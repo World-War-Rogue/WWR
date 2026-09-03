@@ -30,6 +30,7 @@ import {
 export interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
+  DEBUG_ERRORS?: string;
 }
 
 const RESOURCES: ResourceKind[] = ['fuel', 'steel', 'munitions', 'alloy'];
@@ -67,8 +68,8 @@ async function authenticate(request: Request, env: Env): Promise<PlayerRow | nul
 async function seedBase(env: Env, playerId: string, username: string, now: number): Promise<void> {
   const statements = [
     env.DB.prepare(
-      `INSERT INTO bases (player_id, name, resources_at, created_at) VALUES (?1, ?2, ?3, ?3)`,
-    ).bind(playerId, `${username}'s Forward Base`, now),
+      `INSERT INTO bases (player_id, name, resources_at, created_at) VALUES (?1, ?2, ?3, ?4)`,
+    ).bind(playerId, `${username}'s Forward Base`, now, now),
     ...BUILDING_KINDS.map((kind) =>
       env.DB.prepare(`INSERT INTO buildings (player_id, kind, level) VALUES (?1, ?2, ?3)`).bind(
         playerId,
@@ -225,9 +226,9 @@ async function handleRegister(request: Request, env: Env): Promise<Response> {
   const id = newId();
   await env.DB.prepare(
     `INSERT INTO players (id, username, username_key, password_hash, created_at, last_seen_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?5)`,
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
   )
-    .bind(id, username, usernameKey, await hashPassword(password), now)
+    .bind(id, username, usernameKey, await hashPassword(password), now, now)
     .run();
   await seedBase(env, id, username, now);
 
@@ -311,35 +312,56 @@ async function handleStartUpgrade(request: Request, env: Env, player: PlayerRow)
   return json(after ? baseView(after, now) : {error: 'State unavailable.'});
 }
 
+/**
+ * Detailed error text is returned while the backend is being brought up, so a
+ * failure is diagnosable from the client instead of arriving as an opaque
+ * "Worker threw exception" page. Set DEBUG_ERRORS to "off" once real players
+ * exist - internal messages should not be public then.
+ */
+function serverError(error: unknown, env: Env): Response {
+  const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  console.error('Unhandled API error:', detail);
+  const expose = (env.DEBUG_ERRORS ?? 'on') !== 'off';
+  return json({error: expose ? detail : 'Something went wrong on the server.'}, {status: 500});
+}
+
+async function route(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
+
+  const endpoint = `${request.method} ${url.pathname}`;
+
+  if (endpoint === 'POST /api/auth/register') return handleRegister(request, env);
+  if (endpoint === 'POST /api/auth/login') return handleLogin(request, env);
+
+  if (endpoint === 'POST /api/auth/logout') {
+    const token = readSessionCookie(request);
+    if (token) await env.DB.prepare(`DELETE FROM sessions WHERE token = ?1`).bind(token).run();
+    return json({ok: true}, {headers: {'Set-Cookie': sessionCookie('', 0)}});
+  }
+
+  const player = await authenticate(request, env);
+  if (!player) return fail(401, 'Not signed in.');
+
+  if (endpoint === 'GET /api/me') return json({player});
+
+  if (endpoint === 'GET /api/base') {
+    const now = Date.now();
+    const state = await settleAndLoad(env, player.id, now);
+    return state ? json(baseView(state, now)) : fail(404, 'No base found.');
+  }
+
+  if (endpoint === 'POST /api/base/upgrade') return handleStartUpgrade(request, env, player);
+
+  return fail(404, 'No such endpoint.');
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
-    if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
-
-    const route = `${request.method} ${url.pathname}`;
-
-    if (route === 'POST /api/auth/register') return handleRegister(request, env);
-    if (route === 'POST /api/auth/login') return handleLogin(request, env);
-
-    if (route === 'POST /api/auth/logout') {
-      const token = readSessionCookie(request);
-      if (token) await env.DB.prepare(`DELETE FROM sessions WHERE token = ?1`).bind(token).run();
-      return json({ok: true}, {headers: {'Set-Cookie': sessionCookie('', 0)}});
+    try {
+      return await route(request, env);
+    } catch (error) {
+      return serverError(error, env);
     }
-
-    const player = await authenticate(request, env);
-    if (!player) return fail(401, 'Not signed in.');
-
-    if (route === 'GET /api/me') return json({player});
-
-    if (route === 'GET /api/base') {
-      const now = Date.now();
-      const state = await settleAndLoad(env, player.id, now);
-      return state ? json(baseView(state, now)) : fail(404, 'No base found.');
-    }
-
-    if (route === 'POST /api/base/upgrade') return handleStartUpgrade(request, env, player);
-
-    return fail(404, 'No such endpoint.');
   },
 } satisfies ExportedHandler<Env>;
