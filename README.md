@@ -18,3 +18,4 @@ View your app in AI Studio: https://ai.studio/apps/8b1c1234-ca87-4eff-a5c1-ef97f
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
+## Deployment: Cloudflare Pages Live
