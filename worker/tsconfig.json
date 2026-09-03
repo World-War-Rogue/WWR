@@ -1,0 +1,17 @@
+{
+  // The Worker is held to a stricter standard than the client. This is the code
+  // that decides what is true - resources, timers, who owns what - so null
+  // handling and union narrowing are checked properly here even though the
+  // existing React app is not yet strict.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "strict": true,
+    "lib": ["ES2022"],
+    "types": ["@cloudflare/workers-types"],
+    "jsx": "preserve",
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  },
+  "include": ["./**/*.ts"],
+  "exclude": []
+}

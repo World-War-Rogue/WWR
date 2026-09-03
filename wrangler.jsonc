@@ -1,0 +1,30 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "wwr",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-09-03",
+
+  // The built client is served straight from the edge. run_worker_first sends
+  // only /api/* through the Worker, so game requests hit real logic while
+  // every other path is a static file. Without it, single-page-application
+  // not_found_handling would answer /api/* with index.html and the API would
+  // silently never run.
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "wwr-db",
+      "database_id": "b4742b18-4dd7-408e-b692-c54d5919a0b2"
+    }
+  ],
+
+  "observability": {
+    "enabled": true
+  }
+}
