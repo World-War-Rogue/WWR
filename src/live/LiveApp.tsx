@@ -6,7 +6,7 @@
  * keeps running whether or not this tab is open. The tactical UI in App.tsx
  * gets wired to these same endpoints once the foundation is trusted.
  */
-import {useCallback, useEffect, useRef, useState} from 'react';
+import {type FormEvent, useCallback, useEffect, useRef, useState} from 'react';
 import {
   ApiError,
   type BaseView,
@@ -43,7 +43,7 @@ function AuthPanel({onAuthed}: {onAuthed: (player: Player) => void}) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  async function submit(event: React.FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
     setError(null);
