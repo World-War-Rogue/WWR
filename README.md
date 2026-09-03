@@ -1,21 +1,59 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# World War Rogue
 
-# Run and deploy your AI Studio app
+Tactical modern-warfare strategy game. Multi-server deployment, 100-member
+military alliances with an Admiral / Colonel / Lieutenant command hierarchy,
+survival base-building, and ballistic combat.
 
-This contains everything you need to run your app locally.
+**Live site:** [worldwarrogue.com](https://worldwarrogue.com) *(deployment in progress)*
 
-View your app in AI Studio: https://ai.studio/apps/8b1c1234-ca87-4eff-a5c1-ef97fb442e63
+## Stack
 
-## Run Locally
+| | |
+| :--- | :--- |
+| UI | React 19 + TypeScript 5.8 |
+| Build | Vite 6 |
+| Styling | Tailwind CSS v4 (via `@tailwindcss/vite`) |
+| Icons / motion | `lucide-react`, `motion` |
+| Hosting | Cloudflare Pages |
 
-**Prerequisites:**  Node.js
+## Running locally
 
+**Prerequisites:** Node.js 20 or newer.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
-## Deployment: Cloudflare Pages Live
+```bash
+npm install
+npm run dev      # http://localhost:3000
+```
+
+Other scripts:
+
+```bash
+npm run build    # production build into dist/
+npm run preview  # serve the production build locally
+npm run lint     # TypeScript check, no emit
+```
+
+## Project layout
+
+```
+src/
+  App.tsx            root state machine and view routing
+  types.ts           shared domain types
+  components/        views and modals (combat, squad, alliance, base, comms, HUD)
+  data/              static datasets (units, pilots, alliances, leaderboard, servers)
+  utils/             combat renderer, after-action reports, audio, anti-cheat
+docs/                game design documentation (lore, ballistics, economy, roadmap)
+public/              PWA manifest, service worker, icon
+```
+
+## Current state
+
+The application is a **complete single-player client**. Alliances, leaderboards,
+comms and server browsing render from static datasets in `src/data/` — there is
+no backend or persistent storage yet beyond one `localStorage` key used by the
+developer-ops panel. Networked multiplayer is designed in `docs/` but not built.
+
+## Documentation
+
+Design documents live in [`docs/`](./docs) and are also readable in-game through
+the **Intel Dossier** panel in the tactical HUD.
