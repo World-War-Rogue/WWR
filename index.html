@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>World War Rogue</title>
+    <meta name="description" content="Tactical modern warfare strategy game featuring multi-server deployment, 100-member military alliances with strict Admiral/Colonel/Lieutenant command hierarchies, task/event war planning, survival base-building, and ballistic combat." />
+    <meta property="og:title" content="World War Rogue" />
+    <meta property="og:description" content="Tactical modern warfare strategy game featuring multi-server deployment, 100-member military alliances with strict Admiral/Colonel/Lieutenant command hierarchies, task/event war planning, survival base-building, and ballistic combat." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#ea580c" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="WorldWarRogue" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch((err) => {
+            console.log('SW registration skipped:', err);
+          });
+        });
+      }
+    </script>
+  </body>
+</html>
+

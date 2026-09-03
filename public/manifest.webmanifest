@@ -1,0 +1,19 @@
+{
+  "name": "World War Rogue: Modern Tactical Warfare",
+  "short_name": "WorldWarRogue",
+  "description": "Tactical modern warfare strategy game featuring multi-server deployment, 100-member military alliances, survival base-building, and ballistic combat.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#060807",
+  "theme_color": "#ea580c",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["games", "strategy", "simulation"]
+}
