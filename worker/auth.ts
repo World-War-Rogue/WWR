@@ -6,7 +6,12 @@
  * factor can be raised later without invalidating existing accounts.
  */
 
-const PBKDF2_ITERATIONS = 210_000;
+// 100k is the Workers runtime's hard ceiling for PBKDF2 - it rejects anything
+// higher outright. That is below current OWASP guidance for this algorithm, so
+// it is the platform setting the work factor rather than a choice. The
+// iteration count is stored in each hash, so raising it later (or moving to a
+// stronger KDF) can be done without invalidating existing accounts.
+const PBKDF2_ITERATIONS = 100_000;
 const SALT_BYTES = 16;
 const KEY_BITS = 256;
 
