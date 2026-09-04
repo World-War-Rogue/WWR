@@ -14,26 +14,35 @@
  * glance.
  */
 
-export type Allegiance = 'you' | 'ally' | 'server' | 'enemy';
+export type Allegiance = 'ally' | 'server' | 'neutral' | 'hostile';
 
 export interface AllegianceColours {
+  /** Fills the whole plot. This is the only thing carrying meaning out here. */
   fill: string;
+  /** A slightly lifted tone along the top edge, so a field of plots has grain. */
   top: string;
-  edge: string;
   label: string;
 }
 
 /**
- * Deliberately far apart on the colour wheel, and distinguishable by
- * brightness as well as by hue - a red and a green of the same value are the
- * commonest pair to be indistinguishable to a colour-blind player, and this is
- * the one place in the game where misreading a colour loses a battle.
+ * The four states, and nothing else.
+ *
+ * Chosen far apart in brightness as well as hue. Red and green at equal value
+ * is the commonest pair to be indistinguishable to a colour-blind player, so
+ * the green here is lighter than the red rather than merely a different hue -
+ * this is the one place in the game where misreading a colour loses a battle.
+ *
+ * There is no colour for yourself. Four meanings is already the most a player
+ * can hold in their head at a glance, and your own base is the one you can
+ * always find another way: it gets a white outline in your own allegiance's
+ * colour, so it stays part of the picture rather than becoming a fifth thing
+ * to learn.
  */
 export const ALLEGIANCE: Record<Allegiance, AllegianceColours> = {
-  you: {fill: '#c2410c', top: '#f97316', edge: '#ffedd5', label: 'You'},
-  ally: {fill: '#15803d', top: '#4ade80', edge: '#dcfce7', label: 'Alliance'},
-  server: {fill: '#1d4ed8', top: '#60a5fa', edge: '#dbeafe', label: 'Your server'},
-  enemy: {fill: '#9f1239', top: '#fb7185', edge: '#ffe4e6', label: 'Hostile'},
+  ally: {fill: '#16a34a', top: '#4ade80', label: 'Your alliance'},
+  server: {fill: '#ea580c', top: '#fb923c', label: 'Your server'},
+  neutral: {fill: '#2563eb', top: '#60a5fa', label: 'Another server'},
+  hostile: {fill: '#dc2626', top: '#f87171', label: 'At war'},
 };
 
 export interface Viewer {
@@ -46,26 +55,36 @@ export interface Subject {
   username: string;
   homeWorldId: number | null;
   allianceId?: string | null;
+  /**
+   * Set when an event has declared this base an opponent. Nothing sets it yet:
+   * red is reserved for a war, and a war is a thing the event system will
+   * decide. Until then the map has no red on it, which is correct - a colour
+   * that means "at war" must not appear while nobody is.
+   */
+  atWar?: boolean;
 }
 
 /**
  * Where a base stands relative to the player looking at it.
  *
- * Home world, not current world: in an event world eight servers share one
- * map, and telling a neighbour from an invader is the whole reason the event
- * is interesting. Everyone in your own home world is `server` - not a friend,
- * but not someone you are being asked to burn either.
+ * The order matters and is not arbitrary. War outranks everything: an ally who
+ * has been declared an opponent for the duration of an event is an opponent,
+ * and a map that painted them green would get somebody killed. Alliance
+ * outranks server, because an alliance crosses servers and is the bond a
+ * player actually acts on.
+ *
+ * Server means home world, not the world a base is standing in. Eight home
+ * worlds share one map during an event, and telling a neighbour from a visitor
+ * is the whole reason the event is worth attending.
  */
 export function allegianceOf(subject: Subject, viewer: Viewer): Allegiance {
-  if (subject.username === viewer.username) return 'you';
+  if (subject.atWar === true) return 'hostile';
 
   const theirs = subject.allianceId ?? null;
   if (theirs !== null && viewer.allianceId !== null && theirs === viewer.allianceId) {
     return 'ally';
   }
 
-  // An unknown home world is treated as hostile rather than as neutral. The
-  // expensive mistake is assuming a stranger is safe, not the other way round.
   if (
     subject.homeWorldId !== null &&
     viewer.homeWorldId !== null &&
@@ -73,16 +92,23 @@ export function allegianceOf(subject: Subject, viewer: Viewer): Allegiance {
   ) {
     return 'server';
   }
-  return 'enemy';
+
+  // Another server, and not at war with you. Blue is deliberately the default
+  // for a stranger: somebody you have no quarrel with yet is not an enemy, and
+  // painting them as one would make every event look like a bloodbath before
+  // anybody had declared anything.
+  return 'neutral';
 }
 
 /**
- * The strategic marker: one shape for everybody.
+ * The strategic marker: the whole plot, filled solid.
  *
- * Drawn as a slab with a lit top face rather than a flat square, so a screen of
- * them still reads as objects standing on ground instead of as a spreadsheet.
- * Level is shown as height, which is the one piece of information worth
- * carrying down to this zoom - a tall block is somebody to think about.
+ * Not a block standing on ground - a claimed square. At this zoom the map
+ * stops being a place and becomes a holdings chart, and what a commander needs
+ * to see is territory: where their alliance's colour is contiguous, where it
+ * is not, and where somebody else's colour is pressing into it. A small
+ * marker in the middle of an empty tile shows a base; a filled tile shows
+ * ground held, and it is the only version you can read fifty at a time.
  */
 export function drawAllegianceMarker(
   ctx: CanvasRenderingContext2D,
@@ -90,35 +116,30 @@ export function drawAllegianceMarker(
   py: number,
   size: number,
   allegiance: Allegiance,
-  level: number,
+  isYou: boolean,
 ): void {
   const c = ALLEGIANCE[allegiance];
 
-  const w = size * 0.62;
-  const x = px + (size - w) / 2;
-  // Height grows with level but flattens off, so a level 30 neighbour is
-  // visibly bigger than a level 5 and not six times bigger.
-  const lift = size * (0.16 + Math.min(0.26, Math.sqrt(level) * 0.055));
-  const baseY = py + size * 0.74;
-  const topY = baseY - lift;
-
   ctx.save();
-
-  // Contact shadow, so the block sits on the ground rather than floating.
-  ctx.fillStyle = 'rgba(0,0,0,0.32)';
-  ctx.beginPath();
-  ctx.ellipse(px + size / 2, baseY + size * 0.04, w * 0.56, size * 0.09, 0, 0, Math.PI * 2);
-  ctx.fill();
-
   ctx.fillStyle = c.fill;
-  ctx.fillRect(x, topY, w, baseY - topY);
+  ctx.fillRect(px, py, size + 1, size + 1);
 
+  // A lighter band along the top edge. Without it a run of adjacent plots in
+  // the same colour merges into one shapeless field and the count is lost.
   ctx.fillStyle = c.top;
-  ctx.fillRect(x, topY, w, Math.max(1.5, size * 0.07));
+  ctx.fillRect(px, py, size + 1, Math.max(1, size * 0.14));
 
-  ctx.strokeStyle = c.edge;
-  ctx.lineWidth = allegiance === 'you' ? Math.max(1.5, size * 0.045) : 1;
-  ctx.strokeRect(x + 0.5, topY + 0.5, w - 1, baseY - topY - 1);
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(px + 0.5, py + 0.5, size, size);
+
+  if (isYou) {
+    // Your own base keeps its allegiance colour and is found by its outline
+    // instead, so finding yourself never costs a fifth meaning.
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = Math.max(1.5, size * 0.09);
+    ctx.strokeRect(px + ctx.lineWidth / 2, py + ctx.lineWidth / 2, size - ctx.lineWidth, size - ctx.lineWidth);
+  }
 
   ctx.restore();
 }

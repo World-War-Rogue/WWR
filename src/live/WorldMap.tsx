@@ -348,7 +348,7 @@ export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
           toScreenY(base.y),
           zoom,
           allegianceOf(base, viewer),
-          base.level,
+          base.username === you,
         );
         continue;
       }
@@ -500,15 +500,18 @@ export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
 
       {camera.zoom < IDENTITY_ZOOM && (
         <div className="pointer-events-none absolute right-3 top-24 rounded border border-neutral-800 bg-black/70 px-3 py-2 backdrop-blur">
-          {(['you', 'ally', 'server', 'enemy'] as const).map((key) => (
+          {(['ally', 'server', 'neutral', 'hostile'] as const).map((key) => (
             <div key={key} className="flex items-center gap-2 py-0.5">
               <span
                 className="inline-block h-3 w-3 rounded-sm"
-                style={{background: ALLEGIANCE[key].fill, outline: `1px solid ${ALLEGIANCE[key].edge}`}}
+                style={{background: ALLEGIANCE[key].fill}}
               />
               <span className="text-[11px] text-neutral-300">{ALLEGIANCE[key].label}</span>
             </div>
           ))}
+          <p className="mt-1 border-t border-neutral-800 pt-1 text-[10px] text-neutral-500">
+            White outline is you
+          </p>
         </div>
       )}
 
