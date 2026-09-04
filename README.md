@@ -108,6 +108,9 @@ player-authored text, and block / mute / report in chat.
 - [`docs/HOW-IT-WORKS.md`](./docs/HOW-IT-WORKS.md) - **start here.** What the game
   actually is and why each part is built the way it is.
 - [`docs/SKIN-ART-SPEC.md`](./docs/SKIN-ART-SPEC.md) - what a base skin needs to be.
+  The brief for a 3D artist.
+- [`docs/CHATGPT-SKIN-BRIEF.md`](./docs/CHATGPT-SKIN-BRIEF.md) - the same job
+  written for an image model. Paste it in whole and ask for a skin.
 - [`CLAUDE.md`](./CLAUDE.md) - the things that have already cost time here.
 - `docs/WORLD_WAR_ROGUE_DESIGN.md` and `docs/01`-`docs/09` are the original
   design fiction from before the game was built. They describe an architecture
