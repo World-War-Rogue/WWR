@@ -93,6 +93,67 @@ feel like arithmetic, widen it. Nothing else has to change.
 
 ---
 
+## 3a. The resolver knows nothing about the map
+
+Marching, arrival, who is home, loot, shields — none of that is combat. It is
+the **map's** answer to who fights whom and what it costs. The fight itself is
+a pure function:
+
+```
+resolve(sideA, sideB, options) -> report
+```
+
+Two squads in, a report out. No positions, no travel, no clock. That is what
+lets the same fight run in three different places without three different
+balance problems:
+
+| | Who fights | Where the squads come from | What is at stake |
+| :--- | :--- | :--- | :--- |
+| **Map raid** | One marching squad vs everyone still home | Live, as they stand | Resources, damage, a shield |
+| **Arena** | Your squad vs another player's registered squad | A **snapshot**, so an offline defender is not punished for being offline | Rating only |
+| **Events** | Whatever the event says | Whatever the event says | Whatever the event says |
+
+Everything in §4 to §6 — power, composition, counters, detection, the three
+bands, damage — is inside the resolver and identical everywhere. Everything in
+§2 and §7 — marching, who defends, loot, repair, shields, the power floor — is
+outside it, and each context supplies its own.
+
+The **defender modifier** is the seam. On the map it carries the Command Post
+and building levels, because you are fighting somebody at their own base. In
+the arena it is 1.0, because there is no base — the arena is two squads and
+nothing else. Passing it in as a number rather than reading buildings inside
+the resolver is what keeps the arena from accidentally inheriting a home-ground
+bonus nobody is standing on.
+
+### The trap this avoids, and the one it does not
+
+Building combat around marching would have made the arena a second combat
+system, and two combat systems means two balance passes, two sets of bugs, and
+a category that is strong in one and useless in the other.
+
+But there is a second, subtler version of the same trap, and it applies to an
+attribute: **mobility.** If mobility only means march speed, it is worth
+nothing in the arena, fast light assets become strictly worse there, and the
+two places grow different metagames anyway — through the attributes rather than
+through the rules.
+
+So mobility has to earn its place **inside** the fight:
+
+- **Initiative.** Within a band, the higher-mobility side fires first. In a
+  close fight that is the difference between trading and not.
+- **Withdrawal.** A losing side with high mobility takes fewer losses getting
+  out. Being fast is how you survive being wrong.
+
+March speed is then a **bonus** meaning mobility has on the map, on top of a
+job it already does everywhere.
+
+**The rule this generalises to:** every attribute must do something inside the
+resolver. Anything that only matters on the map is an addition, never the whole
+of what an attribute is for. Firepower, armour and range already pass that
+test; detection passes it through the spotting formula; mobility now does too.
+
+---
+
 ## 4. The numbers that decide a battle
 
 Six inputs. Nothing else.
@@ -103,7 +164,7 @@ Six inputs. Nothing else.
 | **Counter coverage** | Which categories each side brought | The largest part of composition |
 | **Detection** | Recon assets, and the detection attribute | Gates what overwatch may fire at |
 | **Lift efficiency** | How fully the budget was used | Unused lift is power left at home |
-| **Base defence** | Command Post and building levels | A defender multiplier |
+| **Defender modifier** | Command Post and buildings on the map; 1.0 in the arena | A defender multiplier, supplied by the context |
 | **Chance** | ±5%, bounded | Stops identical matchups being decided in advance |
 
 Chance is deliberately small. A player who loses should be able to read the
@@ -144,6 +205,15 @@ artillery, which is the counter-battery answer to Band 1.
 
 Armour and screens. Whatever survived the first two bands fights over the
 ground. Screens protect the flanks; breach assets take and hold.
+
+### Initiative and withdrawal
+
+Within each band, the side with more **mobility** resolves first. In an even
+fight that is the difference between trading blows and taking one for free.
+
+A side that is losing withdraws, and mobility decides how much it saves. Being
+fast is how you survive having brought the wrong squad — which is what stops
+mobility being a stat you only care about on the way to the fight.
 
 ### Damage and losses
 
@@ -222,12 +292,13 @@ players will ever learn it.
 
 | Phase | What lands | Why here |
 | :--- | :--- | :--- |
-| **1. Resolver** | Pure function: two squads in, a report out. No UI, no marching | Testable in isolation, and every balance question can be answered by running it a thousand times |
+| **1. Resolver** | Pure function: two squads in, a report out. No UI, no marching, no map | Testable in isolation, every balance question answerable by running it a thousand times, and it is the same function the arena and every event will call |
 | **2. Marching** | Squads leave, travel, arrive; drawn on the map | The rule everything else depends on |
 | **3. Resolution on arrival** | The resolver runs server-side, writes a report | Combat exists here |
 | **4. Damage and repair** | Damaged state, repair timers, alloy repair | Consequence |
 | **5. Protection** | Shields, power floor, loot caps | Before anybody who is not a friend can play |
 | **6. Red on the map** | The `hostile` allegiance colour turns on | It has been waiting since the map was built |
+| **7. Arena** | Registered squads, snapshots, a ladder | Calls the phase-1 resolver unchanged. If it needs anything added to the resolver, phase 1 got the seam wrong |
 
 **Phase 1 is where the design gets tested.** The resolver is a pure function,
 so ten thousand simulated battles will say whether the band is right, whether
@@ -247,6 +318,12 @@ job `auditAssets` does for the catalogue, done for the fight.
 - **How long is a march?** Long enough to be seen and answered, short enough
   that attacking is not an evening's commitment. Probably minutes across a
   neighbourhood, tens of minutes across the map.
+- **Does the arena use one squad or all four?** One is a cleaner test of
+  building a squad. Four is a better test of building a roster, and it is the
+  only thing that would make the other three squads matter to a player who
+  never attacks anybody.
+- **How often does an arena snapshot refresh?** Too rarely and the ladder
+  fights ghosts; too often and it is just the map without the map.
 - **Does winning take ground?** Taking the loser's plot is the strongest
   possible stake and the strongest possible way to drive somebody off the game.
   Probably not, or only in events.
