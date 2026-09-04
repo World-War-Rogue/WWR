@@ -327,3 +327,65 @@ job `auditAssets` does for the catalogue, done for the fight.
 - **Does winning take ground?** Taking the loser's plot is the strongest
   possible stake and the strongest possible way to drive somebody off the game.
   Probably not, or only in events.
+
+---
+
+## 11. What ten thousand simulated battles said
+
+The resolver was built first, as a pure function, precisely so this could be
+run before anything was wired to the map. It found three things wrong with the
+design above, and all three would have been expensive to discover with players
+in the game.
+
+### Survivability cannot be the armour attribute
+
+`hp = armour × 12` made an armour-category asset **eight times tougher** than a
+drone. No 1.5× counter overcomes 8× durability, so **artillery lost to armour
+99% of the time despite being its designed counter**, and drones lost to
+everything.
+
+Durability now scales with what an asset *is* — its total attributes, which
+scale with its lift — with armour as a bonus on top rather than the whole
+story. That alone fixed the rotary-versus-armour counter.
+
+### The counter multipliers were too strong
+
+At 1.5 / 0.6, rotary beat armour **96%** of the time. That is the "counters
+decide almost everything" design that was explicitly not chosen. At 1.35 / 0.75
+the counter is a real edge without being the whole answer, and power stays the
+main driver.
+
+### A mono-category squad beat a mixed one
+
+This was the important finding, because it is the opposite of the central
+claim. A focused squad never suffers a bad matchup within itself; a mixed squad
+is a bet on what it will meet. **Rock-paper-scissors with one throw rewards
+guessing right, not bringing variety** — so "bring combined arms" was advice
+the mechanics actively punished.
+
+The fix is an **exposure penalty**: a squad takes ×1.5 more damage for each
+band it did not bring. No close band and nothing shields the rear; no air band
+and nothing contests the sky. Both are true of real formations, and both are
+now expensive.
+
+With it, a combined-arms squad beats every pure squad:
+
+| Combined arms vs | Wins |
+| :--- | :--- |
+| pure armour | 93% |
+| pure rotary | 90% |
+| pure fixed wing | 67% |
+| pure artillery | 100% |
+| pure drone | 100% |
+
+### Still wrong, and worth knowing before this ships
+
+- **Fixed wing beats rotary 100% of the time.** The counter is doing exactly
+  what it should and there is no upset left in it. Rotary needs something back
+  — probably that helicopters are harder to spot, via the detection contest.
+- **A pure drone squad cannot win anything.** That is partly correct — six
+  drones spend 17 of a 26 lift budget, so it is a cheap squad and should lose
+  to an expensive one. But it means the six-slot cap, not lift, is what binds
+  for light assets, and the lift budget curve may be growing too fast.
+- **The upset band has not been re-measured** since these changes. The
+  0.88–1.15 composition band in §3 is still a target, not a verified number.
