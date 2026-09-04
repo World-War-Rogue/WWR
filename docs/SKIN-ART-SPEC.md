@@ -22,16 +22,30 @@ absurd. That is the target, not photorealism. A photoreal military base at
 
 ## 2. Camera — the part people get wrong
 
-**Orthographic. Zero yaw. 58° elevation.**
+> Reference art must be delivered **isolated on a plain light background**,
+> with no text, frame, banner or rarity panel. A subject rendered dark against
+> a dark background cannot be separated afterwards by any tool — see §11.
+
+
+**Orthographic. Zero yaw. Blender rotation X = 60°.**
+
+That is 60° from straight down, which is 30° above the horizon — low enough to
+show the front of a structure, high enough that a square plot still reads as a
+square.
 
 The map grid is axis-aligned squares, not isometric diamonds. Most mobile
 strategy art is rendered isometric (45° yaw), and isometric art dropped onto a
-square grid looks subtly wrong in a way that is expensive to fix later.
+square grid looks subtly wrong in a way that is expensive to fix after
+delivery. **Yaw stays at zero.**
+
+`tools/skinforge/skinforge.py` sets all of this. Working from that script
+rather than by hand, the camera is already correct and this section only
+explains what it did.
 
 In Blender:
 
 - Camera → Orthographic
-- Rotation: **X 58°, Y 0°, Z 0°**
+- Rotation: **X 60°, Y 0°, Z 0°**
 - Position the base at the world origin, camera directly in front on −Y
 - Orthographic scale set so the **footprint fills the full frame width**
 
@@ -100,7 +114,7 @@ model formats the game does not read, and MP4 or WebM discard the alpha channel
 | Output → Frame Rate | Custom, **12 fps** |
 | Frame range | **1 to 24** |
 | Camera → Type | **Orthographic** |
-| Camera → Rotation | **X 58°, Y 0°, Z 0°** |
+| Camera → Rotation | **X 60°, Y 0°, Z 0°** |
 
 **Animate the model, never the camera.** A camera that drifts even a pixel
 between frames shifts the footprint, and the base visibly jitters on its plot.
@@ -198,3 +212,25 @@ Two things worth settling in writing before taking money for one:
 
 I am not a lawyer and this is not legal advice — for a sale at that size, have
 someone who is look at the terms.
+
+---
+
+## 11. Reference art: the one rule
+
+Concept art that will be fed to the pipeline, or handed to a modeller, must be
+**isolated on a plain light background** — no title, no rarity banner, no
+description panel, no 360° strip, no frame.
+
+This is not a preference. A black base rendered against a black background has
+no separable edge, and no cut-out tool, threshold, flood fill or
+background-removal model can recover one. The information is not in the file.
+It has to be right at the moment the art is generated.
+
+When generating concept art, the phrasing that works:
+
+> *isolated on a plain white background, centred, no text, no frame, no
+> border, no UI, product render*
+
+The 360° turnaround strip that image models like to add is worth asking for
+**separately and at full size**, for the modeller. It is genuinely useful
+reference, and useless at thumbnail size inside a card.
