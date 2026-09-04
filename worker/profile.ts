@@ -40,8 +40,8 @@ export interface PublicProfile {
   commandPost: number;
   baseName: string;
   skin: string;
-  /** Null until alliances exist. */
-  alliance: string | null;
+  /** Tag and name of their alliance, or null when they answer to nobody. */
+  alliance: {tag: string; name: string} | null;
   plot: {x: number; y: number} | null;
   joinedAt: number | null;
 }
@@ -60,6 +60,8 @@ interface Row {
   plot_x: number | null;
   plot_y: number | null;
   portrait_image: string | null;
+  alliance_tag: string | null;
+  alliance_name: string | null;
 }
 
 /**
@@ -79,12 +81,15 @@ export async function loadProfile(
               p.motto AS motto, p.approved_at AS approved_at,
               b.name AS base_name, b.skin AS skin, b.home_world_id AS home_world_id,
               pl.plot_x AS plot_x, pl.plot_y AS plot_y,
-              pp.data_url AS portrait_image
+              pp.data_url AS portrait_image,
+              al.tag AS alliance_tag, al.name AS alliance_name
          FROM players p
          LEFT JOIN bases b ON b.player_id = p.id
          LEFT JOIN placements pl
                 ON pl.player_id = p.id AND pl.world_id = b.home_world_id
          LEFT JOIN player_portraits pp ON pp.player_id = p.id
+         LEFT JOIN alliance_members am ON am.player_id = p.id
+         LEFT JOIN alliances al ON al.id = am.alliance_id
         WHERE p.username = ?1 COLLATE NOCASE`,
     )
     .bind(username)
@@ -117,7 +122,10 @@ export async function loadProfile(
     commandPost: levels.command_post,
     baseName: row.base_name ?? `${row.username}'s Forward Base`,
     skin: row.skin ?? 'desert_fob',
-    alliance: null,
+    alliance:
+      row.alliance_tag && row.alliance_name
+        ? {tag: row.alliance_tag, name: row.alliance_name}
+        : null,
     plot: row.plot_x !== null && row.plot_y !== null ? {x: row.plot_x, y: row.plot_y} : null,
     joinedAt: row.approved_at,
   };

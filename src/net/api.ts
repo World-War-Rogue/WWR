@@ -8,6 +8,41 @@
 
 import type {CosmeticItem, CosmeticSlot, Loadout} from '../../shared/cosmetics';
 
+export interface AllianceSummary {
+  id: string;
+  tag: string;
+  name: string;
+  description: string | null;
+  openJoin: boolean;
+  members: number;
+}
+
+export interface AllianceMember {
+  username: string;
+  rank: 'leader' | 'officer' | 'member';
+  power: number;
+  commandPost: number;
+  joinedAt: number;
+  portrait: {glyph: string; tint: string; image: string | null};
+}
+
+export interface AllianceView {
+  alliance: {
+    id: string;
+    tag: string;
+    name: string;
+    description: string | null;
+    homeWorldId: number;
+    openJoin: boolean;
+    createdAt: number;
+    capacity: number;
+  } | null;
+  rank?: 'leader' | 'officer' | 'member';
+  roster?: AllianceMember[];
+  applications?: Array<{username: string; createdAt: number}>;
+  applied?: Array<{tag: string; name: string}>;
+}
+
 export interface Profile {
   username: string;
   portrait: {glyph: string; tint: string; image: string | null};
@@ -18,7 +53,7 @@ export interface Profile {
   commandPost: number;
   baseName: string;
   skin: string;
-  alliance: string | null;
+  alliance: {tag: string; name: string} | null;
   plot: {x: number; y: number} | null;
   joinedAt: number | null;
 }
@@ -70,6 +105,8 @@ export interface PlacedBase {
   worldId: number;
   /** Home world, not current world - what "same server" means in an event. */
   homeWorldId: number | null;
+  /** Whose colours they fly. Null when they belong to no alliance. */
+  allianceId: string | null;
   /** The equipped cosmetic layers, sent per base so the map can draw them. */
   banner: string;
   emblem: string;
@@ -172,6 +209,42 @@ export const api = {
     call<{world: {id: number; name: string}; plot: {x: number; y: number}}>('/api/world/move', {
       method: 'POST',
       body: JSON.stringify(worldId === undefined ? {x, y} : {x, y, worldId}),
+    }),
+  alliance: () => call<AllianceView>('/api/alliance'),
+  browseAlliances: () =>
+    call<{homeWorldId: number; capacity: number; alliances: AllianceSummary[]}>(
+      '/api/alliance/browse',
+    ),
+  createAlliance: (body: {
+    tag: string;
+    name: string;
+    description: string;
+    openJoin: boolean;
+  }) => call<AllianceView>('/api/alliance/create', {method: 'POST', body: JSON.stringify(body)}),
+  joinAlliance: (allianceId: string) =>
+    call<AllianceView>('/api/alliance/join', {
+      method: 'POST',
+      body: JSON.stringify({allianceId}),
+    }),
+  leaveAlliance: (disband = false) =>
+    call<AllianceView>('/api/alliance/leave', {
+      method: 'POST',
+      body: JSON.stringify({disband}),
+    }),
+  decideApplication: (username: string, accept: boolean) =>
+    call<AllianceView>('/api/alliance/decide', {
+      method: 'POST',
+      body: JSON.stringify({username, accept}),
+    }),
+  allianceRank: (username: string, action: 'promote' | 'demote' | 'remove' | 'handover') =>
+    call<AllianceView>('/api/alliance/rank', {
+      method: 'POST',
+      body: JSON.stringify({username, action}),
+    }),
+  allianceSettings: (body: {description: string; openJoin: boolean}) =>
+    call<AllianceView>('/api/alliance/settings', {
+      method: 'POST',
+      body: JSON.stringify(body),
     }),
   profile: (name: string) =>
     call<{profile: Profile}>(`/api/profile?name=${encodeURIComponent(name)}`),

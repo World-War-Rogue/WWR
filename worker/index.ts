@@ -6,6 +6,19 @@
  */
 import {handleAdminRequests} from './admin';
 import {
+  atCapacity,
+  createAlliance,
+  mayActOn,
+  memberCount,
+  membershipOf,
+  rosterOf,
+} from './alliance';
+import {
+  ALLIANCE_CAPACITY,
+  type AllianceRank,
+  DESCRIPTION_MAX,
+} from '../shared/alliances';
+import {
   type ProfileEdit,
   clearPortrait,
   loadProfile,
@@ -607,6 +620,12 @@ async function handleWorld(request: Request, env: Env, player: PlayerRow): Promi
       .first<{id: number | null}>(),
   ]);
 
+  const ownAlliance = await env.DB.prepare(
+    `SELECT alliance_id AS id FROM alliance_members WHERE player_id = ?1`,
+  )
+    .bind(player.id)
+    .first<{id: string}>();
+
   return json({
     viewport: {x, y, w, h},
     world: {
@@ -625,7 +644,7 @@ async function handleWorld(request: Request, env: Env, player: PlayerRow): Promi
       // drawn as an ally - the branch is here so that adding them later is a
       // query, not a rendering change.
       homeWorldId: home?.id ?? null,
-      allianceId: null,
+      allianceId: ownAlliance?.id ?? null,
     },
     skins: SKINS,
     bases,
@@ -878,6 +897,415 @@ async function handlePortrait(
   return json({profile});
 }
 
+/**
+ * Your alliance, its roster, and the applications waiting on it.
+ *
+ * Applications are only included for officers and above. A member seeing the
+ * queue would be harmless; a member seeing it and being unable to act on it is
+ * a screen that invites a click it will then refuse.
+ */
+async function handleAlliance(env: Env, player: PlayerRow): Promise<Response> {
+  const membership = await membershipOf(env.DB, player.id);
+  if (!membership) {
+    const pending = await env.DB.prepare(
+      `SELECT a.tag AS tag, a.name AS name
+         FROM alliance_applications ap
+         JOIN alliances a ON a.id = ap.alliance_id
+        WHERE ap.player_id = ?1`,
+    )
+      .bind(player.id)
+      .all<{tag: string; name: string}>();
+    return json({alliance: null, applied: pending.results ?? []});
+  }
+
+  const {alliance, rank} = membership;
+  const roster = await rosterOf(env.DB, alliance.id);
+
+  let applications: Array<{username: string; power: number; createdAt: number}> = [];
+  if (rank === 'leader' || rank === 'officer') {
+    const rows = await env.DB.prepare(
+      `SELECT p.username AS username, ap.created_at AS created_at
+         FROM alliance_applications ap
+         JOIN players p ON p.id = ap.player_id
+        WHERE ap.alliance_id = ?1
+        ORDER BY ap.created_at ASC`,
+    )
+      .bind(alliance.id)
+      .all<{username: string; created_at: number}>();
+    applications = (rows.results ?? []).map((r) => ({
+      username: r.username,
+      power: 0,
+      createdAt: r.created_at,
+    }));
+  }
+
+  return json({
+    alliance: {
+      id: alliance.id,
+      tag: alliance.tag,
+      name: alliance.name,
+      description: alliance.description,
+      homeWorldId: alliance.home_world_id,
+      openJoin: alliance.open_join === 1,
+      createdAt: alliance.created_at,
+      capacity: ALLIANCE_CAPACITY,
+    },
+    rank,
+    roster,
+    applications,
+  });
+}
+
+/** Every alliance on this player's home server, for somebody looking to join. */
+async function handleBrowseAlliances(env: Env, player: PlayerRow): Promise<Response> {
+  const home = await env.DB.prepare(`SELECT home_world_id AS id FROM bases WHERE player_id = ?1`)
+    .bind(player.id)
+    .first<{id: number | null}>();
+  if (!home?.id) return fail(409, 'You have not been deployed yet.');
+
+  const rows = await env.DB.prepare(
+    `SELECT a.id AS id, a.tag AS tag, a.name AS name, a.description AS description,
+            a.open_join AS open_join, COUNT(m.player_id) AS members
+       FROM alliances a
+       LEFT JOIN alliance_members m ON m.alliance_id = a.id
+      WHERE a.home_world_id = ?1
+      GROUP BY a.id
+      ORDER BY members DESC, a.created_at ASC
+      LIMIT 100`,
+  )
+    .bind(home.id)
+    .all<{
+      id: string;
+      tag: string;
+      name: string;
+      description: string | null;
+      open_join: number;
+      members: number;
+    }>();
+
+  return json({
+    homeWorldId: home.id,
+    capacity: ALLIANCE_CAPACITY,
+    alliances: (rows.results ?? []).map((r) => ({
+      id: r.id,
+      tag: r.tag,
+      name: r.name,
+      description: r.description,
+      openJoin: r.open_join === 1,
+      members: r.members,
+    })),
+  });
+}
+
+/** Founds an alliance. The founder becomes its leader. */
+async function handleCreateAlliance(
+  request: Request,
+  env: Env,
+  player: PlayerRow,
+): Promise<Response> {
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  if (!body) return fail(400, 'Nothing to create.');
+
+  const existing = await membershipOf(env.DB, player.id);
+  if (existing) return fail(409, 'Leave your current alliance first.');
+
+  const home = await env.DB.prepare(`SELECT home_world_id AS id FROM bases WHERE player_id = ?1`)
+    .bind(player.id)
+    .first<{id: number | null}>();
+  if (!home?.id) return fail(409, 'You have not been deployed yet.');
+
+  const tag = typeof body.tag === 'string' ? body.tag.trim() : '';
+  const name = typeof body.name === 'string' ? body.name : '';
+  const description = typeof body.description === 'string' ? body.description.trim() : '';
+
+  const result = await createAlliance(
+    env.DB,
+    player.id,
+    home.id,
+    newId(),
+    tag,
+    name,
+    description === '' ? null : description,
+    body.openJoin !== false,
+    Date.now(),
+  );
+  if (!result.ok) return fail(409, result.error);
+
+  // Any applications elsewhere are void the moment you found something.
+  await env.DB.prepare(`DELETE FROM alliance_applications WHERE player_id = ?1`)
+    .bind(player.id)
+    .run();
+
+  return handleAlliance(env, player);
+}
+
+/**
+ * Joins an open alliance, or applies to a closed one.
+ *
+ * Capacity is checked here and enforced by the insert failing if two people
+ * take the last seat at once - the check is a courtesy that produces a good
+ * message, not the thing keeping the count right.
+ */
+async function handleJoinAlliance(
+  request: Request,
+  env: Env,
+  player: PlayerRow,
+): Promise<Response> {
+  const body = (await request.json().catch(() => null)) as {allianceId?: unknown} | null;
+  const allianceId = typeof body?.allianceId === 'string' ? body.allianceId : null;
+  if (!allianceId) return fail(400, 'Which alliance?');
+
+  if (await membershipOf(env.DB, player.id)) {
+    return fail(409, 'Leave your current alliance first.');
+  }
+
+  const home = await env.DB.prepare(`SELECT home_world_id AS id FROM bases WHERE player_id = ?1`)
+    .bind(player.id)
+    .first<{id: number | null}>();
+
+  const alliance = await env.DB.prepare(
+    `SELECT id, open_join, home_world_id FROM alliances WHERE id = ?1`,
+  )
+    .bind(allianceId)
+    .first<{id: string; open_join: number; home_world_id: number}>();
+  if (!alliance) return fail(404, 'No such alliance.');
+
+  // An alliance belongs to a server. Joining across servers would make the
+  // server number, and the map colour that depends on it, mean nothing.
+  if (alliance.home_world_id !== home?.id) {
+    return fail(403, 'That alliance belongs to another server.');
+  }
+
+  if (atCapacity(await memberCount(env.DB, alliance.id))) {
+    return fail(409, 'That alliance is full.');
+  }
+
+  const now = Date.now();
+  if (alliance.open_join === 1) {
+    try {
+      await env.DB.prepare(
+        `INSERT INTO alliance_members (player_id, alliance_id, rank, joined_at)
+         VALUES (?1, ?2, 'member', ?3)`,
+      )
+        .bind(player.id, alliance.id, now)
+        .run();
+    } catch {
+      return fail(409, 'You are already in an alliance.');
+    }
+    await env.DB.prepare(`DELETE FROM alliance_applications WHERE player_id = ?1`)
+      .bind(player.id)
+      .run();
+    return handleAlliance(env, player);
+  }
+
+  await env.DB.prepare(
+    `INSERT INTO alliance_applications (alliance_id, player_id, created_at)
+     VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING`,
+  )
+    .bind(alliance.id, player.id, now)
+    .run();
+  return handleAlliance(env, player);
+}
+
+/**
+ * Leaves, or disbands.
+ *
+ * A leader cannot simply walk out of an alliance with people still in it -
+ * that would leave a group with no one able to accept applications or remove
+ * anybody, which is a dead alliance nobody can fix or leave cleanly. They hand
+ * over first, or they disband it deliberately.
+ */
+async function handleLeaveAlliance(
+  request: Request,
+  env: Env,
+  player: PlayerRow,
+): Promise<Response> {
+  const membership = await membershipOf(env.DB, player.id);
+  if (!membership) return fail(409, 'You are not in an alliance.');
+
+  const body = (await request.json().catch(() => null)) as {disband?: unknown} | null;
+  const count = await memberCount(env.DB, membership.alliance.id);
+
+  if (membership.rank === 'leader' && count > 1) {
+    if (body?.disband !== true) {
+      return fail(
+        409,
+        'Hand leadership to somebody else first, or disband the alliance.',
+      );
+    }
+    // Disbanding takes the alliance with it; the cascade clears membership and
+    // any outstanding applications.
+    await env.DB.prepare(`DELETE FROM alliances WHERE id = ?1`)
+      .bind(membership.alliance.id)
+      .run();
+    return json({alliance: null, applied: []});
+  }
+
+  await env.DB.prepare(`DELETE FROM alliance_members WHERE player_id = ?1`)
+    .bind(player.id)
+    .run();
+
+  // A last member walking out takes the empty alliance with them, rather than
+  // leaving a name and tag reserved by nobody.
+  if (count <= 1) {
+    await env.DB.prepare(`DELETE FROM alliances WHERE id = ?1`)
+      .bind(membership.alliance.id)
+      .run();
+  }
+
+  return json({alliance: null, applied: []});
+}
+
+/** Accepts or declines an application. Officers and above. */
+async function handleDecideApplication(
+  request: Request,
+  env: Env,
+  player: PlayerRow,
+): Promise<Response> {
+  const membership = await membershipOf(env.DB, player.id);
+  if (!membership) return fail(409, 'You are not in an alliance.');
+  if (membership.rank === 'member') return fail(403, 'Officers and leaders only.');
+
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const username = typeof body?.username === 'string' ? body.username : null;
+  const accept = body?.accept === true;
+  if (!username) return fail(400, 'Which applicant?');
+
+  const applicant = await env.DB.prepare(
+    `SELECT id FROM players WHERE username = ?1 COLLATE NOCASE`,
+  )
+    .bind(username)
+    .first<{id: string}>();
+  if (!applicant) return fail(404, 'No such callsign.');
+
+  await env.DB.prepare(
+    `DELETE FROM alliance_applications WHERE alliance_id = ?1 AND player_id = ?2`,
+  )
+    .bind(membership.alliance.id, applicant.id)
+    .run();
+
+  if (accept) {
+    if (atCapacity(await memberCount(env.DB, membership.alliance.id))) {
+      return fail(409, 'The alliance is full.');
+    }
+    try {
+      await env.DB.prepare(
+        `INSERT INTO alliance_members (player_id, alliance_id, rank, joined_at)
+         VALUES (?1, ?2, 'member', ?3)`,
+      )
+        .bind(applicant.id, membership.alliance.id, Date.now())
+        .run();
+    } catch {
+      return fail(409, 'They have joined another alliance.');
+    }
+  }
+
+  return handleAlliance(env, player);
+}
+
+/**
+ * Promotes, demotes, removes a member, or hands over leadership.
+ *
+ * Every one of these is the same question - may this rank act on that rank -
+ * and the answer is always "only downward". That single rule is what stops two
+ * officers removing each other and what stops a leader being kicked out of the
+ * alliance they founded.
+ */
+async function handleAllianceRank(
+  request: Request,
+  env: Env,
+  player: PlayerRow,
+): Promise<Response> {
+  const membership = await membershipOf(env.DB, player.id);
+  if (!membership) return fail(409, 'You are not in an alliance.');
+
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const username = typeof body?.username === 'string' ? body.username : null;
+  const action = typeof body?.action === 'string' ? body.action : null;
+  if (!username || !action) return fail(400, 'Who, and what?');
+
+  const target = await env.DB.prepare(
+    `SELECT p.id AS id, m.rank AS rank, m.alliance_id AS alliance_id
+       FROM players p
+       JOIN alliance_members m ON m.player_id = p.id
+      WHERE p.username = ?1 COLLATE NOCASE`,
+  )
+    .bind(username)
+    .first<{id: string; rank: AllianceRank; alliance_id: string}>();
+
+  if (!target || target.alliance_id !== membership.alliance.id) {
+    return fail(404, 'They are not in your alliance.');
+  }
+  if (target.id === player.id) return fail(400, 'That one is about you.');
+  if (!mayActOn(membership.rank, target.rank)) {
+    return fail(403, 'You cannot act on somebody of that rank.');
+  }
+
+  const now = Date.now();
+
+  if (action === 'remove') {
+    await env.DB.prepare(`DELETE FROM alliance_members WHERE player_id = ?1`)
+      .bind(target.id)
+      .run();
+    return handleAlliance(env, player);
+  }
+
+  if (action === 'promote' || action === 'demote') {
+    // Only a leader creates or unmakes officers. An officer promoting another
+    // officer would be creating a peer who could then act on nobody, and
+    // demoting one would be acting sideways.
+    if (membership.rank !== 'leader') return fail(403, 'Leaders only.');
+    const rank: AllianceRank = action === 'promote' ? 'officer' : 'member';
+    await env.DB.prepare(`UPDATE alliance_members SET rank = ?2 WHERE player_id = ?1`)
+      .bind(target.id, rank)
+      .run();
+    return handleAlliance(env, player);
+  }
+
+  if (action === 'handover') {
+    if (membership.rank !== 'leader') return fail(403, 'Leaders only.');
+    // Both writes or neither. A half-applied handover leaves an alliance with
+    // two leaders or none, and either is worse than the change not happening.
+    await env.DB.batch([
+      env.DB.prepare(`UPDATE alliance_members SET rank = 'leader' WHERE player_id = ?1`).bind(
+        target.id,
+      ),
+      env.DB.prepare(`UPDATE alliance_members SET rank = 'officer' WHERE player_id = ?1`).bind(
+        player.id,
+      ),
+    ]);
+    return handleAlliance(env, player);
+  }
+
+  return fail(400, 'Unknown action.');
+}
+
+/** Edits the alliance itself. Leaders only. */
+async function handleAllianceSettings(
+  request: Request,
+  env: Env,
+  player: PlayerRow,
+): Promise<Response> {
+  const membership = await membershipOf(env.DB, player.id);
+  if (!membership) return fail(409, 'You are not in an alliance.');
+  if (membership.rank !== 'leader') return fail(403, 'Leaders only.');
+
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  if (!body) return fail(400, 'Nothing to change.');
+
+  const description =
+    typeof body.description === 'string' ? body.description.trim().slice(0, DESCRIPTION_MAX) : '';
+  const openJoin = body.openJoin !== false;
+
+  await env.DB.prepare(
+    `UPDATE alliances SET description = ?2, open_join = ?3 WHERE id = ?1`,
+  )
+    .bind(membership.alliance.id, description === '' ? null : description, openJoin ? 1 : 0)
+    .run();
+
+  return handleAlliance(env, player);
+}
+
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
@@ -912,6 +1340,28 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
 
   if (endpoint === 'POST /api/base/upgrade') return handleStartUpgrade(request, env, player);
+
+  if (endpoint === 'GET /api/alliance') return handleAlliance(env, player);
+
+  if (endpoint === 'GET /api/alliance/browse') return handleBrowseAlliances(env, player);
+
+  if (endpoint === 'POST /api/alliance/create') {
+    return handleCreateAlliance(request, env, player);
+  }
+
+  if (endpoint === 'POST /api/alliance/join') return handleJoinAlliance(request, env, player);
+
+  if (endpoint === 'POST /api/alliance/leave') return handleLeaveAlliance(request, env, player);
+
+  if (endpoint === 'POST /api/alliance/decide') {
+    return handleDecideApplication(request, env, player);
+  }
+
+  if (endpoint === 'POST /api/alliance/rank') return handleAllianceRank(request, env, player);
+
+  if (endpoint === 'POST /api/alliance/settings') {
+    return handleAllianceSettings(request, env, player);
+  }
 
   if (endpoint === 'GET /api/profile') return handleProfile(request, env);
 

@@ -30,6 +30,8 @@ export interface PlacedBase {
    * thing that distinguishes a neighbour from an invader.
    */
   homeWorldId: number | null;
+  /** Whose colours they fly. Null when they belong to no alliance. */
+  allianceId: string | null;
   banner: string;
   emblem: string;
   lights: string;
@@ -163,11 +165,12 @@ export async function basesInViewport(
       `SELECT pl.plot_x AS x, pl.plot_y AS y, b.skin AS skin, p.username AS username,
               COALESCE(bd.level, 1) AS level, pl.world_id AS worldId,
               b.banner AS banner, b.emblem AS emblem, b.lights AS lights, b.decal AS decal,
-              b.home_world_id AS homeWorldId
+              b.home_world_id AS homeWorldId, am.alliance_id AS allianceId
          FROM placements pl
          JOIN players p ON p.id = pl.player_id
          JOIN bases b ON b.player_id = pl.player_id
          LEFT JOIN buildings bd ON bd.player_id = pl.player_id AND bd.kind = 'command_post'
+         LEFT JOIN alliance_members am ON am.player_id = pl.player_id
         WHERE pl.world_id = ?1
           AND pl.plot_x BETWEEN ?2 AND ?3
           AND pl.plot_y BETWEEN ?4 AND ?5

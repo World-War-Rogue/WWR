@@ -291,7 +291,14 @@ export default function Profile({
 
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Stat label="Power" value={formatNumber(profile.power)} />
-            <Stat label="Alliance" value={profile.alliance ?? 'None'} />
+            <Stat
+              label="Alliance"
+              value={
+                profile.alliance
+                  ? `[${profile.alliance.tag}] ${profile.alliance.name}`
+                  : 'None'
+              }
+            />
             <Stat label="Server" value={profile.homeWorldId ? `#${profile.homeWorldId}` : '—'} />
             <Stat label="Command Post" value={`Lv ${profile.commandPost}`} />
           </div>

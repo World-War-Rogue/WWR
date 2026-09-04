@@ -7,6 +7,7 @@
  * gets wired to these same endpoints once the foundation is trusted.
  */
 import {type FormEvent, useCallback, useEffect, useRef, useState} from 'react';
+import Alliance from './Alliance';
 import Customize from './Customize';
 import Profile from './Profile';
 import Gate from './Gate';
@@ -70,7 +71,7 @@ export default function LiveApp() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [checking, setChecking] = useState(true);
-  const [screen, setScreen] = useState<'base' | 'world' | 'customize' | 'profile'>('base');
+  const [screen, setScreen] = useState<'base' | 'world' | 'customize' | 'profile' | 'alliance'>('base');
   // Whose profile is open. Your own from the base header; somebody else's from
   // their base on the map.
   const [viewing, setViewing] = useState<string | null>(null);
@@ -135,6 +136,19 @@ export default function LiveApp() {
 
   if (!player) return <Gate onAuthed={setPlayer} />;
 
+  if (screen === 'alliance') {
+    return (
+      <Alliance
+        me={player.username}
+        onClose={() => setScreen('base')}
+        onViewProfile={(name) => {
+          setViewing(name);
+          setScreen('profile');
+        }}
+      />
+    );
+  }
+
   if (screen === 'profile') {
     const who = viewing ?? player.username;
     return (
@@ -191,6 +205,12 @@ export default function LiveApp() {
               Access requests
             </a>
           )}
+          <button
+            onClick={() => setScreen('alliance')}
+            className="rounded border border-neutral-700 px-3 py-2 text-sm font-medium text-neutral-300 hover:border-emerald-500"
+          >
+            Alliance
+          </button>
           <button
             onClick={() => {
               setViewing(null);
