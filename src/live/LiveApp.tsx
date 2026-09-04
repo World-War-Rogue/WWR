@@ -147,6 +147,14 @@ export default function LiveApp() {
           <h1 className="text-xl font-semibold text-neutral-100">{base?.name ?? '…'}</h1>
         </div>
         <div className="flex items-center gap-4">
+          {player.role === 'owner' && (
+            <a
+              href="/api/access/requests"
+              className="rounded border border-orange-700 px-3 py-2 text-sm font-medium text-orange-400 hover:bg-orange-950/40"
+            >
+              Access requests
+            </a>
+          )}
           <button
             onClick={() => setScreen('world')}
             className="rounded bg-neutral-800 px-3 py-2 text-sm font-medium text-neutral-100 hover:bg-neutral-700"

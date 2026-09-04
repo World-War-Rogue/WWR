@@ -63,6 +63,7 @@ export interface WorldView {
 export interface Player {
   id: string;
   username: string;
+  role?: string;
 }
 
 export class ApiError extends Error {

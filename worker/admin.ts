@@ -1,14 +1,16 @@
 /**
  * The approvals page.
  *
- * A single owner-only page listing everyone waiting, with approve and decline
+ * An owner-only page listing everyone waiting, with approve and decline
  * buttons. It exists so that email being misconfigured never stops a tester
  * getting in, and so there is somewhere to see the queue rather than only
  * being notified about it.
  *
- * Access is a shared key held in a Worker secret. That is thin protection and
- * deliberately so at this size - it is one person approving ten testers. It
- * should become a real account role before it guards anything that matters.
+ * Access is the owner's own signed-in session. There is no shared key and
+ * nothing secret in the URL, so nothing lands in browser history or in logs
+ * along the way, and there is no secret to rotate or lose. Owner rights are
+ * granted only with database access (scripts/promote_owner.sql), so a
+ * compromised account cannot promote itself.
  */
 
 function html(body: string, status = 200): Response {
@@ -43,17 +45,6 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
-/**
- * Constant-time comparison, so the key cannot be recovered a character at a
- * time by timing the responses.
- */
-function secretsMatch(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
-
 interface PendingRow {
   id: string;
   email: string;
@@ -65,22 +56,13 @@ interface PendingRow {
 }
 
 export async function handleAdminRequests(
-  request: Request,
-  env: {DB: D1Database; ADMIN_KEY?: string},
+  env: {DB: D1Database},
+  player: {id: string; username: string; role: string},
 ): Promise<Response> {
-  const url = new URL(request.url);
-  const key = url.searchParams.get('key') ?? '';
-
-  if (!env.ADMIN_KEY) {
-    return html(
-      `<p class="eyebrow">World War Rogue</p><h1>Not configured</h1>
-       <p class="meta">Set an admin key first:</p>
-       <p class="meta"><code>npx wrangler secret put ADMIN_KEY</code></p>`,
-      503,
-    );
-  }
-  if (!secretsMatch(key, env.ADMIN_KEY)) {
-    // Same answer for a missing key and a wrong one.
+  // A signed-in player who is not the owner is told the page does not exist,
+  // rather than that they are not allowed - there is no reason to confirm to
+  // an ordinary account that an approvals page is there at all.
+  if (player.role !== 'owner') {
     return html(`<p class="eyebrow">World War Rogue</p><h1>Not found</h1>`, 404);
   }
 
@@ -124,11 +106,8 @@ export async function handleAdminRequests(
      <h1>Access requests</h1>
      ${cards}
      <p class="note">
-       ${pending.length} pending${summary ? ` · ${summary}` : ''}.<br>
-       This page is protected by a shared key, which is thin protection: anyone
-       with the URL can approve accounts. Treat the link like a password, and
-       replace this with a proper account role before it guards anything that
-       matters.
+       ${pending.length} pending${summary ? ` · ${summary}` : ''}.
+       Signed in as ${escapeHtml(player.username)}.
      </p>`,
   );
 }

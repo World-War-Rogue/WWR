@@ -59,8 +59,6 @@ export interface Env {
   RESEND_API_KEY?: string;
   MAIL_FROM?: string;
   OWNER_EMAIL?: string;
-  /** Set with: wrangler secret put ADMIN_KEY */
-  ADMIN_KEY?: string;
 }
 
 const RESOURCES: ResourceKind[] = ['fuel', 'steel', 'munitions', 'alloy'];
@@ -79,13 +77,14 @@ function fail(status: number, error: string): Response {
 interface PlayerRow {
   id: string;
   username: string;
+  role: string;
 }
 
 async function authenticate(request: Request, env: Env): Promise<PlayerRow | null> {
   const token = readSessionCookie(request);
   if (!token) return null;
   const row = await env.DB.prepare(
-    `SELECT p.id AS id, p.username AS username
+    `SELECT p.id AS id, p.username AS username, p.role AS role
        FROM sessions s JOIN players p ON p.id = s.player_id
       WHERE s.token = ?1 AND s.expires_at > ?2`,
   )
@@ -509,20 +508,26 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
   const {username, password} = parsed.value;
 
   const row = await env.DB.prepare(
-    `SELECT id, username, password_hash FROM players WHERE username_key = ?1`,
+    `SELECT id, username, password_hash, role FROM players WHERE username_key = ?1`,
   )
     .bind(username.toLowerCase())
-    .first<{id: string; username: string; password_hash: string}>();
+    .first<{id: string; username: string; password_hash: string; role: string}>();
 
   // Same response whether the account is missing or the password is wrong, so
   // the endpoint cannot be used to enumerate callsigns.
   if (!row || !(await verifyPassword(password, row.password_hash))) {
     return fail(401, 'Callsign or password is incorrect.');
   }
-  return startSession(env, row.id, row.username, Date.now());
+  return startSession(env, row.id, row.username, Date.now(), row.role);
 }
 
-async function startSession(env: Env, playerId: string, username: string, now: number): Promise<Response> {
+async function startSession(
+  env: Env,
+  playerId: string,
+  username: string,
+  now: number,
+  role = 'player',
+): Promise<Response> {
   const token = newToken();
   const expiresAt = now + SESSION_TTL_MS;
   await env.DB.batch([
@@ -533,7 +538,7 @@ async function startSession(env: Env, playerId: string, username: string, now: n
     env.DB.prepare(`DELETE FROM sessions WHERE expires_at < ?1`).bind(now),
   ]);
   return json(
-    {player: {id: playerId, username}},
+    {player: {id: playerId, username, role}},
     {headers: {'Set-Cookie': sessionCookie(token, Math.floor(SESSION_TTL_MS / 1000))}},
   );
 }
@@ -695,8 +700,6 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (endpoint === 'GET /api/access/decide') return handleDecision(request, env);
 
   if (endpoint === 'GET /api/access/callsign') return handleCallsignCheck(request, env);
-
-  if (endpoint === 'GET /api/access/requests') return handleAdminRequests(request, env);
   if (endpoint === 'POST /api/auth/login') return handleLogin(request, env);
 
   if (endpoint === 'POST /api/auth/logout') {
@@ -709,6 +712,8 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (!player) return fail(401, 'Not signed in.');
 
   if (endpoint === 'GET /api/me') return json({player});
+
+  if (endpoint === 'GET /api/access/requests') return handleAdminRequests(env, player);
 
   if (endpoint === 'GET /api/base') {
     const now = Date.now();
