@@ -80,11 +80,38 @@ cloth simulation, anything under about 8 pixels of movement. The game layers
 its own smoke, fire, embers and blast rings over the top of every skin, so
 **do not bake damage effects, fire or smoke into the art.**
 
-A still is acceptable as a first delivery — see §8.
+A still is acceptable as a first delivery — see §9.
 
 ---
 
-## 5. Files to deliver
+## 5. Blender output settings
+
+Render an **RGBA PNG image sequence**. Nothing else. FBX, glTF and .blend are
+model formats the game does not read, and MP4 or WebM discard the alpha channel
+— a base exported as video arrives with a black box behind it.
+
+| Where | Setting |
+| :--- | :--- |
+| Render Properties → Film | **Transparent ✓** — without this you get sky, not alpha |
+| Output → File Format | **PNG** |
+| Output → Color | **RGBA**, not RGB |
+| Output → Color Depth | 8 |
+| Output → Resolution | **512 × 640** (or 512 × 768 for a tall skin), 100% |
+| Output → Frame Rate | Custom, **12 fps** |
+| Frame range | **1 to 24** |
+| Camera → Type | **Orthographic** |
+| Camera → Rotation | **X 58°, Y 0°, Z 0°** |
+
+**Animate the model, never the camera.** A camera that drifts even a pixel
+between frames shifts the footprint, and the base visibly jitters on its plot.
+Lock it and leave it.
+
+Name frames zero-padded — `name_0001.png` through `name_0024.png` — so they
+sort correctly when packed.
+
+---
+
+## 6. Files to deliver
 
 1. **PNG sequence** — `name_0001.png` … `name_0024.png`, straight (unassociated)
    alpha, transparent background.
@@ -94,12 +121,22 @@ A still is acceptable as a first delivery — see §8.
 3. **The .blend file**, with materials and rig intact.
 4. **A single hero still** at 1024 × 1280 for the store listing.
 
+To pack the sequence into the atlas, with ImageMagick:
+
+```
+magick montage name_00*.png -tile 6x4 -geometry +0+0 -background none PNG32:atlas.png
+magick atlas.png -quality 88 name.webp
+```
+
+`-background none` and the `PNG32:` prefix are both required; without them the
+alpha channel is flattened and every frame gets a white square behind it.
+
 Frames must be identically sized and identically registered — the footprint
 must not drift between frames, or the base will jitter on its plot.
 
 ---
 
-## 6. Content rules
+## 7. Content rules
 
 - No text, letterforms or numerals anywhere in the art. The game draws its own
   nameplates and level badges over the top.
@@ -112,7 +149,7 @@ must not drift between frames, or the base will jitter on its plot.
 
 ---
 
-## 7. Rights
+## 8. Rights
 
 Buy **full assignment of copyright**, in writing, including the .blend and the
 right to modify and resell. A licence is cheaper and will become a problem the
@@ -120,7 +157,7 @@ first time a skin needs re-rendering at a different size.
 
 ---
 
-## 8. Two ways to buy this
+## 9. Two ways to buy this
 
 **Start with a still.** One high-quality render — no rig, no loop — costs a
 fraction of a full animation. The game applies its own motion over a still: a
@@ -142,7 +179,7 @@ Rough costs for a freelance 3D artist, as of writing:
 
 ---
 
-## 9. One-of-one commissions
+## 10. One-of-one commissions
 
 A skin sold to a single player and never sold again. The database enforces
 this — a second grant of an exclusive item is rejected by a unique index, not
