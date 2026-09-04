@@ -12,6 +12,7 @@
  */
 import {useMemo, useState} from 'react';
 import AssetIcon from './AssetIcon';
+import ForcesTabs from './ForcesTabs';
 import {
   ASSETS,
   ATTRIBUTE_MAX,
@@ -127,7 +128,13 @@ function Card({asset}: {asset: Asset}) {
   );
 }
 
-export default function Assets({onClose}: {onClose: () => void}) {
+export default function Assets({
+  onClose,
+  onShowSquads,
+}: {
+  onClose: () => void;
+  onShowSquads: () => void;
+}) {
   const [category, setCategory] = useState<AssetCategory | 'all'>('all');
   const [query, setQuery] = useState('');
 
@@ -153,7 +160,7 @@ export default function Assets({onClose}: {onClose: () => void}) {
         >
           ‹ Back
         </button>
-        <h2 className="font-semibold text-neutral-100">Assets</h2>
+        <ForcesTabs active="assets" onChange={(tab) => tab === 'squads' && onShowSquads()} />
         <span className="text-[11px] text-neutral-600">{shown.length} of {ASSETS.length}</span>
         <input
           value={query}

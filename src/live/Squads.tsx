@@ -22,6 +22,7 @@ import {
 } from '../../shared/assets';
 import {ApiError, type SquadView, api} from '../net/api';
 import AssetIcon from './AssetIcon';
+import ForcesTabs from './ForcesTabs';
 
 const ROLE_TINT: Record<string, string> = {
   breach: 'text-red-300',
@@ -76,7 +77,13 @@ function Slot({
   );
 }
 
-export default function Squads({onClose}: {onClose: () => void}) {
+export default function Squads({
+  onClose,
+  onShowAssets,
+}: {
+  onClose: () => void;
+  onShowAssets: () => void;
+}) {
   const [view, setView] = useState<SquadView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -148,7 +155,7 @@ export default function Squads({onClose}: {onClose: () => void}) {
         >
           ‹ Back
         </button>
-        <h2 className="font-semibold text-neutral-100">Squads</h2>
+        <ForcesTabs active="squads" onChange={(tab) => tab === 'assets' && onShowAssets()} />
         {view && (
           <span className="ml-auto text-[11px] text-neutral-500">
             Lift budget <span className="font-mono text-neutral-300">{budget}</span> per squad

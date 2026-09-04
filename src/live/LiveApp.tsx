@@ -87,14 +87,12 @@ function PlayerMenu({
   player,
   onOpenProfile,
   onOpenCustomize,
-  onOpenAssets,
   onOpenAlliance,
   onSignOut,
 }: {
   player: Player;
   onOpenProfile: () => void;
   onOpenCustomize: () => void;
-  onOpenAssets: () => void;
   onOpenAlliance: () => void;
   onSignOut: () => Promise<void>;
 }) {
@@ -213,15 +211,6 @@ function PlayerMenu({
             className="block w-full px-3 py-2.5 text-left text-sm text-neutral-200 hover:bg-neutral-900"
           >
             {t('nav.alliance')}
-          </button>
-          <button
-            onClick={() => {
-              setOpen(false);
-              onOpenAssets();
-            }}
-            className="block w-full px-3 py-2.5 text-left text-sm text-neutral-200 hover:bg-neutral-900"
-          >
-            {t('menu.assets')}
           </button>
           {player.role === 'owner' && (
             <a
@@ -419,7 +408,7 @@ export default function LiveApp() {
     return (
       <>
         <div className="fixed inset-0 bg-[#0a0906] text-neutral-200">
-          <Squads onClose={() => setScreen('base')} />
+          <Squads onClose={() => setScreen('base')} onShowAssets={() => setScreen('assets')} />
         </div>
         {chat}
       </>
@@ -432,7 +421,7 @@ export default function LiveApp() {
     return (
       <>
         <div className="fixed inset-0 bg-[#0a0906] text-neutral-200">
-          <Assets onClose={() => setScreen('base')} />
+          <Assets onClose={() => setScreen('base')} onShowSquads={() => setScreen('squads')} />
         </div>
         {chat}
       </>
@@ -499,7 +488,6 @@ export default function LiveApp() {
             setScreen('profile');
           }}
           onOpenCustomize={() => setScreen('customize')}
-          onOpenAssets={() => setScreen('assets')}
           onOpenAlliance={() => setScreen('alliance')}
           onSignOut={async () => {
             await api.logout();

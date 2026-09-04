@@ -22,7 +22,6 @@ export const EN = {
   'menu.viewProfile': 'View full profile',
   'menu.customise': 'Customise base',
   'menu.squads': 'Squads',
-  'menu.assets': 'Assets',
   'menu.accessRequests': 'Access requests',
   'menu.signOut': 'Sign out',
   'menu.noAlliance': 'No alliance',
