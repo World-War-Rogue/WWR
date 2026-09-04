@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>World War Rogue — Base Skin Concepts</title>
+<style>
+  :root{
+    --bg:#0a0c0b; --panel:#131614; --line:#262a27;
+    --ink:#e8eae7; --muted:#9aa09b; --accent:#ea580c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+    padding:40px 24px 80px}
+  .wrap{max-width:1180px;margin:0 auto}
+  .eyebrow{font-size:12px;letter-spacing:.28em;text-transform:uppercase;color:var(--accent);margin:0}
+  h1{font-size:30px;margin:10px 0 8px;font-weight:650;letter-spacing:-.01em}
+  .lede{color:var(--muted);font-size:15px;line-height:1.65;max-width:70ch;margin:0 0 8px}
+  .note{color:#6f756f;font-size:13px;line-height:1.6;max-width:70ch;margin:14px 0 36px}
+  .grid{display:grid;gap:18px;grid-template-columns:repeat(auto-fill,minmax(330px,1fr))}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;
+    display:flex;flex-direction:column}
+  .art{display:flex;align-items:center;gap:16px;padding:16px;background:#0f120f;
+    border-bottom:1px solid var(--line)}
+  canvas{display:block;border-radius:6px;image-rendering:auto}
+  .zooms{display:flex;flex-direction:column;gap:8px;align-items:center}
+  .zoomlabel{font-size:10px;color:#5f655f;letter-spacing:.12em;text-transform:uppercase}
+  .body{padding:14px 16px 18px}
+  .num{font-size:11px;color:#5f655f;letter-spacing:.16em}
+  h2{font-size:17px;margin:4px 0 6px;font-weight:620}
+  p.desc{color:var(--muted);font-size:13.5px;line-height:1.6;margin:0 0 10px}
+  .sig{font-size:12px;color:#7d837d;margin:0}
+  .sig b{color:#b9beb8;font-weight:600}
+  .swatches{display:flex;gap:5px;margin-top:12px}
+  .sw{width:22px;height:12px;border-radius:3px;border:1px solid rgba(255,255,255,.12)}
+  footer{margin-top:44px;color:#6f756f;font-size:13px;line-height:1.7;max-width:70ch}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="eyebrow">World War Rogue</p>
+  <h1>Base skin concepts</h1>
+  <p class="lede">
+    Ten silhouettes to choose from. Each is drawn twice: at close-up size, and at the size it
+    actually appears on the world map when you are looking at your neighbours.
+  </p>
+  <p class="note">
+    The small version is the one that matters. A skin earns its place by being recognisable at
+    map scale — if two bases are indistinguishable at 30 pixels, they are the same skin as far as
+    a player is concerned, however different the detail is up close.
+  </p>
+
+  <div class="grid" id="grid"></div>
+
+  <footer>
+    These are drawn from recipes rather than image files: the same code renders them at any size,
+    nothing has to be downloaded, and a skin is a data entry rather than an art pipeline. When you
+    commission real art it drops into these same slots.
+  </footer>
+</div>
+
+<script>
+const SKINS = [
+  {
+    id:'desert_fob', name:'Desert FOB',
+    desc:'HESCO barriers filled with earth, a berm pushed up around the wire, and a watchtower over the gate. Built in a week, holds for a year.',
+    sig:'Segmented bastion wall, single tower',
+    p:{ground:'#b08248',wall:'#c9ac78',structure:'#d9c39a',roof:'#8d6636',accent:'#e07a29'},
+    draw:'fob'
+  },
+  {
+    id:'arctic_station', name:'Arctic Station',
+    desc:'Radar domes on a snow berm above the treeline. Half the compound is buried; what shows is antenna and white.',
+    sig:'Dome cluster, smooth berm',
+    p:{ground:'#9fb6c6',wall:'#cddde6',structure:'#e8f1f6',roof:'#7d97a8',accent:'#3fa9d6'},
+    draw:'arctic'
+  },
+  {
+    id:'jungle_outpost', name:'Jungle Outpost',
+    desc:'Timber palisade, platforms up off the wet ground, camouflage netting stretched over the whole compound.',
+    sig:'Palisade stakes, canopy triangle',
+    p:{ground:'#4e6b3a',wall:'#5f7a45',structure:'#7b8f5c',roof:'#3c5430',accent:'#9fd356'},
+    draw:'jungle'
+  },
+  {
+    id:'urban_garrison', name:'Urban Garrison',
+    desc:'A city block turned strongpoint. Blast walls across the streets, corner buildings reinforced into firing positions.',
+    sig:'Blast walls, four corner blocks',
+    p:{ground:'#6b6b6b',wall:'#8a9096',structure:'#9aa0a6',roof:'#4f5155',accent:'#d64545'},
+    draw:'urban'
+  },
+  {
+    id:'forward_airstrip', name:'Forward Airstrip',
+    desc:'A graded strip and two hangars. Everything else is subordinate to keeping the runway clear.',
+    sig:'Diagonal runway with centreline',
+    p:{ground:'#8a8470',wall:'#a39c85',structure:'#cfc9b4',roof:'#5f5a4b',accent:'#f0b429'},
+    draw:'airstrip'
+  },
+  {
+    id:'harbour_station', name:'Harbour Station',
+    desc:'A cut in the shoreline, a jetty, and boats tied alongside. The only base type that brings water with it.',
+    sig:'Water wedge and pier',
+    p:{ground:'#7a7f74',wall:'#98a08f',structure:'#d6dcd2',roof:'#4c5a52',accent:'#2aa1a8'},
+    draw:'harbour'
+  },
+  {
+    id:'missile_battery', name:'Missile Battery',
+    desc:'Launchers in earth revetments arranged around a central radar. Built to shoot at things it cannot see.',
+    sig:'Radial revetments around a dish',
+    p:{ground:'#6f6752',wall:'#8b8268',structure:'#b9b199',roof:'#4a4436',accent:'#e2574c'},
+    draw:'missile'
+  },
+  {
+    id:'mountain_bunker', name:'Mountain Bunker',
+    desc:'Cut into rock. A tunnel mouth, blast doors, gun positions on the ledges above. Most of it is inside the hill.',
+    sig:'Dark rock mass, tunnel mouth',
+    p:{ground:'#3c3a38',wall:'#57534e',structure:'#6f6a63',roof:'#2a2825',accent:'#c2703a'},
+    draw:'bunker'
+  },
+  {
+    id:'salvage_yard', name:'Salvage Yard',
+    desc:'Containers stacked four high, a gantry crane, and the hulls they were cut from. Wealth measured in scrap.',
+    sig:'Container stacks, crane gantry',
+    p:{ground:'#5c5751',wall:'#7a736a',structure:'#9c948a',roof:'#43403c',accent:'#d97706'},
+    draw:'salvage'
+  },
+  {
+    id:'oil_depot', name:'Oil Depot',
+    desc:'Storage tanks inside a bund wall, pipework between them, a flare stack burning at the corner.',
+    sig:'Circular tanks, flare',
+    p:{ground:'#6b6455',wall:'#89826f',structure:'#c8c3b4',roof:'#514b40',accent:'#ef6c1f'},
+    draw:'oil'
+  },
+];
+
+function rnd(x,y,s){const n=Math.sin(x*127.1+y*311.7+s*74.7)*43758.5453;return n-Math.floor(n)}
+function rr(ctx,x,y,w,h,r){ctx.beginPath();ctx.roundRect(x,y,w,h,r)}
+function shadow(ctx,x,y,w,h,o){ctx.fillStyle='rgba(0,0,0,.3)';ctx.fillRect(x+o,y+o,w,h)}
+
+function drawSkin(ctx,S,size,detailed){
+  const p=S.p, pad=size*.05, s=size-pad*2, x=pad, y=pad;
+  ctx.clearRect(0,0,size,size);
+  ctx.fillStyle=p.ground; rr(ctx,x,y,s,s,size*.09); ctx.fill();
+  if(!detailed){
+    ctx.fillStyle=p.roof; ctx.fillRect(x+s*.22,y+s*.22,s*.56,s*.56);
+    ctx.fillStyle=p.accent; ctx.fillRect(x+s*.4,y+s*.4,s*.2,s*.2);
+  } else {
+    DRAW[S.draw](ctx,x,y,s,p,size);
+  }
+  ctx.strokeStyle='rgba(0,0,0,.42)'; ctx.lineWidth=1;
+  rr(ctx,x,y,s,s,size*.09); ctx.stroke();
+}
+
+function wall(ctx,x,y,s,p,t){
+  ctx.fillStyle=p.wall;
+  ctx.fillRect(x,y,s,t); ctx.fillRect(x,y+s-t,s,t);
+  ctx.fillRect(x,y,t,s); ctx.fillRect(x+s-t,y,t,s);
+}
+function gate(ctx,x,y,s,p,t){ctx.fillStyle=p.accent;ctx.fillRect(x+s*.42,y+s-t,s*.16,t)}
+function huts(ctx,x,y,s,p,n,seed){
+  const t=s*.09, ix=x+t, iy=y+t, is=s-t*2;
+  for(let i=0;i<n;i++){
+    const w=is*(.16+rnd(seed,i,1)*.15), h=is*(.13+rnd(seed,i,2)*.15);
+    const bx=ix+(is-w)*rnd(seed,i,3), by=iy+(is-h)*rnd(seed,i,4)*.85;
+    shadow(ctx,bx,by,w,h,s*.02);
+    ctx.fillStyle=p.structure; ctx.fillRect(bx,by,w,h);
+    ctx.fillStyle=p.roof; ctx.fillRect(bx,by,w,h*.34);
+  }
+}
+
+const DRAW={
+  fob(ctx,x,y,s,p,size){
+    const t=s*.09; wall(ctx,x,y,s,p,t);
+    ctx.strokeStyle='rgba(0,0,0,.24)';ctx.lineWidth=1;
+    for(let i=1;i<7;i++){const o=s/7*i;ctx.beginPath();
+      ctx.moveTo(x+o,y);ctx.lineTo(x+o,y+t);ctx.moveTo(x+o,y+s-t);ctx.lineTo(x+o,y+s);
+      ctx.moveTo(x,y+o);ctx.lineTo(x+t,y+o);ctx.moveTo(x+s-t,y+o);ctx.lineTo(x+s,y+o);ctx.stroke();}
+    huts(ctx,x,y,s,p,4,11); gate(ctx,x,y,s,p,t);
+    const cx=x+s*.5,cy=y+s*.42,r=s*.09;
+    shadow(ctx,cx-r*.6,cy-r*1.6,r*1.2,r*3,s*.02);
+    ctx.fillStyle=p.structure;ctx.fillRect(cx-r*.6,cy-r*1.6,r*1.2,r*3);
+    ctx.fillStyle=p.accent;ctx.fillRect(cx-r,cy-r*2,r*2,r*.6);
+  },
+  arctic(ctx,x,y,s,p,size){
+    const t=s*.09; wall(ctx,x,y,s,p,t);
+    ctx.fillStyle='rgba(255,255,255,.45)';ctx.fillRect(x+t,y+t,s-t*2,t*.4);
+    huts(ctx,x,y,s,p,3,22); gate(ctx,x,y,s,p,t);
+    [[.5,.4,.16],[.28,.62,.1],[.72,.63,.09]].forEach(([fx,fy,fr],i)=>{
+      const cx=x+s*fx,cy=y+s*fy,r=s*fr;
+      shadow(ctx,cx-r,cy-r,r*2,r*2,s*.02);
+      ctx.fillStyle=p.structure;ctx.beginPath();ctx.arc(cx,cy,r,0,7);ctx.fill();
+      ctx.strokeStyle=p.accent;ctx.lineWidth=Math.max(1,s*.014);
+      ctx.beginPath();ctx.arc(cx,cy,r*.6,0,7);ctx.stroke();
+    });
+  },
+  jungle(ctx,x,y,s,p,size){
+    const t=s*.09; wall(ctx,x,y,s,p,t);
+    ctx.strokeStyle=p.roof;ctx.lineWidth=Math.max(1,s*.02);
+    for(let i=0;i<15;i++){const o=s/15*(i+.5);ctx.beginPath();
+      ctx.moveTo(x+o,y);ctx.lineTo(x+o,y+t);ctx.moveTo(x+o,y+s-t);ctx.lineTo(x+o,y+s);ctx.stroke();}
+    huts(ctx,x,y,s,p,4,33); gate(ctx,x,y,s,p,t);
+    ctx.fillStyle=p.accent;
+    [[.5,.36,.16],[.3,.66,.1],[.7,.66,.1]].forEach(([fx,fy,fr])=>{
+      const cx=x+s*fx,cy=y+s*fy,r=s*fr;
+      ctx.beginPath();ctx.moveTo(cx,cy-r*1.1);ctx.lineTo(cx+r,cy+r*.7);ctx.lineTo(cx-r,cy+r*.7);
+      ctx.closePath();ctx.fill();
+    });
+  },
+  urban(ctx,x,y,s,p,size){
+    const t=s*.09; wall(ctx,x,y,s,p,t);
+    const c=s*.17; ctx.fillStyle=p.roof;
+    [[0,0],[s-c,0],[0,s-c],[s-c,s-c]].forEach(([ox,oy])=>ctx.fillRect(x+ox,y+oy,c,c));
+    ctx.fillStyle='rgba(0,0,0,.16)';
+    ctx.fillRect(x+t,y+s*.46,s-t*2,s*.08); ctx.fillRect(x+s*.46,y+t,s*.08,s-t*2);
+    huts(ctx,x,y,s,p,4,44); gate(ctx,x,y,s,p,t);
+    ctx.fillStyle=p.accent;ctx.fillRect(x+s*.42,y+s*.38,s*.16,s*.16);
+  },
+  airstrip(ctx,x,y,s,p,size){
+    const t=s*.07; wall(ctx,x,y,s,p,t);
+    ctx.save();ctx.beginPath();rr(ctx,x+t,y+t,s-t*2,s-t*2,s*.04);ctx.clip();
+    ctx.translate(x+s/2,y+s/2);ctx.rotate(-Math.PI/5);
+    ctx.fillStyle=p.roof;ctx.fillRect(-s*.72,-s*.13,s*1.44,s*.26);
+    ctx.strokeStyle=p.structure;ctx.lineWidth=Math.max(1,s*.018);ctx.setLineDash([s*.07,s*.05]);
+    ctx.beginPath();ctx.moveTo(-s*.66,0);ctx.lineTo(s*.66,0);ctx.stroke();ctx.setLineDash([]);
+    ctx.restore();
+    [[.16,.2],[.16,.62]].forEach(([fx,fy])=>{
+      const w=s*.22,h=s*.17,bx=x+s*fx,by=y+s*fy;
+      shadow(ctx,bx,by,w,h,s*.02);
+      ctx.fillStyle=p.structure;ctx.fillRect(bx,by,w,h);
+      ctx.fillStyle=p.roof;ctx.fillRect(bx,by,w,h*.4);
+    });
+    ctx.fillStyle=p.accent;ctx.fillRect(x+s*.78,y+s*.14,s*.07,s*.24);
+  },
+  harbour(ctx,x,y,s,p,size){
+    const t=s*.08;
+    ctx.fillStyle='#1c4f57';
+    ctx.beginPath();ctx.moveTo(x+s,y);ctx.lineTo(x+s,y+s);ctx.lineTo(x+s*.42,y+s);ctx.closePath();ctx.fill();
+    wall(ctx,x,y,s,p,t);
+    ctx.fillStyle=p.structure;ctx.fillRect(x+s*.46,y+s*.5,s*.42,s*.07);
+    [[.6,.32],[.68,.72]].forEach(([fx,fy],i)=>{
+      ctx.save();ctx.translate(x+s*fx,y+s*fy);ctx.rotate(i?.3:-.25);
+      ctx.fillStyle=p.accent;ctx.beginPath();
+      ctx.moveTo(-s*.11,0);ctx.lineTo(s*.06,-s*.05);ctx.lineTo(s*.11,0);ctx.lineTo(s*.06,s*.05);
+      ctx.closePath();ctx.fill();ctx.restore();
+    });
+    huts(ctx,x,y,s*.62,p,3,55); gate(ctx,x,y,s,p,t);
+  },
+  missile(ctx,x,y,s,p,size){
+    const t=s*.08; wall(ctx,x,y,s,p,t);
+    const cx=x+s*.5,cy=y+s*.5;
+    for(let i=0;i<6;i++){
+      const a=i/6*Math.PI*2, rx=cx+Math.cos(a)*s*.28, ry=cy+Math.sin(a)*s*.28;
+      ctx.save();ctx.translate(rx,ry);ctx.rotate(a);
+      ctx.fillStyle=p.wall;ctx.fillRect(-s*.09,-s*.07,s*.18,s*.14);
+      ctx.fillStyle=p.accent;ctx.fillRect(-s*.02,-s*.05,s*.05,s*.1);
+      ctx.restore();
+    }
+    shadow(ctx,cx-s*.1,cy-s*.1,s*.2,s*.2,s*.02);
+    ctx.fillStyle=p.structure;ctx.beginPath();ctx.arc(cx,cy,s*.1,0,7);ctx.fill();
+    ctx.strokeStyle=p.roof;ctx.lineWidth=Math.max(1,s*.02);
+    ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+s*.09,cy-s*.07);ctx.stroke();
+    gate(ctx,x,y,s,p,t);
+  },
+  bunker(ctx,x,y,s,p,size){
+    ctx.fillStyle=p.roof;
+    ctx.beginPath();ctx.moveTo(x,y+s*.16);
+    for(let i=0;i<=6;i++){const fx=i/6;ctx.lineTo(x+s*fx,y+s*(.16+Math.sin(fx*3.1)*.1+rnd(i,3,7)*.05));}
+    ctx.lineTo(x+s,y);ctx.lineTo(x,y);ctx.closePath();ctx.fill();
+    const t=s*.08; wall(ctx,x,y,s,p,t);
+    const cx=x+s*.5,cy=y+s*.34,r=s*.14;
+    ctx.fillStyle='#15130f';
+    ctx.beginPath();ctx.moveTo(cx-r,cy+r);ctx.lineTo(cx-r,cy);ctx.arc(cx,cy,r,Math.PI,0);ctx.lineTo(cx+r,cy+r);ctx.closePath();ctx.fill();
+    ctx.fillStyle=p.accent;ctx.fillRect(cx-r*.16,cy+r*.2,r*.32,r*.8);
+    huts(ctx,x,y+s*.3,s*.9,p,3,66);
+    [[.2,.2],[.8,.2]].forEach(([fx,fy])=>{
+      ctx.fillStyle=p.structure;ctx.beginPath();ctx.arc(x+s*fx,y+s*fy,s*.05,0,7);ctx.fill();
+    });
+    gate(ctx,x,y,s,p,t);
+  },
+  salvage(ctx,x,y,s,p,size){
+    const t=s*.07; wall(ctx,x,y,s,p,t);
+    const cols=['#b45309','#0f766e','#7f1d1d','#3f6212','#1e3a8a','#78350f'];
+    for(let r=0;r<4;r++)for(let c=0;c<4;c++){
+      if(rnd(r,c,9)<.28) continue;
+      const w=s*.17,h=s*.09;
+      const bx=x+t+s*.03+c*s*.2, by=y+t+s*.06+r*s*.19;
+      shadow(ctx,bx,by,w,h,s*.015);
+      ctx.fillStyle=cols[Math.floor(rnd(r,c,4)*cols.length)];
+      ctx.fillRect(bx,by,w,h);
+      ctx.strokeStyle='rgba(0,0,0,.3)';ctx.lineWidth=1;ctx.strokeRect(bx+.5,by+.5,w,h);
+    }
+    ctx.fillStyle=p.structure;ctx.fillRect(x+s*.08,y+s*.44,s*.84,s*.045);
+    ctx.fillStyle=p.accent;ctx.fillRect(x+s*.5,y+s*.4,s*.05,s*.14);
+    gate(ctx,x,y,s,p,t);
+  },
+  oil(ctx,x,y,s,p,size){
+    const t=s*.08;
+    ctx.fillStyle=p.wall;ctx.fillRect(x,y,s,t);ctx.fillRect(x,y+s-t,s,t);
+    ctx.fillRect(x,y,t,s);ctx.fillRect(x+s-t,y,t,s);
+    [[.32,.34,.14],[.66,.34,.11],[.36,.68,.11],[.68,.68,.13]].forEach(([fx,fy,fr],i)=>{
+      const cx=x+s*fx,cy=y+s*fy,r=s*fr;
+      ctx.fillStyle='rgba(0,0,0,.3)';ctx.beginPath();ctx.arc(cx+s*.02,cy+s*.025,r,0,7);ctx.fill();
+      ctx.fillStyle=p.structure;ctx.beginPath();ctx.arc(cx,cy,r,0,7);ctx.fill();
+      ctx.strokeStyle=p.roof;ctx.lineWidth=Math.max(1,s*.012);
+      ctx.beginPath();ctx.arc(cx,cy,r*.55,0,7);ctx.stroke();
+    });
+    ctx.strokeStyle=p.roof;ctx.lineWidth=Math.max(1,s*.022);
+    ctx.beginPath();ctx.moveTo(x+s*.32,y+s*.34);ctx.lineTo(x+s*.66,y+s*.34);
+    ctx.lineTo(x+s*.68,y+s*.68);ctx.lineTo(x+s*.36,y+s*.68);ctx.stroke();
+    ctx.fillStyle=p.roof;ctx.fillRect(x+s*.14,y+s*.14,s*.05,s*.16);
+    ctx.fillStyle=p.accent;ctx.beginPath();ctx.arc(x+s*.165,y+s*.13,s*.045,0,7);ctx.fill();
+    gate(ctx,x,y,s,p,t);
+  },
+};
+
+const grid=document.getElementById('grid');
+SKINS.forEach((S,i)=>{
+  const card=document.createElement('div');card.className='card';
+  card.innerHTML=`
+    <div class="art">
+      <canvas class="big" width="160" height="160" style="width:160px;height:160px"></canvas>
+      <div class="zooms">
+        <span class="zoomlabel">On the map</span>
+        <canvas class="mid" width="56" height="56" style="width:56px;height:56px"></canvas>
+        <canvas class="sml" width="30" height="30" style="width:30px;height:30px"></canvas>
+      </div>
+    </div>
+    <div class="body">
+      <p class="num">${String(i+1).padStart(2,'0')}</p>
+      <h2>${S.name}</h2>
+      <p class="desc">${S.desc}</p>
+      <p class="sig"><b>Reads as:</b> ${S.sig}</p>
+      <div class="swatches">
+        ${['ground','wall','structure','roof','accent'].map(k=>`<span class="sw" style="background:${S.p[k]}"></span>`).join('')}
+      </div>
+    </div>`;
+  grid.appendChild(card);
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  [['big',160,true],['mid',56,true],['sml',30,false]].forEach(([cls,px,detail])=>{
+    const cv=card.querySelector('.'+cls);
+    cv.width=px*dpr;cv.height=px*dpr;
+    const ctx=cv.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);
+    drawSkin(ctx,S,px,detail);
+  });
+});
+</script>
+</body>
+</html>

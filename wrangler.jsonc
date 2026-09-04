@@ -24,6 +24,13 @@
     }
   ],
 
+  "vars": {
+    // Internal error text is no longer returned to the browser. The real
+    // exception is still logged and readable with `wrangler tail`; set this
+    // to "on" temporarily when a failure needs diagnosing from the response.
+    "DEBUG_ERRORS": "off"
+  },
+
   "observability": {
     "enabled": true
   }

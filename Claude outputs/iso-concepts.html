@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>World War Rogue — Isometric base concepts</title>
+<style>
+  body{margin:0;background:#0a0c0b;color:#e8eae7;
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;padding:40px 24px 80px}
+  .wrap{max-width:1180px;margin:0 auto}
+  .eyebrow{font-size:12px;letter-spacing:.28em;text-transform:uppercase;color:#ea580c;margin:0}
+  h1{font-size:30px;margin:10px 0 10px;font-weight:650;letter-spacing:-.01em}
+  .lede{color:#9aa09b;font-size:15px;line-height:1.65;max-width:72ch;margin:0 0 30px}
+  .grid{display:grid;gap:20px;grid-template-columns:repeat(auto-fill,minmax(340px,1fr))}
+  .card{background:#131614;border:1px solid #262a27;border-radius:10px;overflow:hidden}
+  .art{background:radial-gradient(120% 100% at 50% 20%, #1a1f18 0%, #0d100c 100%);
+    padding:10px;display:flex;align-items:center;justify-content:center;gap:14px;
+    border-bottom:1px solid #262a27}
+  canvas{display:block}
+  .zooms{display:flex;flex-direction:column;gap:10px;align-items:center}
+  .zl{font-size:10px;color:#5f655f;letter-spacing:.12em;text-transform:uppercase}
+  .body{padding:14px 16px 18px}
+  h2{font-size:17px;margin:0 0 6px;font-weight:620}
+  p{color:#9aa09b;font-size:13.5px;line-height:1.6;margin:0}
+  footer{margin-top:40px;color:#6f756f;font-size:13px;line-height:1.7;max-width:72ch}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="eyebrow">World War Rogue</p>
+  <h1>Isometric rebuild</h1>
+  <p class="lede">
+    Same four ideas, rebuilt with real geometry: every structure is a box with a lit top, a mid-tone
+    left face and a shaded right face, casting a shadow onto the ground and drawn back-to-front so
+    nearer buildings overlap the ones behind. Compare the small versions to the flat ones — height
+    survives the zoom-out, flat colour does not.
+  </p>
+  <div class="grid" id="grid"></div>
+  <footer>
+    Still drawn from recipes rather than image files, so this scales to any size and needs nothing
+    downloaded. If you want painted illustration rather than clean stylised geometry, that is a
+    commission — these slots would take the art unchanged.
+  </footer>
+</div>
+
+<script>
+/* ---------- isometric core ---------- */
+// 2:1 projection. One tile is TW wide and TH tall on screen; H is the pixel
+// height of one unit of elevation.
+function makeIso(size, tiles){
+  const TW = size / (tiles * 0.72);
+  const TH = TW / 2;
+  const H  = TW * 0.58;
+  const ox = size / 2;
+  const oy = size * 0.30;
+  return {
+    TW, TH, H,
+    px:(x,y)=> ox + (x - y) * TW/2,
+    py:(x,y,z=0)=> oy + (x + y) * TH/2 - z * H,
+  };
+}
+
+function shade(hex, amt){
+  const n = parseInt(hex.slice(1),16);
+  const r = Math.max(0, Math.min(255, (n>>16) + amt));
+  const g = Math.max(0, Math.min(255, ((n>>8)&255) + amt));
+  const b = Math.max(0, Math.min(255, (n&255) + amt));
+  return `rgb(${r},${g},${b})`;
+}
+
+/** A flat diamond on the ground plane. */
+function tile(ctx, I, x, y, w, d, fill, stroke){
+  ctx.beginPath();
+  ctx.moveTo(I.px(x,y),         I.py(x,y));
+  ctx.lineTo(I.px(x+w,y),       I.py(x+w,y));
+  ctx.lineTo(I.px(x+w,y+d),     I.py(x+w,y+d));
+  ctx.lineTo(I.px(x,y+d),       I.py(x,y+d));
+  ctx.closePath();
+  ctx.fillStyle = fill; ctx.fill();
+  if (stroke){ ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
+}
+
+/**
+ * A box standing on the ground.
+ *
+ * Three faces: the top catches the light, the left is mid-tone, the right is
+ * in shadow. That single convention is what makes a flat canvas read as solid.
+ */
+function box(ctx, I, x, y, w, d, h, colour, opts={}){
+  const top = opts.top ?? colour;
+  // Cast shadow first, offset along the light direction.
+  if (opts.shadow !== false){
+    ctx.globalAlpha = 0.28;
+    tile(ctx, I, x + 0.18, y + 0.18, w, d, '#000');
+    ctx.globalAlpha = 1;
+  }
+
+  // Left face (x+w edge going down in y).
+  ctx.beginPath();
+  ctx.moveTo(I.px(x,y+d),       I.py(x,y+d,h));
+  ctx.lineTo(I.px(x+w,y+d),     I.py(x+w,y+d,h));
+  ctx.lineTo(I.px(x+w,y+d),     I.py(x+w,y+d));
+  ctx.lineTo(I.px(x,y+d),       I.py(x,y+d));
+  ctx.closePath();
+  ctx.fillStyle = shade(colour, -34); ctx.fill();
+
+  // Right face.
+  ctx.beginPath();
+  ctx.moveTo(I.px(x+w,y),       I.py(x+w,y,h));
+  ctx.lineTo(I.px(x+w,y+d),     I.py(x+w,y+d,h));
+  ctx.lineTo(I.px(x+w,y+d),     I.py(x+w,y+d));
+  ctx.lineTo(I.px(x+w,y),       I.py(x+w,y));
+  ctx.closePath();
+  ctx.fillStyle = shade(colour, -66); ctx.fill();
+
+  // Top.
+  ctx.beginPath();
+  ctx.moveTo(I.px(x,y),         I.py(x,y,h));
+  ctx.lineTo(I.px(x+w,y),       I.py(x+w,y,h));
+  ctx.lineTo(I.px(x+w,y+d),     I.py(x+w,y+d,h));
+  ctx.lineTo(I.px(x,y+d),       I.py(x,y+d,h));
+  ctx.closePath();
+  ctx.fillStyle = shade(top, 14); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,.22)'; ctx.lineWidth = 1; ctx.stroke();
+}
+
+function cyl(ctx, I, cx, cy, r, h, colour){
+  const sx = I.px(cx,cy), syTop = I.py(cx,cy,h), syBase = I.py(cx,cy);
+  const rx = r * I.TW/2 * 1.42, ry = rx/2;
+  ctx.globalAlpha=.28;
+  ctx.beginPath(); ctx.ellipse(sx+I.TW*.16, syBase+I.TH*.16, rx, ry, 0,0,7); ctx.fillStyle='#000'; ctx.fill();
+  ctx.globalAlpha=1;
+  ctx.beginPath();
+  ctx.moveTo(sx-rx, syBase); ctx.lineTo(sx-rx, syTop);
+  ctx.ellipse(sx, syTop, rx, ry, 0, Math.PI, 0, true);
+  ctx.lineTo(sx+rx, syBase);
+  ctx.ellipse(sx, syBase, rx, ry, 0, 0, Math.PI);
+  ctx.closePath();
+  ctx.fillStyle = shade(colour,-44); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(sx, syTop, rx, ry, 0,0,7);
+  ctx.fillStyle = shade(colour, 16); ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,.25)'; ctx.stroke();
+}
+
+function dome(ctx, I, cx, cy, r, colour){
+  const sx = I.px(cx,cy), sy = I.py(cx,cy);
+  const rx = r * I.TW/2 * 1.42;
+  ctx.globalAlpha=.28;
+  ctx.beginPath(); ctx.ellipse(sx+I.TW*.16, sy+I.TH*.16, rx, rx/2, 0,0,7); ctx.fillStyle='#000'; ctx.fill();
+  ctx.globalAlpha=1;
+  const g = ctx.createLinearGradient(sx-rx, sy-rx, sx+rx, sy);
+  g.addColorStop(0, shade(colour, 22)); g.addColorStop(1, shade(colour, -48));
+  ctx.beginPath(); ctx.ellipse(sx, sy, rx, rx*0.82, 0, Math.PI, 0);
+  ctx.ellipse(sx, sy, rx, rx/2, 0, 0, Math.PI); ctx.closePath();
+  ctx.fillStyle = g; ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,.25)'; ctx.stroke();
+}
+
+/* ---------- skins ---------- */
+const N = 8; // plot is N x N iso tiles
+
+function ground(ctx,I,p){
+  for(let y=0;y<N;y++) for(let x=0;x<N;x++){
+    const alt = (x+y)%2===0;
+    tile(ctx,I,x,y,1,1, alt ? p.ground : shade(p.ground,-9));
+  }
+}
+function perimeter(ctx,I,p,h=0.45,style='wall'){
+  const segs=[];
+  for(let x=0;x<N;x++){ segs.push([x,0,1,0.35]); if(x<3||x>4) segs.push([x,N-0.35,1,0.35]); }
+  for(let y=0.35;y<N-0.35;y+=1){ segs.push([0,y,0.35,1]); segs.push([N-0.35,y,0.35,1]); }
+  segs.sort((a,b)=>(a[0]+a[1])-(b[0]+b[1]));
+  for(const [x,y,w,d] of segs) box(ctx,I,x,y,w,d,h,p.wall,{shadow:false});
+}
+
+const SKINS=[
+{
+  id:'desert_fob', name:'Desert FOB',
+  desc:'HESCO bastion wall, vehicle hardstanding, and a watchtower standing over the gate.',
+  p:{ground:'#a87c44',wall:'#c9ac78',structure:'#d9c39a',roof:'#8d6636',accent:'#e07a29'},
+  build(ctx,I,p){
+    ground(ctx,I,p);
+    tile(ctx,I,3,5.2,2,2.8, shade(p.ground,-24));
+    perimeter(ctx,I,p,0.5);
+    const items=[
+      ()=>box(ctx,I,1.2,1.2,2.4,1.6,0.8,p.structure,{top:p.roof}),
+      ()=>box(ctx,I,4.6,1.4,2,1.4,0.7,p.structure,{top:p.roof}),
+      ()=>box(ctx,I,1.4,3.6,1.6,1.6,0.55,p.structure,{top:p.roof}),
+      ()=>{box(ctx,I,3.4,3.2,1.1,1.1,2.6,p.structure,{top:p.accent});},
+      ()=>box(ctx,I,5.4,4.2,1.5,1.2,0.6,p.roof),
+    ];
+    items.forEach(f=>f());
+  }
+},
+{
+  id:'oil_depot', name:'Oil Depot',
+  desc:'Storage tanks inside a bund wall, pipework running between them, a flare stack at the corner.',
+  p:{ground:'#6b6455',wall:'#89826f',structure:'#c8c3b4',roof:'#514b40',accent:'#ef6c1f'},
+  build(ctx,I,p){
+    ground(ctx,I,p);
+    perimeter(ctx,I,p,0.4);
+    const tanks=[[2.2,2.2,1.1,1.9],[5.1,2.4,0.85,1.5],[2.6,5.2,0.85,1.5],[5.3,5.4,1.0,1.7]];
+    tanks.sort((a,b)=>(a[0]+a[1])-(b[0]+b[1]));
+    tanks.forEach(([x,y,r,h])=>cyl(ctx,I,x,y,r,h,p.structure));
+    box(ctx,I,6.6,1.1,0.5,0.5,3.4,p.roof,{top:p.accent});
+  }
+},
+{
+  id:'forward_airstrip', name:'Forward Airstrip',
+  desc:'A graded strip cut diagonally through the compound, two hangars, and a control tower.',
+  p:{ground:'#8a8470',wall:'#a39c85',structure:'#cfc9b4',roof:'#5f5a4b',accent:'#f0b429'},
+  build(ctx,I,p){
+    ground(ctx,I,p);
+    for(let i=0;i<N;i++) tile(ctx,I,i,3,1,2, shade(p.roof,18));
+    for(let i=0;i<N;i+=2) tile(ctx,I,i+0.35,3.85,0.5,0.3, p.structure);
+    perimeter(ctx,I,p,0.35);
+    box(ctx,I,1.1,0.9,2.2,1.6,1.0,p.structure,{top:p.roof});
+    box(ctx,I,4.6,0.9,2.2,1.6,1.0,p.structure,{top:p.roof});
+    box(ctx,I,5.9,5.6,0.9,0.9,2.8,p.structure,{top:p.accent});
+    box(ctx,I,1.4,5.6,1.6,1.2,0.5,p.roof);
+  }
+},
+{
+  id:'mountain_bunker', name:'Mountain Bunker',
+  desc:'Cut into rock. Blast doors at a tunnel mouth, gun positions on the ledges above.',
+  p:{ground:'#4a4642',wall:'#6b6560',structure:'#8a837b',roof:'#33302c',accent:'#c2703a'},
+  build(ctx,I,p){
+    ground(ctx,I,p);
+    // The hill: stacked boxes stepping up towards the back corner.
+    const rock=[[0,0,4,3,2.6],[4,0,4,2,3.4],[0,3,2.5,2,1.7],[6,2,2,2,2.2]];
+    rock.sort((a,b)=>(a[0]+a[1])-(b[0]+b[1]));
+    rock.forEach(([x,y,w,d,h])=>box(ctx,I,x,y,w,d,h,p.roof,{top:shade(p.roof,26),shadow:false}));
+    perimeter(ctx,I,p,0.4);
+    box(ctx,I,2.9,2.6,1.6,0.5,1.2,'#17150f',{top:'#17150f'});
+    box(ctx,I,2.7,3.1,2.0,0.4,0.5,p.accent);
+    box(ctx,I,1.3,5.2,1.8,1.4,0.7,p.structure,{top:p.roof});
+    box(ctx,I,4.6,5.4,1.6,1.3,0.6,p.structure,{top:p.roof});
+  }
+},
+];
+
+const grid=document.getElementById('grid');
+SKINS.forEach(S=>{
+  const card=document.createElement('div');card.className='card';
+  card.innerHTML=`<div class="art">
+      <canvas class="big"></canvas>
+      <div class="zooms"><span class="zl">On map</span><canvas class="mid"></canvas><canvas class="sml"></canvas></div>
+    </div>
+    <div class="body"><h2>${S.name}</h2><p>${S.desc}</p></div>`;
+  grid.appendChild(card);
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  [['big',210],['mid',64],['sml',34]].forEach(([cls,px])=>{
+    const cv=card.querySelector('.'+cls);
+    cv.style.width=px+'px'; cv.style.height=px+'px';
+    cv.width=px*dpr; cv.height=px*dpr;
+    const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0);
+    const I=makeIso(px,N);
+    S.build(ctx,I,S.p);
+  });
+});
+</script>
+</body>
+</html>
