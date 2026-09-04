@@ -24,6 +24,13 @@
     }
   ],
 
+  // Workers AI, used only to translate chat. Failures are swallowed and the
+  // message simply shows untranslated, so a model outage degrades chat rather
+  // than breaking it.
+  "ai": {
+    "binding": "AI"
+  },
+
   "vars": {
     // Internal error text is no longer returned to the browser. The real
     // exception is still logged and readable with `wrangler tail`; set this

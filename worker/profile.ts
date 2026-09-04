@@ -26,6 +26,7 @@ import {
   PORTRAIT_MIMES,
   type PortraitMime,
 } from '../shared/portraits';
+import {isLanguage} from '../shared/chat';
 
 export interface PublicProfile {
   username: string;
@@ -38,6 +39,8 @@ export interface PublicProfile {
   motto: string | null;
   /** ISO 3166-1 alpha-2. The client turns it into a flag and a name. */
   country: string;
+  /** What they read chat in. Chosen, not guessed from the browser. */
+  language: string;
   /** Home world - the server they came from, not the one they stand in. */
   homeWorldId: number | null;
   power: number;
@@ -54,6 +57,7 @@ interface Row {
   id: string;
   username: string;
   country: string;
+  locale: string;
   portrait_glyph: string;
   portrait_tint: string;
   motto: string | null;
@@ -82,7 +86,7 @@ export async function loadProfile(
     .prepare(
       `SELECT p.id AS id, p.username AS username, p.country AS country,
               p.portrait_glyph AS portrait_glyph, p.portrait_tint AS portrait_tint,
-              p.motto AS motto, p.approved_at AS approved_at,
+              p.motto AS motto, p.approved_at AS approved_at, p.locale AS locale,
               b.name AS base_name, b.skin AS skin, b.home_world_id AS home_world_id,
               pl.plot_x AS plot_x, pl.plot_y AS plot_y,
               (CASE WHEN pp.player_id IS NULL THEN NULL ELSE 1 END) AS portrait_image,
@@ -121,6 +125,7 @@ export async function loadProfile(
     },
     motto: row.motto,
     country: row.country,
+    language: row.locale,
     homeWorldId: row.home_world_id,
     power: totalPower(levels),
     commandPost: levels.command_post,
@@ -139,10 +144,11 @@ export interface ProfileEdit {
   glyph?: unknown;
   tint?: unknown;
   motto?: unknown;
+  language?: unknown;
 }
 
 export type EditResult =
-  | {ok: true; glyph: string; tint: string; motto: string | null}
+  | {ok: true; glyph: string; tint: string; motto: string | null; language: string | null}
   | {ok: false; error: string};
 
 /**
@@ -189,11 +195,16 @@ export function validateEdit(edit: ProfileEdit): EditResult {
     return {ok: false, error: 'Motto must be text.'};
   }
 
+  if (edit.language !== undefined && !isLanguage(edit.language)) {
+    return {ok: false, error: 'That language is not supported yet.'};
+  }
+
   return {
     ok: true,
     glyph: isPortraitGlyph(edit.glyph) ? edit.glyph : DEFAULT_PORTRAIT.glyph,
     tint: isPortraitTint(edit.tint) ? edit.tint : DEFAULT_PORTRAIT.tint,
     motto,
+    language: isLanguage(edit.language) ? edit.language : null,
   };
 }
 

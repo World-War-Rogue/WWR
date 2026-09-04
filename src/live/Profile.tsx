@@ -19,6 +19,7 @@ import {
 import {PORTRAIT_ACCEPT, PORTRAIT_MAX_SOURCE_BYTES} from '../../shared/portraits';
 import {ApiError, type Profile as ProfileData, api, formatNumber} from '../net/api';
 import PortraitCrop from './PortraitCrop';
+import {LANGUAGES} from '../../shared/chat';
 import {nameFor} from './countries';
 import {drawGlyph} from './cosmeticsPaint';
 import {skinSpec} from './skins';
@@ -127,6 +128,7 @@ export default function Profile({
   const [glyph, setGlyph] = useState<string>('star');
   const [tint, setTint] = useState<string>('ember');
   const [motto, setMotto] = useState('');
+  const [language, setLanguage] = useState('en');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // Bumped after an upload so the browser refetches instead of showing the
@@ -143,6 +145,7 @@ export default function Profile({
         setGlyph(p.portrait.glyph);
         setTint(p.portrait.tint);
         setMotto(p.motto ?? '');
+        setLanguage(p.language);
       })
       .catch((err) =>
         setError(err instanceof ApiError ? err.message : 'Could not load that profile.'),
@@ -153,6 +156,7 @@ export default function Profile({
     profile !== null &&
     (glyph !== profile.portrait.glyph ||
       tint !== profile.portrait.tint ||
+      language !== profile.language ||
       motto.trim() !== (profile.motto ?? ''));
 
   const save = useCallback(async () => {
@@ -162,6 +166,7 @@ export default function Profile({
       const {profile: saved} = await api.saveProfile({
         glyph,
         tint,
+        language,
         motto: motto.trim() === '' ? null : motto.trim(),
       });
       setProfile(saved);
@@ -343,6 +348,25 @@ export default function Profile({
 
           {editable && (
             <div className="mt-8 space-y-6">
+              <section>
+                <h2 className="text-sm font-semibold text-neutral-200">Language</h2>
+                <p className="mt-1 text-xs text-neutral-600">
+                  Chat written in another language is translated into this one for you. Your own
+                  messages are sent in it.
+                </p>
+                <select
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value)}
+                  className="mt-2 w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 focus:border-orange-600 focus:outline-none sm:w-64"
+                >
+                  {LANGUAGES.map((l) => (
+                    <option key={l.code} value={l.code}>
+                      {l.name}
+                    </option>
+                  ))}
+                </select>
+              </section>
+
               <section>
                 <h2 className="text-sm font-semibold text-neutral-200">Portrait</h2>
                 <div className="mt-2 flex gap-2 overflow-x-auto pb-2">

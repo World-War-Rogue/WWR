@@ -60,3 +60,74 @@ export function flattenMessage(text: string): string {
   }
   return out.replace(/\s+/g, ' ').trim();
 }
+
+/* -------------------------------------------------------------------------- */
+/* Groups                                                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * People in one group conversation.
+ *
+ * Twenty is small enough that everybody in it still knows who everybody is,
+ * which is the difference between a group chat and a channel. Past that it
+ * stops being a conversation and becomes an audience, and the alliance channel
+ * already exists for that.
+ */
+export const GROUP_CAPACITY = 20;
+
+export const GROUP_NAME_MAX = 32;
+
+export const groupChannel = (groupId: string) => `group:${groupId}`;
+
+export function isGroupChannel(channel: string): boolean {
+  return channel.startsWith('group:');
+}
+
+export function groupIdOf(channel: string): string | null {
+  return channel.startsWith('group:') ? channel.slice('group:'.length) : null;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Translation                                                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Languages a player can choose to read in.
+ *
+ * Deliberately a list rather than anything the browser reports. A player who
+ * lives abroad usually wants their own language, not the one their laptop was
+ * bought in, and this is the field that decides whether they can follow a
+ * conversation at all.
+ */
+export const LANGUAGES: Array<{code: string; name: string}> = [
+  {code: 'en', name: 'English'},
+  {code: 'es', name: 'Espanol'},
+  {code: 'pt', name: 'Portugues'},
+  {code: 'fr', name: 'Francais'},
+  {code: 'de', name: 'Deutsch'},
+  {code: 'it', name: 'Italiano'},
+  {code: 'nl', name: 'Nederlands'},
+  {code: 'pl', name: 'Polski'},
+  {code: 'ru', name: 'Russkiy'},
+  {code: 'uk', name: 'Ukrainska'},
+  {code: 'tr', name: 'Turkce'},
+  {code: 'ar', name: 'Arabic'},
+  {code: 'he', name: 'Hebrew'},
+  {code: 'hi', name: 'Hindi'},
+  {code: 'zh', name: 'Chinese'},
+  {code: 'ja', name: 'Japanese'},
+  {code: 'ko', name: 'Korean'},
+  {code: 'vi', name: 'Tieng Viet'},
+  {code: 'th', name: 'Thai'},
+  {code: 'id', name: 'Bahasa Indonesia'},
+];
+
+export const LANGUAGE_CODES = LANGUAGES.map((l) => l.code);
+
+export function isLanguage(code: unknown): code is string {
+  return typeof code === 'string' && LANGUAGE_CODES.includes(code);
+}
+
+export function languageName(code: string): string {
+  return LANGUAGES.find((l) => l.code === code)?.name ?? code;
+}

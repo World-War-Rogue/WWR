@@ -15,11 +15,16 @@ export interface ChatMessage {
   createdAt: number;
   rank: 'leader' | 'officer' | 'member' | null;
   hasPortrait: number;
+  /** The language it was typed in. */
+  lang: string;
+  /** Present when the reader's language differs and a translation exists. */
+  translated: string | null;
 }
 
 export interface ChatChannels {
   channels: {server: string | null; alliance: string | null; leadership: string | null};
   threads: Array<{channel: string; other: string; updatedAt: number}>;
+  groups: Array<{id: string; name: string; members: number; channel: string}>;
   unread: Record<string, number>;
   /** The most recent message in each channel, for previews. */
   latest: Record<string, {author: string; body: string; createdAt: number}>;
@@ -75,6 +80,7 @@ export interface Profile {
   portrait: {glyph: string; tint: string; hasImage: boolean};
   motto: string | null;
   country: string;
+  language: string;
   homeWorldId: number | null;
   power: number;
   commandPost: number;
@@ -250,6 +256,21 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({channel, body}),
     }),
+  chatCreateGroup: (name: string) =>
+    call<{channel: string; id: string; name: string}>('/api/chat/group', {
+      method: 'POST',
+      body: JSON.stringify({name}),
+    }),
+  chatAddToGroup: (groupId: string, username: string) =>
+    call<ChatChannels>('/api/chat/group/add', {
+      method: 'POST',
+      body: JSON.stringify({groupId, username}),
+    }),
+  chatLeaveGroup: (groupId: string) =>
+    call<ChatChannels>('/api/chat/group/leave', {
+      method: 'POST',
+      body: JSON.stringify({groupId}),
+    }),
   chatOpenDm: (username: string) =>
     call<{channel: string; other: string}>('/api/chat/dm', {
       method: 'POST',
@@ -295,7 +316,7 @@ export const api = {
     }),
   profile: (name: string) =>
     call<{profile: Profile}>(`/api/profile?name=${encodeURIComponent(name)}`),
-  saveProfile: (edit: {glyph: string; tint: string; motto: string | null}) =>
+  saveProfile: (edit: {glyph: string; tint: string; motto: string | null; language: string}) =>
     call<{profile: Profile}>('/api/profile', {
       method: 'POST',
       body: JSON.stringify(edit),

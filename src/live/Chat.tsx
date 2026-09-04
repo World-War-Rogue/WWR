@@ -22,6 +22,7 @@ import {
   TAB_LABEL,
 } from '../../shared/chat';
 import {RANK_LABEL} from '../../shared/alliances';
+import {GROUP_NAME_MAX, groupIdOf} from '../../shared/chat';
 import {ApiError, type ChatChannels, type ChatMessage, api} from '../net/api';
 import {Portrait} from './Profile';
 
@@ -49,6 +50,8 @@ export default function Chat({
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [dmName, setDmName] = useState('');
+  const [groupName, setGroupName] = useState('');
+  const [addName, setAddName] = useState('');
 
   const sinceRef = useRef<number | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -285,12 +288,83 @@ export default function Chat({
                 Message
               </button>
             </div>
+            <div className="mt-2 flex gap-2">
+              <input
+                value={groupName}
+                onChange={(e) => setGroupName(e.target.value)}
+                maxLength={GROUP_NAME_MAX}
+                placeholder="New group name"
+                className="min-w-0 flex-1 rounded border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm text-neutral-100 focus:border-orange-600 focus:outline-none"
+              />
+              <button
+                onClick={() => {
+                  const name = groupName.trim();
+                  if (name.length < 2) return;
+                  setGroupName('');
+                  api
+                    .chatCreateGroup(name)
+                    .then((g) => {
+                      setThread(g.channel);
+                      return loadChannels();
+                    })
+                    .catch((err) =>
+                      setError(
+                        err instanceof ApiError ? err.message : 'Could not start that group.',
+                      ),
+                    );
+                }}
+                className="shrink-0 rounded border border-neutral-700 px-3 py-1.5 text-sm text-neutral-300 hover:border-orange-600"
+              >
+                Group
+              </button>
+            </div>
           </div>
 
           {error && (
             <p className="m-3 rounded border border-red-900 bg-red-950/60 px-3 py-2 text-sm text-red-300">
               {error}
             </p>
+          )}
+
+          {(info?.groups.length ?? 0) > 0 && (
+            <ul className="divide-y divide-neutral-900 border-b border-neutral-900">
+              {info!.groups.map((g) => {
+                const last = info!.latest[g.channel];
+                const unread = info!.unread[g.channel] ?? 0;
+                return (
+                  <li key={g.channel}>
+                    <button
+                      onClick={() => setThread(g.channel)}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-neutral-900/60"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900 text-xs font-semibold text-neutral-400">
+                        {g.members}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-baseline justify-between gap-2">
+                          <span className="truncate text-sm font-semibold text-neutral-100">
+                            {g.name}
+                          </span>
+                          {last && (
+                            <span className="shrink-0 font-mono text-[10px] text-neutral-700">
+                              {timeOf(last.createdAt)}
+                            </span>
+                          )}
+                        </span>
+                        <span className="block truncate text-xs text-neutral-500">
+                          {last ? `${last.author}: ${last.body}` : 'No messages yet'}
+                        </span>
+                      </span>
+                      {unread > 0 && (
+                        <span className="shrink-0 rounded-full bg-orange-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+                          {unread}
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
           )}
 
           {(info?.threads.length ?? 0) === 0 ? (
@@ -345,12 +419,59 @@ export default function Chat({
       )}
 
       {tab === 'private' && thread !== null && (
-        <button
-          onClick={() => setThread(null)}
-          className="shrink-0 border-b border-neutral-800 px-4 py-2 text-left text-xs text-neutral-400 hover:text-neutral-200"
-        >
-          &larr; All conversations
-        </button>
+        <div className="shrink-0 border-b border-neutral-800">
+          <button
+            onClick={() => setThread(null)}
+            className="px-4 py-2 text-left text-xs text-neutral-400 hover:text-neutral-200"
+          >
+            &larr; All conversations
+          </button>
+
+          {groupIdOf(thread) && (
+            <div className="flex items-center gap-2 px-4 pb-3">
+              <input
+                value={addName}
+                onChange={(e) => setAddName(e.target.value)}
+                placeholder="Add a callsign"
+                className="min-w-0 flex-1 rounded border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm text-neutral-100 focus:border-orange-600 focus:outline-none"
+              />
+              <button
+                onClick={() => {
+                  const id = groupIdOf(thread);
+                  const name = addName.trim();
+                  if (!id || !name) return;
+                  setAddName('');
+                  api
+                    .chatAddToGroup(id, name)
+                    .then(setInfo)
+                    .catch((err) =>
+                      setError(err instanceof ApiError ? err.message : 'Could not add them.'),
+                    );
+                }}
+                className="shrink-0 rounded border border-neutral-700 px-3 py-1.5 text-sm text-neutral-300 hover:border-orange-600"
+              >
+                Add
+              </button>
+              <button
+                onClick={() => {
+                  const id = groupIdOf(thread);
+                  if (!id) return;
+                  if (!window.confirm('Leave this group?')) return;
+                  api
+                    .chatLeaveGroup(id)
+                    .then((next) => {
+                      setInfo(next);
+                      setThread(null);
+                    })
+                    .catch(() => setError('Could not leave that group.'));
+                }}
+                className="shrink-0 rounded border border-red-900 px-3 py-1.5 text-sm text-red-300"
+              >
+                Leave
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {showConversation && (
@@ -409,6 +530,17 @@ export default function Chat({
                     </span>
                   </p>
                   <p className="break-words text-sm text-neutral-300">{m.body}</p>
+                  {m.translated && (
+                    // The original stays above. A translation that replaced it
+                    // would hide the fact that a machine guessed, and a player
+                    // who speaks a little of the language could not check it.
+                    <p className="mt-0.5 flex gap-1.5 break-words text-sm text-sky-300/80">
+                      <span className="shrink-0 select-none text-[10px] uppercase tracking-wider text-neutral-600">
+                        {m.lang}
+                      </span>
+                      {m.translated}
+                    </p>
+                  )}
                 </div>
               </div>
             ))}

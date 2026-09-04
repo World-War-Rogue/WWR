@@ -11,6 +11,7 @@ import {
   readChannel,
   readRecent,
   resolveAccess,
+  translateMissing,
 } from './chat';
 import {
   MESSAGE_MAX,
@@ -18,6 +19,10 @@ import {
   dmChannel,
   dmOther,
   flattenMessage,
+  GROUP_CAPACITY,
+  GROUP_NAME_MAX,
+  groupChannel,
+  isLanguage,
 } from '../shared/chat';
 import {
   atCapacity,
@@ -101,6 +106,9 @@ import {
 export interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
+  /** Workers AI, used only for chat translation. Optional so a deploy without
+   *  the binding still runs, with translation simply absent. */
+  AI?: {run: (model: string, input: unknown) => Promise<unknown>};
   DEBUG_ERRORS?: string;
   /** Set with: wrangler secret put RESEND_API_KEY */
   RESEND_API_KEY?: string;
@@ -875,11 +883,14 @@ async function handleEditProfile(
   const result = validateEdit(body);
   if (!result.ok) return fail(400, result.error);
 
+  // A null language means the edit did not include one, so the existing choice
+  // is kept rather than being reset to a default nobody picked.
   await env.DB.prepare(
-    `UPDATE players SET portrait_glyph = ?2, portrait_tint = ?3, motto = ?4
+    `UPDATE players SET portrait_glyph = ?2, portrait_tint = ?3, motto = ?4,
+            locale = COALESCE(?5, locale)
       WHERE id = ?1`,
   )
-    .bind(player.id, result.glyph, result.tint, result.motto)
+    .bind(player.id, result.glyph, result.tint, result.motto, result.language)
     .run();
 
   const profile = await loadProfile(env.DB, player.username);
@@ -1497,17 +1508,25 @@ async function handleAllianceCrest(
 
 /** Everything about this player that decides which channels they belong to. */
 async function chatViewer(env: Env, player: PlayerRow): Promise<Viewer> {
-  const [home, membership] = await Promise.all([
+  const [home, membership, groups, self] = await Promise.all([
     env.DB.prepare(`SELECT home_world_id AS id FROM bases WHERE player_id = ?1`)
       .bind(player.id)
       .first<{id: number | null}>(),
     membershipOf(env.DB, player.id),
+    env.DB.prepare(`SELECT group_id AS id FROM chat_group_members WHERE player_id = ?1`)
+      .bind(player.id)
+      .all<{id: string}>(),
+    env.DB.prepare(`SELECT locale FROM players WHERE id = ?1`)
+      .bind(player.id)
+      .first<{locale: string}>(),
   ]);
   return {
     playerId: player.id,
     homeWorldId: home?.id ?? null,
     allianceId: membership?.alliance.id ?? null,
     rank: membership?.rank ?? null,
+    groupIds: (groups.results ?? []).map((g) => g.id),
+    language: isLanguage(self?.locale) ? self!.locale : 'en',
   };
 }
 
@@ -1522,6 +1541,7 @@ async function handleChatRead(
   request: Request,
   env: Env,
   player: PlayerRow,
+  ctx: ExecutionContext,
 ): Promise<Response> {
   const url = new URL(request.url);
   const channel = url.searchParams.get('channel');
@@ -1536,8 +1556,14 @@ async function handleChatRead(
 
   const messages =
     since === null || !Number.isFinite(since)
-      ? await readRecent(env.DB, channel, 80)
-      : await readChannel(env.DB, channel, since, 200);
+      ? await readRecent(env.DB, channel, 80, viewer.language)
+      : await readChannel(env.DB, channel, since, 200, viewer.language);
+
+  // Translation happens after this response has gone out. A message appears
+  // immediately in the language it was typed in and grows a translation a
+  // second later, rather than every message in the channel waiting behind a
+  // model call.
+  ctx.waitUntil(translateMissing(env, messages, viewer.language));
 
   // Opening a channel marks it read. Anything arriving after this instant is
   // what the unread badge is counting.
@@ -1584,9 +1610,9 @@ async function handleChatSend(
   const now = Date.now();
   const writes: D1PreparedStatement[] = [
     env.DB.prepare(
-      `INSERT INTO messages (id, channel, author_id, body, created_at)
-       VALUES (?1, ?2, ?3, ?4, ?5)`,
-    ).bind(newId(), channelRaw, player.id, text, now),
+      `INSERT INTO messages (id, channel, author_id, body, created_at, lang)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
+    ).bind(newId(), channelRaw, player.id, text, now, viewer.language),
   ];
 
   const other = dmOther(channelRaw, player.id);
@@ -1635,8 +1661,28 @@ async function handleChatChannels(env: Env, player: PlayerRow): Promise<Response
     .bind(player.id)
     .all<{channel: string; other: string; updatedAt: number}>();
 
+  const groups = await env.DB.prepare(
+    `SELECT g.id AS id, g.name AS name,
+            (SELECT COUNT(*) FROM chat_group_members x WHERE x.group_id = g.id) AS members
+       FROM chat_group_members m
+       JOIN chat_groups g ON g.id = m.group_id
+      WHERE m.player_id = ?1
+      ORDER BY g.created_at DESC
+      LIMIT 50`,
+  )
+    .bind(player.id)
+    .all<{id: string; name: string; members: number}>();
+
+  const groupList = (groups.results ?? []).map((g) => ({
+    id: g.id,
+    name: g.name,
+    members: g.members,
+    channel: groupChannel(g.id),
+  }));
+
   const keys = [channels.server, channels.alliance, channels.leadership]
     .concat((threads.results ?? []).map((t) => t.channel))
+    .concat(groupList.map((g) => g.channel))
     .filter((k): k is string => k !== null);
 
   const unread: Record<string, number> = {};
@@ -1689,6 +1735,7 @@ async function handleChatChannels(env: Env, player: PlayerRow): Promise<Response
   return json({
     channels,
     threads: threads.results ?? [],
+    groups: groupList,
     unread,
     latest,
     rank: viewer.rank,
@@ -1729,7 +1776,122 @@ async function handleChatOpenDm(
   return json({channel, other: other.username});
 }
 
-async function route(request: Request, env: Env): Promise<Response> {
+/** Starts a group conversation. The founder is simply its first member. */
+async function handleGroupCreate(
+  request: Request,
+  env: Env,
+  player: PlayerRow,
+): Promise<Response> {
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const name = typeof body?.name === 'string' ? flattenMessage(body.name) : '';
+  if (name.length < 2) return fail(400, 'Give the group a name.');
+  if (name.length > GROUP_NAME_MAX) {
+    return fail(400, `Names are ${GROUP_NAME_MAX} characters or fewer.`);
+  }
+
+  const id = newId();
+  const now = Date.now();
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO chat_groups (id, name, created_by, created_at) VALUES (?1, ?2, ?3, ?4)`,
+    ).bind(id, name, player.id, now),
+    env.DB.prepare(
+      `INSERT INTO chat_group_members (group_id, player_id, added_at) VALUES (?1, ?2, ?3)`,
+    ).bind(id, player.id, now),
+  ]);
+
+  return json({channel: groupChannel(id), id, name});
+}
+
+/**
+ * Adds somebody to a group.
+ *
+ * Anybody already inside may do this, which is what a group chat is - there is
+ * no owner to ask. The cap is checked here and, because two people adding the
+ * twenty-first member at once would both pass that check, the count is read
+ * inside the same request that writes. It can still race by one under real
+ * contention; twenty-one people in a group is a cosmetic problem, where a
+ * lock would be a real one.
+ */
+async function handleGroupAdd(
+  request: Request,
+  env: Env,
+  player: PlayerRow,
+): Promise<Response> {
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const groupId = typeof body?.groupId === 'string' ? body.groupId : null;
+  const username = typeof body?.username === 'string' ? body.username : null;
+  if (!groupId || !username) return fail(400, 'Who, and to which group?');
+
+  const mine = await env.DB.prepare(
+    `SELECT 1 AS ok FROM chat_group_members WHERE group_id = ?1 AND player_id = ?2`,
+  )
+    .bind(groupId, player.id)
+    .first<{ok: number}>();
+  if (!mine) return fail(403, 'That conversation is not yours.');
+
+  const target = await env.DB.prepare(
+    `SELECT id FROM players WHERE username = ?1 COLLATE NOCASE`,
+  )
+    .bind(username)
+    .first<{id: string}>();
+  if (!target) return fail(404, 'No such callsign.');
+
+  const count = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM chat_group_members WHERE group_id = ?1`,
+  )
+    .bind(groupId)
+    .first<{n: number}>();
+  if ((count?.n ?? 0) >= GROUP_CAPACITY) {
+    return fail(409, `A group holds ${GROUP_CAPACITY} people.`);
+  }
+
+  await env.DB.prepare(
+    `INSERT INTO chat_group_members (group_id, player_id, added_at)
+     VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING`,
+  )
+    .bind(groupId, target.id, Date.now())
+    .run();
+
+  return handleChatChannels(env, player);
+}
+
+/** Leaves a group. A group nobody is left in is deleted with its messages. */
+async function handleGroupLeave(
+  request: Request,
+  env: Env,
+  player: PlayerRow,
+): Promise<Response> {
+  const body = (await request.json().catch(() => null)) as {groupId?: unknown} | null;
+  const groupId = typeof body?.groupId === 'string' ? body.groupId : null;
+  if (!groupId) return fail(400, 'Which group?');
+
+  await env.DB.prepare(
+    `DELETE FROM chat_group_members WHERE group_id = ?1 AND player_id = ?2`,
+  )
+    .bind(groupId, player.id)
+    .run();
+
+  const left = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM chat_group_members WHERE group_id = ?1`,
+  )
+    .bind(groupId)
+    .first<{n: number}>();
+  if ((left?.n ?? 0) === 0) {
+    await env.DB.batch([
+      env.DB.prepare(`DELETE FROM messages WHERE channel = ?1`).bind(groupChannel(groupId)),
+      env.DB.prepare(`DELETE FROM chat_groups WHERE id = ?1`).bind(groupId),
+    ]);
+  }
+
+  return handleChatChannels(env, player);
+}
+
+async function route(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+): Promise<Response> {
   const url = new URL(request.url);
   if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
 
@@ -1764,13 +1926,19 @@ async function route(request: Request, env: Env): Promise<Response> {
 
   if (endpoint === 'POST /api/base/upgrade') return handleStartUpgrade(request, env, player);
 
-  if (endpoint === 'GET /api/chat') return handleChatRead(request, env, player);
+  if (endpoint === 'GET /api/chat') return handleChatRead(request, env, player, ctx);
 
   if (endpoint === 'POST /api/chat') return handleChatSend(request, env, player);
 
   if (endpoint === 'GET /api/chat/channels') return handleChatChannels(env, player);
 
   if (endpoint === 'POST /api/chat/dm') return handleChatOpenDm(request, env, player);
+
+  if (endpoint === 'POST /api/chat/group') return handleGroupCreate(request, env, player);
+
+  if (endpoint === 'POST /api/chat/group/add') return handleGroupAdd(request, env, player);
+
+  if (endpoint === 'POST /api/chat/group/leave') return handleGroupLeave(request, env, player);
 
   if (endpoint === 'GET /api/portrait') return handlePortraitImage(request, env);
 
@@ -1818,9 +1986,9 @@ async function route(request: Request, env: Env): Promise<Response> {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     try {
-      return await route(request, env);
+      return await route(request, env, ctx);
     } catch (error) {
       return serverError(error, env);
     }
