@@ -16,6 +16,7 @@ import {DEFAULT_LOADOUT, type Loadout} from '../../shared/cosmetics';
 import {
   type SkinArt,
   type SkinMotion,
+  atlas,
   drawMotionGlow,
   drawSkinArt,
   motionOffset,
@@ -26,6 +27,8 @@ import {
   drawBanner,
   drawDecal,
   drawLights,
+  drawLightsOnArt,
+  drawOwnerRing,
   drawPadEmblem,
   emblemOf,
   lightsOf,
@@ -236,18 +239,31 @@ export function drawBase(
   const lights = lightsOf(loadout);
   const decal = decalOf(loadout);
 
+  // Whether art is going to cover this plot has to be known BEFORE the ground
+  // is drawn, not after: rendered art brings its own floor, and a compound
+  // slab underneath shows around its edges as a square that does not belong to
+  // anything. Asking for the atlas here also starts it loading.
+  const artImage = skin.art ? atlas(skin.art.src) : null;
+  const hasArt = artImage !== null;
+
   // The halo sits behind everything, so it reads as light cast on the ground
   // rather than as a filter over the base.
   drawMotionGlow(ctx, x, y, inner, skin.motion, time);
 
-  // Compound floor.
-  ctx.fillStyle = p.ground;
-  roundRect(ctx, x, y, inner, inner, size * 0.09);
-  ctx.fill();
+  if (!hasArt) {
+    // Compound floor.
+    ctx.fillStyle = p.ground;
+    roundRect(ctx, x, y, inner, inner, size * 0.09);
+    ctx.fill();
 
-  // Ground marking goes on the floor, under everything built on it - and it
-  // stays put while the base above it moves, because paint does not bob.
-  if (decal) drawDecal(ctx, x, y, inner, decal);
+    // Ground marking goes on the floor, under everything built on it - and it
+    // stays put while the base above it moves, because paint does not bob.
+    if (decal) drawDecal(ctx, x, y, inner, decal);
+  } else if (isYou) {
+    // Drawn before the base so the base stands inside the ring rather than
+    // being circled by it.
+    drawOwnerRing(ctx, x, y, inner);
+  }
 
   const {dy, shear} = motionOffset(skin.motion, inner, time);
   const moving = dy !== 0 || shear !== 0;
@@ -264,7 +280,7 @@ export function drawBase(
 
   // Rendered art wins when it has loaded. Everything below it is the fallback
   // that keeps the map complete while art is still being commissioned.
-  const painted = skin.art ? drawSkinArt(ctx, x, y, inner, skin.art, time) : false;
+  const painted = skin.art ? drawSkinArt(ctx, x, y, inner, skin.art, artImage, time) : false;
 
   if (!painted) {
     const detailed = size >= 34;
@@ -286,14 +302,22 @@ export function drawBase(
 
   if (moving) ctx.restore();
 
-  ctx.strokeStyle = isYou ? '#ffffff' : 'rgba(0,0,0,0.4)';
-  ctx.lineWidth = isYou ? Math.max(2, size * 0.045) : 1;
-  roundRect(ctx, x, y, inner, inner, size * 0.09);
-  ctx.stroke();
+  if (!painted) {
+    // The plot outline belongs to a compound that fills its plot. Around
+    // rendered art it reads as a picture frame, so art gets the ground ring
+    // above instead and no box at all.
+    ctx.strokeStyle = isYou ? '#ffffff' : 'rgba(0,0,0,0.4)';
+    ctx.lineWidth = isYou ? Math.max(2, size * 0.045) : 1;
+    roundRect(ctx, x, y, inner, inner, size * 0.09);
+    ctx.stroke();
+  }
 
   // Lights sit on top of the walls, and the banner on top of everything - it
   // is the tallest thing in the compound and is allowed to overhang the plot.
-  if (lights) drawLights(ctx, x, y, inner, lights);
+  if (lights) {
+    if (painted) drawLightsOnArt(ctx, x, y, inner, lights);
+    else drawLights(ctx, x, y, inner, lights);
+  }
   if (banner) drawBanner(ctx, x, y, inner, banner, emblem);
 }
 

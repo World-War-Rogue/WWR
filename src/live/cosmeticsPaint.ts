@@ -508,3 +508,73 @@ export function drawSwatch(
   drawDecal(ctx, 0, 0, s, cfg);
   ctx.restore();
 }
+
+/**
+ * Perimeter lights for a base with rendered art.
+ *
+ * The plot-corner placement above is right for a square compound drawn to fill
+ * its plot. Rendered art does not: it has its own silhouette, and lamps pinned
+ * to the plot corners hang in empty space beside it, obviously not attached to
+ * anything.
+ *
+ * These follow the front arc of the base instead - where a dais meets the
+ * ground - so they read as lanterns standing around it whatever shape it is.
+ */
+export function drawLightsOnArt(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  s: number,
+  cfg: LightsConfig,
+): void {
+  if (s < LIGHTS_MIN) return;
+
+  const cx = x + s * 0.5;
+  const cy = y + s * 0.78;
+  const rx = s * 0.44;
+  const ry = s * 0.15;
+  const glow = s * (0.07 + cfg.reach * 0.08);
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 7; i += 1) {
+    // Across the front half of the ellipse only. A lamp drawn on the far side
+    // would be behind the base, and drawing it in front of one reads as a
+    // mistake rather than as depth.
+    const a = Math.PI * (0.08 + (i / 6) * 0.84);
+    const lx = cx - Math.cos(a) * rx;
+    const ly = cy + Math.sin(a) * ry;
+
+    const g = ctx.createRadialGradient(lx, ly, 0, lx, ly, glow);
+    g.addColorStop(0, cfg.color);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.globalAlpha = 0.45 + cfg.reach * 0.3;
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(lx, ly, glow, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/**
+ * The "this is you" marker for a base with rendered art.
+ *
+ * A square outline works on a compound that fills its plot, and frames a
+ * rendered base like a picture. This sits on the ground underneath instead,
+ * which reads as a spotlight on your own base rather than a box around it.
+ */
+export function drawOwnerRing(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  s: number,
+): void {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.lineWidth = Math.max(1.5, s * 0.022);
+  ctx.beginPath();
+  ctx.ellipse(x + s * 0.5, y + s * 0.84, s * 0.46, s * 0.13, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}

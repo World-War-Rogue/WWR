@@ -173,6 +173,10 @@ export function drawMotionGlow(
 /**
  * Draws one frame of a skin's art over its plot.
  *
+ * The image is passed in rather than fetched here, because the caller has to
+ * know whether art is coming BEFORE it draws the ground: art brings its own
+ * floor, and a compound slab underneath it shows around the edges.
+ *
  * Returns false when the art has not arrived, which is the caller's signal to
  * fall back to the drawn recipe. That fallback is the reason art can ship one
  * skin at a time instead of all at once.
@@ -183,9 +187,9 @@ export function drawSkinArt(
   py: number,
   size: number,
   art: SkinArt,
+  image: HTMLImageElement | null,
   time: number,
 ): boolean {
-  const image = atlas(art.src);
   if (!image) return false;
 
   const frame = art.frames > 1 ? Math.floor((time / 1000) * art.fps) % art.frames : 0;
