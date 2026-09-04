@@ -17,7 +17,7 @@ import {DEFAULT_SEASON, seasonSpec, terrainAt} from './terrain';
 import {normaliseLoadout} from '../../shared/cosmetics';
 import {ALLEGIANCE, allegianceOf, drawAllegianceMarker} from './allegiance';
 import {artPending, onArtLoaded, skinIsAnimated} from './skinArt';
-import {artHeadroom, drawBase as paintBase, skinSpec} from './skins';
+import {drawBase as paintBase, skinSpec} from './skins';
 
 const MIN_ZOOM = 14; // pixels per plot when fully zoomed out
 // Far enough in that a premium skin is worth having drawn at all. A base is
@@ -72,10 +72,19 @@ function useCanvasSize(ref: RefObject<HTMLCanvasElement | null>) {
   return size;
 }
 
+/**
+ * The plate that names a base.
+ *
+ * `plateTop` is where the top of the plate goes, and the caller anchors it to
+ * the plot rather than to the art. Anchoring to the art meant a tall skin put
+ * its name a long way up and a short one kept it low, so names sat at a
+ * different height for every base and a screenful of them jittered. Against
+ * the plot they line up in rows, which is what makes a map of names scannable.
+ */
 function drawNameplate(
   ctx: CanvasRenderingContext2D,
   cx: number,
-  topY: number,
+  plateTop: number,
   base: PlacedBase,
   isYou: boolean,
   scale: number,
@@ -89,7 +98,7 @@ function drawNameplate(
   const boxW = textWidth + padX * 2 + fontSize * 1.6;
   const boxH = fontSize * 1.5;
   const boxX = cx - boxW / 2;
-  const boxY = topY - boxH - fontSize * 0.4;
+  const boxY = plateTop;
 
   // A drop shadow and a fully opaque plate, because these now sit over
   // rendered art - fire, gold, white stone - and a translucent label that was
@@ -427,13 +436,13 @@ export default function WorldMap({
 
     if (!strategic) {
       for (const base of visible) {
-        // Lifted clear of whatever the skin draws above its plot. A base with
-        // rendered art stands well over its own footprint, and a plate pinned
-        // to the plot edge lands on the art it is supposed to label.
+        // Sat on the ground just below the footprint, not above the art.
+        // Every base's name is then at the same height relative to its plot
+        // whatever its skin does, and no plate covers the thing it names.
         drawNameplate(
           ctx,
           toScreenX(base.x) + zoom / 2,
-          toScreenY(base.y) - artHeadroom(skinSpec(base.skin), zoom),
+          toScreenY(base.y) + zoom + zoom * 0.03,
           base,
           base.username === you,
           zoom,
