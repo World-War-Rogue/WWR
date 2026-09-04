@@ -46,7 +46,7 @@ const IDENTITY_ZOOM = 42;
  * threshold, so the map opened in strategic mode and a new player's first
  * sight of their base was a block.
  */
-const HOME_ZOOM = 72;
+const HOME_ZOOM = 94;
 const FETCH_MARGIN = 6; // plots of slack around the viewport, so panning is not a stutter of requests
 
 interface Camera {
@@ -254,6 +254,13 @@ export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || w === 0 || h === 0) return;
+
+    // Until the server has said where this player is, the camera is still
+    // sitting on the world origin. Drawing that would show a stretch of salt
+    // flats nobody asked for and then jump, which reads as a glitch on every
+    // single opening of the map.
+    const located = centred || (view !== null && view.you.plot === null);
+
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     canvas.width = w * dpr;
     canvas.height = h * dpr;
@@ -271,6 +278,8 @@ export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
 
     ctx.fillStyle = '#0a0906';
     ctx.fillRect(0, 0, w, h);
+
+    if (!located) return;
 
     const firstX = Math.floor(cx - w / (2 * zoom)) - 1;
     const lastX = Math.ceil(cx + w / (2 * zoom)) + 1;
@@ -406,7 +415,7 @@ export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
         );
       }
     }
-  }, [camera, view, w, h, selected]);
+  }, [camera, view, w, h, selected, centred]);
 
   // Drives the animation loop only while something is actually moving. A map
   // of static bases costs nothing; a burning one runs at frame rate.
