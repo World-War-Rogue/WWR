@@ -12,6 +12,8 @@
  */
 import {type RefObject, useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {ApiError, type PlacedBase, type WorldView, api} from '../net/api';
+import {DEFAULT_SEASON, seasonSpec, terrainAt} from './terrain';
+import {drawBase as paintBase, skinSpec} from './skins';
 
 const MIN_ZOOM = 14; // pixels per plot when fully zoomed out
 const MAX_ZOOM = 96;
@@ -38,52 +40,6 @@ function useCanvasSize(ref: RefObject<HTMLCanvasElement | null>) {
     return () => observer.disconnect();
   }, [ref]);
   return size;
-}
-
-/** Deterministic pseudo-random in [0,1) from a plot's coordinates. */
-function jitter(x: number, y: number, salt: number): number {
-  const n = Math.sin(x * 127.1 + y * 311.7 + salt * 74.7) * 43758.5453;
-  return n - Math.floor(n);
-}
-
-function drawBase(
-  ctx: CanvasRenderingContext2D,
-  px: number,
-  py: number,
-  size: number,
-  palette: {ground: string; structure: string; accent: string},
-  base: PlacedBase,
-  isYou: boolean,
-) {
-  const pad = size * 0.06;
-  const inner = size - pad * 2;
-
-  // Ground pad.
-  ctx.fillStyle = palette.ground;
-  ctx.beginPath();
-  ctx.roundRect(px + pad, py + pad, inner, inner, Math.max(2, size * 0.1));
-  ctx.fill();
-
-  // Structures. Deterministic from the plot, so a base looks the same on every
-  // load and to every player without storing any of it.
-  const blocks = 3;
-  for (let i = 0; i < blocks; i += 1) {
-    const bw = inner * (0.24 + jitter(base.x, base.y, i) * 0.2);
-    const bh = inner * (0.24 + jitter(base.x, base.y, i + 10) * 0.2);
-    const bx = px + pad + inner * (0.1 + jitter(base.x, base.y, i + 20) * 0.6);
-    const by = py + pad + inner * (0.1 + jitter(base.x, base.y, i + 30) * 0.6);
-
-    ctx.fillStyle = 'rgba(0,0,0,0.28)';
-    ctx.fillRect(bx + size * 0.03, by + size * 0.03, bw, bh);
-    ctx.fillStyle = i === 0 ? palette.accent : palette.structure;
-    ctx.fillRect(bx, by, bw, bh);
-  }
-
-  ctx.strokeStyle = isYou ? '#ffffff' : 'rgba(0,0,0,0.35)';
-  ctx.lineWidth = isYou ? Math.max(2, size * 0.05) : 1;
-  ctx.beginPath();
-  ctx.roundRect(px + pad, py + pad, inner, inner, Math.max(2, size * 0.1));
-  ctx.stroke();
 }
 
 function drawNameplate(
@@ -260,7 +216,7 @@ export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
     const toScreenX = (plotX: number) => (plotX - cx) * zoom + w / 2;
     const toScreenY = (plotY: number) => (plotY - cy) * zoom + h / 2;
 
-    ctx.fillStyle = '#11140f';
+    ctx.fillStyle = '#0a0906';
     ctx.fillRect(0, 0, w, h);
 
     const firstX = Math.floor(cx - w / (2 * zoom)) - 1;
@@ -270,18 +226,51 @@ export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
 
     const extent = view?.world.extent ?? 200;
 
-    // Ground and grid. Lines are skipped when zoomed out, where they would be
-    // noise rather than information.
-    const showGrid = zoom > 22;
+    // Ground. Terrain is generated per plot rather than stored, so the season
+    // costs nothing in the database and nothing over the wire.
+    const season = seasonSpec(DEFAULT_SEASON);
+    const showGrid = zoom > 26;
+    const worldId = view?.world.id ?? 1001;
+
     for (let py = firstY; py <= lastY; py += 1) {
       for (let px = firstX; px <= lastX; px += 1) {
         const sx = toScreenX(px);
         const sy = toScreenY(py);
-        const outside = Math.abs(px) > extent || Math.abs(py) > extent;
-        ctx.fillStyle = outside ? '#0a0c08' : (px + py) % 2 === 0 ? '#1d2318' : '#1a1f16';
+
+        if (Math.abs(px) > extent || Math.abs(py) > extent) {
+          ctx.fillStyle = season.voidColor;
+          ctx.fillRect(sx, sy, zoom + 1, zoom + 1);
+          continue;
+        }
+
+        const cell = terrainAt(worldId, season.id, extent, px, py);
+        const colours = season.biomes[cell.biome];
+        ctx.fillStyle = cell.shade > 0.5 ? colours.fill : colours.alt;
         ctx.fillRect(sx, sy, zoom + 1, zoom + 1);
-        if (showGrid && !outside) {
-          ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+
+        if (cell.feature === 'oasis') {
+          ctx.fillStyle = season.biomes.forest.fill;
+          ctx.beginPath();
+          ctx.arc(sx + zoom / 2, sy + zoom / 2, zoom * 0.44, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = colours.detail;
+          ctx.beginPath();
+          ctx.arc(sx + zoom / 2, sy + zoom / 2, zoom * 0.26, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (cell.feature === 'wreck' && zoom > 20) {
+          // A freighter left stranded when the sea dried, canted over.
+          ctx.save();
+          ctx.translate(sx + zoom / 2, sy + zoom / 2);
+          ctx.rotate(cell.shade * 1.2 - 0.6);
+          ctx.fillStyle = '#4a4038';
+          ctx.fillRect(-zoom * 0.34, -zoom * 0.12, zoom * 0.68, zoom * 0.24);
+          ctx.fillStyle = '#6b5c4d';
+          ctx.fillRect(-zoom * 0.06, -zoom * 0.24, zoom * 0.18, zoom * 0.16);
+          ctx.restore();
+        }
+
+        if (showGrid) {
+          ctx.strokeStyle = 'rgba(0,0,0,0.10)';
           ctx.lineWidth = 1;
           ctx.strokeRect(sx + 0.5, sy + 0.5, zoom, zoom);
         }
@@ -306,12 +295,17 @@ export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
     const you = view?.you.username;
 
     for (const base of visible) {
-      const palette = view?.skins[base.skin]?.palette ?? {
-        ground: '#4b5563',
-        structure: '#9ca3af',
-        accent: '#f97316',
-      };
-      drawBase(ctx, toScreenX(base.x), toScreenY(base.y), zoom, palette, base, base.username === you);
+      paintBase(
+        ctx,
+        toScreenX(base.x),
+        toScreenY(base.y),
+        zoom,
+        skinSpec(base.skin),
+        base.x,
+        base.y,
+        base.level,
+        base.username === you,
+      );
     }
 
     if (zoom > 26) {
@@ -346,7 +340,7 @@ export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
   const occupied = Boolean(selected?.base);
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-[#11140f]">
+    <div className="relative h-full w-full overflow-hidden bg-[#0a0906]">
       <canvas ref={canvasRef} className="h-full w-full touch-none" style={{width: w, height: h}} />
 
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-3">
@@ -417,7 +411,7 @@ export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
                 <>
                   <p className="truncate font-semibold text-neutral-100">{selected.base.username}</p>
                   <p className="text-xs text-neutral-400">
-                    {view?.skins[selected.base.skin]?.name ?? selected.base.skin} · Command Post{' '}
+                    {skinSpec(selected.base.skin).name} · Command Post{' '}
                     {selected.base.level}
                   </p>
                 </>

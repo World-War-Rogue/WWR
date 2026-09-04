@@ -147,12 +147,25 @@ export const TARGET_OCCUPANCY = 0.12;
  */
 export const WORLD_EXTENT = 200;
 
+/**
+ * Radius of the salt flats at the centre of the world, in plots. Kept clear of
+ * bases so the middle of the map stays contested ground rather than somebody's
+ * back garden.
+ */
+export const INNER_BAND_RADIUS = Math.round(WORLD_EXTENT * 0.1);
+
 /** Radius in plots that a given population settles at the target occupancy. */
 export function settledRadius(population: number): number {
   return Math.sqrt(Math.max(1, population) / (TARGET_OCCUPANCY * Math.PI));
 }
 
-export type SkinId = 'desert_fob' | 'arctic_station' | 'jungle_outpost' | 'urban_garrison';
+export type SkinId =
+  | 'desert_fob'
+  | 'arctic_station'
+  | 'jungle_outpost'
+  | 'urban_garrison'
+  | 'custom_one'
+  | 'custom_two';
 
 export interface SkinSpec {
   id: SkinId;
@@ -187,7 +200,28 @@ export const SKINS: Record<SkinId, SkinSpec> = {
     blurb: 'Blast walls and concrete. A city block turned strongpoint.',
     palette: {ground: '#6b6b6b', structure: '#9aa0a6', accent: '#d64545'},
   },
+  // Not offered at signup. Reserved for the two custom skins under test.
+  custom_one: {
+    id: 'custom_one',
+    name: 'Custom I',
+    blurb: 'Awaiting reference art.',
+    palette: {ground: '#5b4b6e', structure: '#b9a7d0', accent: '#c084fc'},
+  },
+  custom_two: {
+    id: 'custom_two',
+    name: 'Custom II',
+    blurb: 'Awaiting reference art.',
+    palette: {ground: '#6e5b3a', structure: '#d6c08a', accent: '#facc15'},
+  },
 };
+
+/** Only these are selectable by a new player. */
+export const STARTER_SKIN_IDS: SkinId[] = [
+  'desert_fob',
+  'arctic_station',
+  'jungle_outpost',
+  'urban_garrison',
+];
 
 export const SKIN_IDS = Object.keys(SKINS) as SkinId[];
 
@@ -204,15 +238,21 @@ export function isSkinId(value: unknown): value is SkinId {
  * registering at the same instant rarely contend for the same plot.
  */
 export function candidatePlots(population: number, attempts: number): Array<{x: number; y: number}> {
-  // Grow the settled area to keep density constant as the population rises,
-  // with a small floor so the first few arrivals are not stacked on one plot.
-  const radius = Math.min(WORLD_EXTENT, Math.max(6, settledRadius(population + 1)));
+  // Nobody is placed on the salt flats. Players settle in a ring around them,
+  // which leaves the centre of the world as open contested ground that
+  // everyone borders and nobody owns - the natural site for events and, later,
+  // for whatever is worth marching across it for.
+  const inner = INNER_BAND_RADIUS + 2;
+  const outer = Math.min(
+    WORLD_EXTENT,
+    Math.max(inner + 6, Math.sqrt(inner * inner + settledRadius(population + 1) ** 2)),
+  );
   const out: Array<{x: number; y: number}> = [];
   for (let i = 0; i < attempts; i += 1) {
-    // Square-rooting the distance spreads arrivals evenly over the disc rather
-    // than piling them into the centre.
+    // Sampling the square of the radius spreads arrivals evenly over the
+    // annulus rather than piling them against its inner edge.
     const angle = Math.random() * Math.PI * 2;
-    const distance = Math.sqrt(Math.random()) * radius;
+    const distance = Math.sqrt(inner * inner + Math.random() * (outer * outer - inner * inner));
     out.push({
       x: Math.round(Math.cos(angle) * distance),
       y: Math.round(Math.sin(angle) * distance),

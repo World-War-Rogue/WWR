@@ -8,6 +8,7 @@
  */
 import {type FormEvent, useCallback, useEffect, useRef, useState} from 'react';
 import WorldMap from './WorldMap';
+import {STARTER_SKINS} from './skins';
 import {
   ApiError,
   type BaseView,
@@ -37,18 +38,11 @@ function useServerClock(base: BaseView | null) {
   return () => Date.now() + offsetRef.current;
 }
 
-const STARTER_SKINS = [
-  {id: 'desert_fob', name: 'Desert FOB', blurb: 'HESCO barriers and sand berms.', swatch: '#b08248', accent: '#e07a29'},
-  {id: 'arctic_station', name: 'Arctic Station', blurb: 'Radar domes above the treeline.', swatch: '#9fb6c6', accent: '#3fa9d6'},
-  {id: 'jungle_outpost', name: 'Jungle Outpost', blurb: 'Netting and raised platforms.', swatch: '#4e6b3a', accent: '#9fd356'},
-  {id: 'urban_garrison', name: 'Urban Garrison', blurb: 'Blast walls and concrete.', swatch: '#6b6b6b', accent: '#d64545'},
-];
-
 function AuthPanel({onAuthed}: {onAuthed: (player: Player) => void}) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [skin, setSkin] = useState(STARTER_SKINS[0].id);
+  const [skin, setSkin] = useState<string>(STARTER_SKINS[0].id);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -114,7 +108,10 @@ function AuthPanel({onAuthed}: {onAuthed: (player: Player) => void}) {
                     <span className="flex items-center gap-2">
                       <span
                         className="inline-block h-4 w-4 rounded-sm"
-                        style={{backgroundColor: option.swatch, boxShadow: `inset 0 0 0 2px ${option.accent}`}}
+                        style={{
+                          backgroundColor: option.palette.ground,
+                          boxShadow: `inset 0 0 0 2px ${option.palette.accent}`,
+                        }}
                       />
                       <span className="text-sm font-medium text-neutral-100">{option.name}</span>
                     </span>
