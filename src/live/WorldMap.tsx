@@ -293,6 +293,10 @@ export default function WorldMap({
   const [moving, setMoving] = useState(false);
   const [rallying, setRallying] = useState(false);
   const [centred, setCentred] = useState(false);
+  /** Bumped to ask for another attempt after a failed load. */
+  const [retry, setRetry] = useState(0);
+  /** Consecutive failures, for the backoff. A ref because it must not re-render. */
+  const failuresRef = useRef(0);
 
   const cameraRef = useRef(camera);
   cameraRef.current = camera;
@@ -331,8 +335,15 @@ export default function WorldMap({
     try {
       setView(await api.world(x, y, Math.min(80, plotsW), Math.min(80, plotsH)));
       setError(null);
+      failuresRef.current = 0;
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not reach the server.');
+      // Ask to be run again. Without this the map only ever reloads when the
+      // camera moves, so a load that fails while nobody is touching anything -
+      // every deploy does exactly that to every open tab - leaves the map
+      // empty and captioned "unplaced" until the player thinks to pan.
+      failuresRef.current += 1;
+      setRetry((n) => n + 1);
     }
   }, []);
 
@@ -344,11 +355,16 @@ export default function WorldMap({
     setCentred(true);
   }, [view, centred]);
 
-  // Refetch on a settle rather than on every frame of a drag.
+  // Refetch on a settle rather than on every frame of a drag - and again,
+  // backing off, after a failure. The delay is 180ms for an ordinary move and
+  // grows to ten seconds while the server is unreachable, so a deploy costs one
+  // retry rather than a request every fifth of a second until it comes back.
   useEffect(() => {
-    const id = window.setTimeout(() => void load(camera, w, h), 180);
+    const failures = failuresRef.current;
+    const delay = failures === 0 ? 180 : Math.min(10000, 1000 * 2 ** (failures - 1));
+    const id = window.setTimeout(() => void load(camera, w, h), delay);
     return () => window.clearTimeout(id);
-  }, [camera, w, h, load]);
+  }, [camera, w, h, load, retry]);
 
   // Pointer panning. Tracked in refs so a drag never re-renders per frame.
   useEffect(() => {
@@ -888,6 +904,7 @@ export default function WorldMap({
       {error && (
         <div className="absolute inset-x-3 bottom-32 rounded border border-red-900 bg-red-950/80 px-3 py-2 text-sm text-red-200 backdrop-blur">
           {error}
+          <span className="ml-2 text-red-400/70">Retrying…</span>
         </div>
       )}
 
