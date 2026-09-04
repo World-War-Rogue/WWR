@@ -10,9 +10,11 @@
  * against each asset's own maximum. A bar that always fills to the end tells
  * you nothing; the point of the row is comparison.
  */
-import {useMemo, useState} from 'react';
+import {useEffect, useMemo, useState} from 'react';
 import AssetIcon from './AssetIcon';
 import ForcesTabs from './ForcesTabs';
+import {api} from '../net/api';
+import {t} from '../i18n';
 import {
   ASSETS,
   ATTRIBUTE_MAX,
@@ -22,6 +24,7 @@ import {
   COUNTERS,
   ROLE_BLURB,
   ROLE_LABEL,
+  SQUAD_NAMES,
   pointBudget,
 } from '../../shared/assets';
 
@@ -77,7 +80,7 @@ function Bars({asset}: {asset: Asset}) {
   );
 }
 
-function Card({asset}: {asset: Asset}) {
+function Card({asset, squad}: {asset: Asset; squad: string | null}) {
   const counters = COUNTERS[asset.category];
   return (
     <article
@@ -107,7 +110,17 @@ function Card({asset}: {asset: Asset}) {
         </span>
       </div>
 
-      <p className="mt-1.5 text-[11px] leading-snug text-neutral-500">{asset.blurb}</p>
+      {/*
+        Where it is right now. The catalogue is browsed to decide what to put
+        in a squad, so the first thing worth knowing about a row is whether it
+        is already in one - without it a player has to hold four squads in
+        their head while reading sixty cards.
+      */}
+      <p className="mt-1.5 text-[11px] font-semibold text-orange-400/90">
+        {squad ? t('assets.inSquad', {squad}) : <span className="text-neutral-700">{t('assets.unassigned')}</span>}
+      </p>
+
+      <p className="mt-1 text-[11px] leading-snug text-neutral-500">{asset.blurb}</p>
 
       <Bars asset={asset} />
 
@@ -137,6 +150,30 @@ export default function Assets({
 }) {
   const [category, setCategory] = useState<AssetCategory | 'all'>('all');
   const [query, setQuery] = useState('');
+  const [placed, setPlaced] = useState<Map<string, string>>(new Map());
+
+  // Squad placement, so each card can say where it is. Read once when the
+  // screen opens: nothing here changes while it is on screen, and the squad
+  // screen is one tap away for anybody who wants to change it.
+  useEffect(() => {
+    let live = true;
+    api
+      .squads()
+      .then((view) => {
+        if (!live) return;
+        const map = new Map<string, string>();
+        for (const squad of SQUAD_NAMES) {
+          for (const id of view.squads[squad] ?? []) {
+            if (id) map.set(id, squad);
+          }
+        }
+        setPlaced(map);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -194,7 +231,7 @@ export default function Assets({
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {shown.map((asset) => (
             <div key={asset.id}>
-              <Card asset={asset} />
+              <Card asset={asset} squad={placed.get(asset.id) ?? null} />
             </div>
           ))}
         </div>

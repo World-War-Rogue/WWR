@@ -175,3 +175,80 @@ export function squadLiftUsed(board: SquadBoard, squad: SquadName): number {
     0,
   );
 }
+
+/**
+ * Move an asset to another slot, swapping with whatever is already there.
+ *
+ * A swap has to be ONE operation, not two assignments. Done as two, the middle
+ * state has both assets in the same slot or neither in any, and the unique
+ * index rejects it - so the obvious implementation fails and the workaround
+ * for it is a window where a player's squads are wrong. Both rows are written
+ * in a single batch instead.
+ *
+ * Lift is checked on both squads as they will be AFTER the swap. Dragging a
+ * heavy asset into a full squad and a light one back out can leave both legal
+ * even though the intermediate state is not, and refusing that would be
+ * refusing the exact move a player makes to fix an over-committed squad.
+ */
+export async function moveSlot(
+  db: D1Database,
+  playerId: string,
+  from: {squad: SquadName; slot: number},
+  to: {squad: SquadName; slot: number},
+  buildingLevels: {motor_pool: number; airfield: number; barracks: number},
+): Promise<AssignResult> {
+  if (from.slot < 0 || from.slot >= SQUAD_SLOTS) return {ok: false, error: 'No such slot.'};
+  if (to.slot < 0 || to.slot >= SQUAD_SLOTS) return {ok: false, error: 'No such slot.'};
+  if (from.squad === to.squad && from.slot === to.slot) return {ok: true};
+
+  const board = await readSquads(db, playerId);
+  const moving = board[from.squad]?.[from.slot] ?? null;
+  if (!moving) return {ok: false, error: 'Nothing to move.'};
+  const displaced = board[to.squad]?.[to.slot] ?? null;
+
+  // Within one squad a swap changes nothing about its lift, so only a move
+  // between squads needs checking - and then both ends do.
+  if (from.squad !== to.squad) {
+    const budget = squadLiftBudget(buildingLevels);
+    const movingLift = ASSET_BY_ID[moving]?.lift ?? 0;
+    const displacedLift = displaced ? ASSET_BY_ID[displaced]?.lift ?? 0 : 0;
+
+    const toAfter = squadLiftUsed(board, to.squad) - displacedLift + movingLift;
+    if (toAfter > budget) {
+      return {ok: false, error: `${to.squad} cannot carry that. ${toAfter} of ${budget} lift.`};
+    }
+    const fromAfter = squadLiftUsed(board, from.squad) - movingLift + displacedLift;
+    if (fromAfter > budget) {
+      return {ok: false, error: `${from.squad} cannot carry that. ${fromAfter} of ${budget} lift.`};
+    }
+  }
+
+  // Clear both rows first, then write both. The unique index on
+  // (player_id, asset_id) means an asset cannot briefly exist in two slots, so
+  // the deletes have to land before the inserts inside the same batch.
+  const writes: D1PreparedStatement[] = [
+    db
+      .prepare(`DELETE FROM squad_slots WHERE player_id = ?1 AND squad = ?2 AND slot = ?3`)
+      .bind(playerId, from.squad, from.slot),
+    db
+      .prepare(`DELETE FROM squad_slots WHERE player_id = ?1 AND squad = ?2 AND slot = ?3`)
+      .bind(playerId, to.squad, to.slot),
+    db
+      .prepare(
+        `INSERT INTO squad_slots (player_id, squad, slot, asset_id) VALUES (?1, ?2, ?3, ?4)`,
+      )
+      .bind(playerId, to.squad, to.slot, moving),
+  ];
+  if (displaced) {
+    writes.push(
+      db
+        .prepare(
+          `INSERT INTO squad_slots (player_id, squad, slot, asset_id) VALUES (?1, ?2, ?3, ?4)`,
+        )
+        .bind(playerId, from.squad, from.slot, displaced),
+    );
+  }
+
+  await db.batch(writes);
+  return {ok: true};
+}

@@ -10,7 +10,7 @@
  * will not fit, but the refusal comes from the Worker - the greying is a
  * courtesy, not the check.
  */
-import {useCallback, useEffect, useMemo, useState} from 'react';
+import {type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ASSET_BY_ID,
   CATEGORY_LABEL,
@@ -38,22 +38,36 @@ function Slot({
   asset,
   level,
   selected,
+  dropTarget,
+  dragging,
   onClick,
+  onPointerDown,
 }: {
   asset: Asset | null;
   level: number;
   selected: boolean;
+  dropTarget: boolean;
+  dragging: boolean;
   onClick: () => void;
+  onPointerDown: (e: ReactPointerEvent) => void;
 }) {
   return (
     <button
       onClick={onClick}
+      onPointerDown={onPointerDown}
+      // The browser's own drag would fight the pointer handling and, on touch,
+      // scroll the page instead of moving the asset.
+      style={{touchAction: 'none'}}
       className={`flex h-[4.5rem] flex-col justify-center rounded border px-2 text-left transition ${
-        selected
-          ? 'border-orange-500 bg-orange-950/40'
-          : asset
-            ? 'border-neutral-700 bg-neutral-900 hover:border-neutral-500'
-            : 'border-dashed border-neutral-800 bg-neutral-950 hover:border-neutral-600'
+        dropTarget
+          ? 'border-orange-400 bg-orange-900/40 ring-2 ring-orange-500'
+          : dragging
+            ? 'border-neutral-700 bg-neutral-900 opacity-40'
+            : selected
+              ? 'border-orange-500 bg-orange-950/40'
+              : asset
+                ? 'border-neutral-700 bg-neutral-900 hover:border-neutral-500'
+                : 'border-dashed border-neutral-800 bg-neutral-950 hover:border-neutral-600'
       }`}
     >
       {asset ? (
@@ -90,6 +104,21 @@ export default function Squads({
   const [busy, setBusy] = useState(false);
   const [picking, setPicking] = useState<{squad: string; slot: number} | null>(null);
   const [pickQuery, setPickQuery] = useState('');
+  /** A filled slot that was tapped: remove it, or replace it. */
+  const [acting, setActing] = useState<{squad: string; slot: number} | null>(null);
+  /** The slot being dragged, and the slot the pointer is currently over. */
+  const [drag, setDrag] = useState<{squad: string; slot: number} | null>(null);
+  /** The slot the pointer is over mid-drag. Not `over` - that name is taken
+   * by the lift-exceeded flag on each squad card, and the shadowing compiles
+   * into a boolean where a slot was meant. */
+  const [overSlot, setOverSlot] = useState<{squad: string; slot: number} | null>(null);
+  const dragRef = useRef<{
+    squad: string;
+    slot: number;
+    x: number;
+    y: number;
+    moved: boolean;
+  } | null>(null);
   const [pickCategory, setPickCategory] = useState<AssetCategory | 'all'>('all');
 
   const load = useCallback(async () => {
@@ -126,6 +155,83 @@ export default function Squads({
     setPickQuery('');
     setPickCategory('all');
   }, [picking?.squad, picking?.slot]);
+
+  /**
+   * Dragging, on both mouse and touch, from one handler.
+   *
+   * The press is not a drag until the pointer has moved a few pixels, so a tap
+   * still opens the slot menu. The slot under the pointer is found by
+   * hit-testing the DOM rather than by caching each slot's box, because the
+   * squads scroll and a cached rectangle is wrong the moment they do.
+   */
+  useEffect(() => {
+    if (!drag) return;
+
+    const move = (e: PointerEvent) => {
+      const hit = document
+        .elementsFromPoint(e.clientX, e.clientY)
+        .find((n) => n instanceof HTMLElement && n.dataset.slot) as HTMLElement | undefined;
+      if (!hit?.dataset.slot) {
+        setOverSlot(null);
+        return;
+      }
+      const [squad, slot] = hit.dataset.slot.split(':');
+      setOverSlot({squad, slot: Number(slot)});
+    };
+
+    const up = () => {
+      const target = overSlot;
+      const source = drag;
+      setDrag(null);
+      setOverSlot(null);
+      dragRef.current = null;
+      if (!source || !target) return;
+      if (source.squad === target.squad && source.slot === target.slot) return;
+      void moveTo(source, target);
+    };
+
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+    };
+  }, [drag, overSlot]);
+
+  function beginDrag(squad: string, slot: number, e: ReactPointerEvent) {
+    if (!view?.squads[squad]?.[slot]) return;
+    dragRef.current = {squad, slot, x: e.clientX, y: e.clientY, moved: false};
+
+    const watch = (ev: PointerEvent) => {
+      const d = dragRef.current;
+      if (!d || d.moved) return;
+      if (Math.abs(ev.clientX - d.x) + Math.abs(ev.clientY - d.y) < 6) return;
+      d.moved = true;
+      setDrag({squad: d.squad, slot: d.slot});
+      window.removeEventListener('pointermove', watch);
+    };
+    window.addEventListener('pointermove', watch);
+    window.addEventListener('pointerup', () => window.removeEventListener('pointermove', watch), {
+      once: true,
+    });
+  }
+
+  async function moveTo(
+    from: {squad: string; slot: number},
+    to: {squad: string; slot: number},
+  ) {
+    setBusy(true);
+    setError(null);
+    try {
+      setView(await api.moveSlot(from, to));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'That did not stick.');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function assign(squad: string, slot: number, assetId: string | null) {
     setBusy(true);
@@ -243,18 +349,33 @@ export default function Squads({
                         const id = view.squads[name]?.[slot] ?? null;
                         const asset = id ? ASSET_BY_ID[id] ?? null : null;
                         return (
-                          <div key={slot}>
+                          // data-slot is what the drag hit-test reads. It sits
+                          // on the wrapper so the whole cell is a drop target,
+                          // not just the button's own box.
+                          <div key={slot} data-slot={`${name}:${slot}`}>
                             <Slot
                               asset={asset}
                               level={id ? levels.get(id) ?? 1 : 1}
-                              selected={picking?.squad === name && picking.slot === slot}
-                              onClick={() =>
-                                setPicking(
-                                  picking?.squad === name && picking.slot === slot
-                                    ? null
-                                    : {squad: name, slot},
-                                )
+                              selected={
+                                (picking?.squad === name && picking.slot === slot) ||
+                                (acting?.squad === name && acting.slot === slot)
                               }
+                              dropTarget={
+                                drag !== null && overSlot?.squad === name && overSlot?.slot === slot
+                              }
+                              dragging={drag?.squad === name && drag?.slot === slot}
+                              onPointerDown={(e) => beginDrag(name, slot, e)}
+                              onClick={() => {
+                                // A drag ends over a slot and would otherwise
+                                // fire this too.
+                                if (dragRef.current?.moved) return;
+                                // An occupied slot asks what to do with what is
+                                // already there; an empty one goes straight to
+                                // the choices, because there is only one thing
+                                // to do with it.
+                                if (id) setActing({squad: name, slot});
+                                else setPicking({squad: name, slot});
+                              }}
                             />
                           </div>
                         );
@@ -266,11 +387,77 @@ export default function Squads({
             </div>
 
             <p className="mt-4 text-[11px] leading-relaxed text-neutral-600">
-              {t('squads.hint')}
+              {t('squads.hint')} {t('squads.dragHint')}
             </p>
           </>
         )}
       </div>
+
+      {/*
+        What to do with a slot that already holds something. Tapping it used to
+        open the whole catalogue, which assumed the answer was always "replace"
+        - but most of the time the intent is to take it out, and that was a
+        button hidden in the header of a sixty-row list.
+      */}
+      {acting && view && (
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-xs rounded-lg border border-neutral-700 bg-neutral-950 p-4 shadow-2xl">
+            {(() => {
+              const id = view.squads[acting.squad]?.[acting.slot] ?? null;
+              const held = id ? ASSET_BY_ID[id] ?? null : null;
+              if (!held) return null;
+              return (
+                <>
+                  <div className="flex items-center gap-2">
+                    <AssetIcon asset={held} size={32} />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-neutral-100">
+                        {held.name}
+                      </p>
+                      <p className="truncate text-[11px] text-neutral-500">
+                        {t('squads.inSlot', {
+                          name: CATEGORY_LABEL[held.category],
+                          squad: acting.squad,
+                          slot: acting.slot + 1,
+                        })}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-2">
+                    <button
+                      onClick={() => {
+                        const at = acting;
+                        setActing(null);
+                        setPicking(at);
+                      }}
+                      className="rounded border border-neutral-700 px-3 py-2 text-sm font-medium text-neutral-100 hover:border-orange-600"
+                    >
+                      {t('squads.replace')}
+                    </button>
+                    <button
+                      onClick={() => {
+                        void assign(acting.squad, acting.slot, null);
+                        setActing(null);
+                      }}
+                      disabled={busy}
+                      className="rounded border border-red-900 px-3 py-2 text-sm font-medium text-red-300 hover:border-red-600 disabled:opacity-50"
+                    >
+                      {t('squads.remove')}
+                    </button>
+                    <button
+                      onClick={() => setActing(null)}
+                      className="px-3 py-1 text-xs text-neutral-500 hover:text-neutral-200"
+                    >
+                      {t('squads.cancel')}
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
 
       {/*
         The chooser is an overlay, not a panel below the squads.

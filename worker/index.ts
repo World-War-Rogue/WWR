@@ -6,7 +6,7 @@
  */
 import {handleAdminRequests} from './admin';
 import {ensureRally, lastRalliedAt, rallyTo, readRally, setRally} from './rally';
-import {assignSlot, ensureRoster, readSquads, squadLiftUsed, squadPower} from './squads';
+import {assignSlot, ensureRoster, moveSlot, readSquads, squadLiftUsed, squadPower} from './squads';
 import {SQUAD_NAMES, isSquadName, squadLiftBudget} from '../shared/assets';
 import {RALLY_COOLDOWN_MS, maySetRally, rallyCooldownLeft} from '../shared/rally';
 import {listBattles, readBattle} from './battles';
@@ -1011,6 +1011,33 @@ async function handleSquads(env: Env, player: PlayerRow): Promise<Response> {
       barracks: state.levels.barracks,
     },
   });
+}
+
+/** Drag one slot onto another: move, or swap with whatever is already there. */
+async function handleMove2(request: Request, env: Env, player: PlayerRow): Promise<Response> {
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const from = body?.from as {squad?: unknown; slot?: unknown} | undefined;
+  const to = body?.to as {squad?: unknown; slot?: unknown} | undefined;
+
+  if (!isSquadName(from?.squad) || !isSquadName(to?.squad)) return fail(400, 'No such squad.');
+  if (!Number.isInteger(Number(from?.slot)) || !Number.isInteger(Number(to?.slot))) {
+    return fail(400, 'No such slot.');
+  }
+
+  const now = Date.now();
+  const state = await settleAndLoad(env, player.id, now);
+  if (!state) return fail(404, 'No base found.');
+  await ensureRoster(env.DB, player.id, now);
+
+  const result = await moveSlot(
+    env.DB,
+    player.id,
+    {squad: from.squad, slot: Number(from.slot)},
+    {squad: to.squad, slot: Number(to.slot)},
+    state.levels,
+  );
+  if (!result.ok) return fail(409, result.error);
+  return handleSquads(env, player);
 }
 
 /** Put an asset in a slot, move it there from another squad, or clear a slot. */
@@ -2297,6 +2324,8 @@ async function route(
   if (endpoint === 'GET /api/squads') return handleSquads(env, player);
 
   if (endpoint === 'POST /api/squads/assign') return handleAssign(request, env, player);
+
+  if (endpoint === 'POST /api/squads/move') return handleMove2(request, env, player);
 
   if (endpoint === 'GET /api/chat') return handleChatRead(request, env, player, ctx);
 

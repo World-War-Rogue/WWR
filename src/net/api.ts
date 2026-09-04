@@ -297,6 +297,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({squad, slot, assetId}),
     }),
+  moveSlot: (
+    from: {squad: string; slot: number},
+    to: {squad: string; slot: number},
+  ) => call<SquadView>('/api/squads/move', {method: 'POST', body: JSON.stringify({from, to})}),
   battles: (scope: 'mine' | 'alliance', before?: number) => {
     const params = new URLSearchParams({scope});
     if (before !== undefined) params.set('before', String(before));
