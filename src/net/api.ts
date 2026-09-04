@@ -276,8 +276,6 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(worldId === undefined ? {x, y} : {x, y, worldId}),
     }),
-  clearRally: () =>
-    call<{rally: null}>('/api/rally/set', {method: 'POST', body: JSON.stringify({clear: true})}),
   rally: () =>
     call<{world: {id: number; name: string}; plot: {x: number; y: number}; cooldownMs: number}>(
       '/api/rally',

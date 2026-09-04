@@ -282,6 +282,82 @@ function drawRallyMarker(
   ctx.restore();
 }
 
+/**
+ * A pointer at the screen edge when the rendezvous is off it.
+ *
+ * The marker itself is only useful once you have found it, and the map is four
+ * hundred plots across. This is how it stays findable from anywhere: an arrow
+ * pinned to the edge in the marker's direction, with how far away it is, so
+ * "where is the RV" never needs a coordinate readout taking up the top of the
+ * screen.
+ *
+ * Drawn only when the point is genuinely outside the viewport - an arrow
+ * pointing at something already on screen is clutter that teaches a player to
+ * ignore arrows.
+ */
+function drawRallyEdge(
+  ctx: CanvasRenderingContext2D,
+  px: number,
+  py: number,
+  w: number,
+  h: number,
+  plots: number,
+) {
+  const pad = 26;
+  if (px >= pad && px <= w - pad && py >= pad && py <= h - pad) return;
+
+  const cx = w / 2;
+  const cy = h / 2;
+  const angle = Math.atan2(py - cy, px - cx);
+
+  // Walk from the centre toward the marker and stop at the first edge crossed,
+  // so the arrow sits where a line to the marker leaves the screen rather than
+  // at a corner-biased approximation of it.
+  const halfW = w / 2 - pad;
+  const halfH = h / 2 - pad;
+  const t = Math.min(
+    Math.abs(halfW / Math.cos(angle)) || Infinity,
+    Math.abs(halfH / Math.sin(angle)) || Infinity,
+  );
+  const ex = cx + Math.cos(angle) * t;
+  const ey = cy + Math.sin(angle) * t;
+
+  ctx.save();
+  ctx.translate(ex, ey);
+
+  ctx.fillStyle = 'rgba(8,20,24,0.85)';
+  ctx.strokeStyle = '#22d3ee';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(0, 0, 15, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.rotate(angle);
+  ctx.fillStyle = '#22d3ee';
+  ctx.beginPath();
+  ctx.moveTo(9, 0);
+  ctx.lineTo(-3, -6);
+  ctx.lineTo(-3, 6);
+  ctx.closePath();
+  ctx.fill();
+  ctx.rotate(-angle);
+
+  // Distance in plots, which is the unit the map is actually measured in and
+  // the one a player already thinks in when deciding whether to answer.
+  ctx.font = '700 10px ui-sans-serif, system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+  const label = `${Math.round(plots)}`;
+  ctx.strokeText(label, 0, 24);
+  ctx.fillStyle = '#a5f3fc';
+  ctx.fillText(label, 0, 24);
+
+  ctx.restore();
+}
+
 export default function WorldMap({
   onOpenBase,
   onViewProfile,
@@ -621,7 +697,17 @@ export default function WorldMap({
     // already found it is not a rally point.
     const marker = view?.rally;
     if (marker && marker.worldId === view?.world.id) {
-      drawRallyMarker(ctx, toScreenX(marker.x) + zoom / 2, toScreenY(marker.y) + zoom / 2, zoom, time);
+      const mx = toScreenX(marker.x) + zoom / 2;
+      const my = toScreenY(marker.y) + zoom / 2;
+      drawRallyMarker(ctx, mx, my, zoom, time);
+      drawRallyEdge(
+        ctx,
+        mx,
+        my,
+        w,
+        h,
+        Math.hypot(marker.x + 0.5 - camera.cx, marker.y + 0.5 - camera.cy),
+      );
     }
   }, [camera, view, w, h, selected, selectedBase, centred]);
 
@@ -883,41 +969,6 @@ export default function WorldMap({
           </button>
         )}
       </div>
-
-      {rally && (
-        <div className="pointer-events-none absolute inset-x-0 top-20 flex justify-center">
-          <div className="pointer-events-auto flex items-center gap-2 rounded border border-cyan-800 bg-cyan-950/70 px-3 py-1.5 text-xs text-cyan-200 backdrop-blur">
-            <span className="font-semibold">RV</span>
-            <span className="font-mono text-cyan-400">
-              {rally.x}, {rally.y}
-            </span>
-            <span className="text-cyan-500/80">· {rally.setBy}</span>
-            <button
-              onClick={() => setCamera((c) => ({...c, cx: rally.x + 0.5, cy: rally.y + 0.5}))}
-              className="rounded border border-cyan-700 px-1.5 py-0.5 hover:border-cyan-400"
-            >
-              Show
-            </button>
-            {view?.you.maySetRally && (
-              <button
-                onClick={() => {
-                  void (async () => {
-                    try {
-                      await api.clearRally();
-                      await load(camera, w, h);
-                    } catch (err) {
-                      setError(err instanceof ApiError ? err.message : 'Could not reach the server.');
-                    }
-                  })();
-                }}
-                className="rounded border border-cyan-900 px-1.5 py-0.5 text-cyan-500 hover:border-red-600 hover:text-red-300"
-              >
-                Clear
-              </button>
-            )}
-          </div>
-        </div>
-      )}
 
       {error && (
         <div className="absolute inset-x-3 bottom-32 rounded border border-red-900 bg-red-950/80 px-3 py-2 text-sm text-red-200 backdrop-blur">

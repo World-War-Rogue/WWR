@@ -5,7 +5,7 @@
  * static assets binding, which serves the built React client.
  */
 import {handleAdminRequests} from './admin';
-import {clearRally, lastRalliedAt, rallyTo, readRally, setRally} from './rally';
+import {ensureRally, lastRalliedAt, rallyTo, readRally, setRally} from './rally';
 import {RALLY_COOLDOWN_MS, maySetRally, rallyCooldownLeft} from '../shared/rally';
 import {listBattles, readBattle} from './battles';
 import {REPORT_RETENTION_DAYS} from '../shared/battles';
@@ -672,7 +672,7 @@ async function handleWorld(request: Request, env: Env, player: PlayerRow): Promi
   // the map is already being refreshed, so a second endpoint would be a second
   // request for the same information.
   const [rallyPoint, ralliedAt] = await Promise.all([
-    readRally(env.DB, ownAlliance?.id ?? null),
+    ownAlliance ? ensureRally(env.DB, ownAlliance.id, world.id, now) : Promise.resolve(null),
     lastRalliedAt(env.DB, world.id, player.id),
   ]);
 
@@ -757,11 +757,8 @@ async function handleSetRally(request: Request, env: Env, player: PlayerRow): Pr
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   const now = Date.now();
 
-  if (body?.clear === true) {
-    await clearRally(env.DB, membership.alliance.id);
-    return json({rally: null});
-  }
-
+  // There is no clearing a rendezvous, only moving it. An alliance always has
+  // one, so the button on the map always points somewhere.
   const x = Number(body?.x);
   const y = Number(body?.y);
   if (!Number.isInteger(x) || !Number.isInteger(y)) return fail(400, 'Pick a plot on the map.');
@@ -792,11 +789,15 @@ async function handleRally(env: Env, player: PlayerRow): Promise<Response> {
   const membership = await membershipOf(env.DB, player.id);
   if (!membership) return fail(409, 'You are not in an alliance.');
 
-  const point = await readRally(env.DB, membership.alliance.id);
-  if (!point) return fail(404, 'Your alliance has no rendezvous point.');
-
   const now = Date.now();
   const worlds = await reachableWorlds(env.DB, player.id, now);
+  const home = worlds.find((entry) => entry.kind === 'home') ?? worlds[0];
+
+  const point = home
+    ? await ensureRally(env.DB, membership.alliance.id, home.id, now)
+    : await readRally(env.DB, membership.alliance.id);
+  if (!point) return fail(404, 'Your alliance has nowhere to rally to yet.');
+
   const world = worlds.find((entry) => entry.id === point.worldId);
   if (!world) return fail(403, 'That rendezvous is in a world you cannot reach.');
 

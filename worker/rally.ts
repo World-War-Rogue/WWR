@@ -73,8 +73,57 @@ export async function setRally(
     .run();
 }
 
-export async function clearRally(db: D1Database, allianceId: string): Promise<void> {
-  await db.prepare(`DELETE FROM alliance_rally WHERE alliance_id = ?1`).bind(allianceId).run();
+/**
+ * The alliance's marker, guaranteed.
+ *
+ * An alliance ALWAYS has a rendezvous. There is no clearing it and no state
+ * where the button is there but points nowhere - a rally that has to be set up
+ * before it can be used is one that is not there in the minute somebody needs
+ * it, which is the only minute it exists for.
+ *
+ * When one has not been placed yet it is put where the alliance already is:
+ * the centre of its members' plots, rounded to a plot. That is the most useful
+ * default there is - it is home ground, so an untouched marker still rallies
+ * people somewhere they would want to be, and an officer moving it is refining
+ * a real answer rather than replacing a placeholder.
+ *
+ * It is written, not merely returned, so the answer is stable. A default that
+ * were recomputed on every read would drift every time a member moved, and a
+ * rally point that wanders is worse than one in the wrong place.
+ */
+export async function ensureRally(
+  db: D1Database,
+  allianceId: string,
+  worldId: number,
+  now: number,
+): Promise<RallyPoint | null> {
+  const existing = await readRally(db, allianceId);
+  if (existing) return existing;
+
+  const centre = await db
+    .prepare(
+      `SELECT CAST(ROUND(AVG(p.plot_x)) AS INTEGER) AS x,
+              CAST(ROUND(AVG(p.plot_y)) AS INTEGER) AS y,
+              MIN(m.player_id) AS anyone
+         FROM alliance_members m
+         JOIN placements p ON p.player_id = m.player_id AND p.world_id = ?2
+        WHERE m.alliance_id = ?1`,
+    )
+    .bind(allianceId, worldId)
+    .first<{x: number | null; y: number | null; anyone: string | null}>();
+
+  // An alliance with nobody placed yet has no centre to take. It gets one when
+  // somebody stands somewhere; until then there is genuinely no answer, and
+  // inventing a corner of the map would be worse than the button being quiet.
+  if (!centre || centre.x === null || centre.y === null || !centre.anyone) return null;
+
+  const leader = await db
+    .prepare(`SELECT player_id AS id FROM alliance_members WHERE alliance_id = ?1 AND rank = 'leader'`)
+    .bind(allianceId)
+    .first<{id: string}>();
+
+  await setRally(db, allianceId, leader?.id ?? centre.anyone, worldId, centre.x, centre.y, now);
+  return readRally(db, allianceId);
 }
 
 /** When this player last rallied. Absent placement counts as never. */
