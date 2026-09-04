@@ -337,6 +337,24 @@ export default function Squads({
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              {/*
+                A list where every row is greyed out reads as broken. It is
+                not - the squad is simply full - and saying so is the
+                difference between a rule a player understands and a screen
+                they think is failing. This is the FIRST thing a new player
+                meets: two tanks fill a level-zero squad exactly.
+              */}
+              {choices.length > 0 && choices.every((a) => a.lift > remaining + freed) && (
+                <div className="mb-3 rounded border border-amber-900 bg-amber-950/40 px-3 py-2">
+                  <p className="text-xs font-semibold text-amber-200">
+                    {t('squads.nothingFits', {amount: remaining + freed})}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-amber-300/70">
+                    {t('squads.nothingFitsHint')}
+                  </p>
+                </div>
+              )}
+
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {choices.map((asset) => {
                   const where = placedIn.get(asset.id);

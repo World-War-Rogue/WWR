@@ -95,6 +95,8 @@ export const EN = {
   'squads.cancel': 'Cancel',
   'squads.inSquad': 'in {squad}',
   'squads.readingRoster': 'Reading the roster…',
+  'squads.nothingFits': 'Nothing you hold fits in {amount} lift.',
+  'squads.nothingFitsHint': 'Clear a slot, or raise the Motor Pool, Airfield or Barracks to carry more.',
   'squads.hint': 'Tap a slot to fill it. Lift is the brake: heavier assets cost more, and the budget comes from your Motor Pool, Airfield and Barracks — so early on a squad has to be mixed, and that is the point.',
 
   // Assets
