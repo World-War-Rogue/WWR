@@ -128,7 +128,7 @@ export default function WorldMap({
 
   const [camera, setCamera] = useState<Camera>({cx: 0, cy: 0, zoom: HOME_ZOOM});
   const [view, setView] = useState<WorldView | null>(null);
-  const [selected, setSelected] = useState<{x: number; y: number; base: PlacedBase | null} | null>(null);
+  const [selected, setSelected] = useState<{x: number; y: number} | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [moving, setMoving] = useState(false);
   const [centred, setCentred] = useState(false);
@@ -224,7 +224,7 @@ export default function WorldMap({
       const cam = cameraRef.current;
       const plotX = Math.floor(cam.cx + (e.clientX - rect.left - rect.width / 2) / cam.zoom);
       const plotY = Math.floor(cam.cy + (e.clientY - rect.top - rect.height / 2) / cam.zoom);
-      setSelected({x: plotX, y: plotY, base: null});
+      setSelected({x: plotX, y: plotY});
     };
     const wheel = (e: WheelEvent) => {
       e.preventDefault();
@@ -248,13 +248,16 @@ export default function WorldMap({
     };
   }, []);
 
-  // Resolve which base, if any, occupies the selected plot.
-  useEffect(() => {
-    if (!selected) return;
-    const base = basesByPlot.get(`${selected.x},${selected.y}`) ?? null;
-    if (base !== selected.base) setSelected({...selected, base});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [basesByPlot, selected?.x, selected?.y]);
+  // Which base, if any, is on the selected plot.
+  //
+  // Derived rather than stored. Holding it in state meant re-selecting the same
+  // plot wrote the same coordinates back with a null base, and the effect that
+  // resolved it did not re-run because the coordinates had not changed - so a
+  // second click on an occupied plot left it reading as open ground and
+  // offering to move there.
+  const selectedBase: PlacedBase | null = selected
+    ? basesByPlot.get(`${selected.x},${selected.y}`) ?? null
+    : null;
 
   // Draw.
   useEffect(() => {
@@ -349,7 +352,7 @@ export default function WorldMap({
     if (selected) {
       const sx = toScreenX(selected.x);
       const sy = toScreenY(selected.y);
-      ctx.strokeStyle = selected.base ? '#f59e0b' : '#4ade80';
+      ctx.strokeStyle = selectedBase ? '#f59e0b' : '#4ade80';
       ctx.lineWidth = 2;
       ctx.setLineDash([6, 4]);
       ctx.strokeRect(sx + 1, sy + 1, zoom - 2, zoom - 2);
@@ -421,7 +424,7 @@ export default function WorldMap({
         );
       }
     }
-  }, [camera, view, w, h, selected, centred]);
+  }, [camera, view, w, h, selected, selectedBase, centred]);
 
   // Drives the animation loop only while something is actually moving. A map
   // of static bases costs nothing; a burning one runs at frame rate.
@@ -498,7 +501,7 @@ export default function WorldMap({
     }
   }
 
-  const occupied = Boolean(selected?.base);
+  const occupied = selectedBase !== null;
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-[#0a0906]">
@@ -604,12 +607,12 @@ export default function WorldMap({
               <p className="font-mono text-[11px] text-neutral-500">
                 plot {selected.x}, {selected.y}
               </p>
-              {selected.base ? (
+              {selectedBase ? (
                 <>
-                  <p className="truncate font-semibold text-neutral-100">{selected.base.username}</p>
+                  <p className="truncate font-semibold text-neutral-100">{selectedBase.username}</p>
                   <p className="text-xs text-neutral-400">
-                    {skinSpec(selected.base.skin).name} · Command Post{' '}
-                    {selected.base.level}
+                    {skinSpec(selectedBase.skin).name} · Command Post{' '}
+                    {selectedBase.level}
                   </p>
                 </>
               ) : (
@@ -626,7 +629,7 @@ export default function WorldMap({
 
           {occupied ? (
             <button
-              onClick={() => onViewProfile(selected.base!.username)}
+              onClick={() => onViewProfile(selectedBase.username)}
               className="mt-3 w-full rounded border border-fuchsia-700 bg-fuchsia-950/40 px-3 py-2 text-sm font-semibold text-fuchsia-200 hover:border-fuchsia-500"
             >
               View profile
