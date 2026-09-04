@@ -107,8 +107,10 @@ player-authored text, and block / mute / report in chat.
 
 - [`docs/HOW-IT-WORKS.md`](./docs/HOW-IT-WORKS.md) - **start here.** What the game
   actually is and why each part is built the way it is.
-- [`docs/SQUADS-AND-HEROES.md`](./docs/SQUADS-AND-HEROES.md) - the plan for the
-  last pillar: the hero catalogue, the draft, squads, and the build order.
+- [`docs/SQUADS-AND-HEROES.md`](./docs/SQUADS-AND-HEROES.md) - the asset
+  catalogue, squads, lift, and how they are drawn.
+- [`docs/COMBAT.md`](./docs/COMBAT.md) - what a battle is, what decides it,
+  and what it costs.
 - [`docs/SKIN-ART-SPEC.md`](./docs/SKIN-ART-SPEC.md) - what a base skin needs to be.
   The brief for a 3D artist.
 - [`docs/CHATGPT-SKIN-BRIEF.md`](./docs/CHATGPT-SKIN-BRIEF.md) - the same job
