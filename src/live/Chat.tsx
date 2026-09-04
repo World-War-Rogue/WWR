@@ -53,6 +53,11 @@ export default function Chat({
   const sinceRef = useRef<number | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
+  // The channel the bar previews when closed: whichever was last open.
+  // Remembered rather than derived, because the point of the bar is to keep an
+  // eye on the conversation you were actually in.
+  const [lastChannel, setLastChannel] = useState<string | null>(null);
+
   // Which channel the current tab is looking at. Private has no single
   // channel - it has a list, and one of them is selected.
   const channel =
@@ -134,6 +139,10 @@ export default function Chat({
     bottomRef.current?.scrollIntoView({block: 'end'});
   }, [messages]);
 
+  useEffect(() => {
+    if (channel) setLastChannel(channel);
+  }, [channel]);
+
   async function send(e: FormEvent) {
     e.preventDefault();
     const text = draft.trim();
@@ -165,23 +174,38 @@ export default function Chat({
 
   const totalUnread = Object.values<number>(info?.unread ?? {}).reduce((a, b) => a + b, 0);
 
+  // On the Private tab with nothing selected, the tab IS the list - the
+  // conversation and its composer have nothing to be about yet.
+  const showConversation = !(tab === 'private' && thread === null);
+
   if (!open) {
+    // The bar previews the channel you were last in, not the one you last
+    // spoke in. Somebody watching a conversation wants to see it continue,
+    // whether or not they are the one talking.
+    const preview = lastChannel
+      ? info?.latest[lastChannel] ?? null
+      : info?.latest[info?.channels.server ?? ''] ?? null;
+
     return (
       <button
         onClick={() => setOpen(true)}
-        className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-between border-t border-neutral-800 bg-neutral-950/95 px-4 py-3 text-left backdrop-blur"
+        className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t border-neutral-800 bg-neutral-950/95 px-4 py-3 text-left backdrop-blur"
       >
-        <span className="text-sm text-neutral-400">
-          {totalUnread > 0 ? 'New messages' : 'Comms'}
-        </span>
-        <span className="flex items-center gap-2">
-          {totalUnread > 0 && (
-            <span className="rounded-full bg-orange-600 px-2 py-0.5 text-xs font-semibold text-white">
-              {totalUnread}
-            </span>
+        <span className="min-w-0 flex-1 truncate text-sm">
+          {preview ? (
+            <>
+              <span className="font-semibold text-neutral-300">{preview.author}</span>
+              <span className="text-neutral-500"> {preview.body}</span>
+            </>
+          ) : (
+            <span className="text-neutral-600">Comms</span>
           )}
-          <span className="text-xs uppercase tracking-widest text-neutral-600">Open</span>
         </span>
+        {totalUnread > 0 && (
+          <span className="shrink-0 rounded-full bg-orange-600 px-2 py-0.5 text-xs font-semibold text-white">
+            {totalUnread}
+          </span>
+        )}
       </button>
     );
   }
@@ -238,53 +262,98 @@ export default function Chat({
         })}
       </nav>
 
-      {tab === 'private' && (
-        <div className="shrink-0 border-b border-neutral-800 p-3">
-          <div className="flex gap-2">
-            <input
-              value={dmName}
-              onChange={(e) => setDmName(e.target.value)}
-              placeholder="Callsign"
-              className="min-w-0 flex-1 rounded border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm text-neutral-100 focus:border-orange-600 focus:outline-none"
-            />
-            <button
-              onClick={() => {
-                const name = dmName.trim();
-                if (name) {
-                  setDmName('');
-                  void openDm(name);
-                }
-              }}
-              className="shrink-0 rounded bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white"
-            >
-              Message
-            </button>
-          </div>
-          {(info?.threads.length ?? 0) > 0 && (
-            <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
-              {info!.threads.map((t) => (
-                <button
-                  key={t.channel}
-                  onClick={() => setThread(t.channel)}
-                  className={`shrink-0 rounded border px-3 py-1 text-xs transition ${
-                    thread === t.channel
-                      ? 'border-orange-500 text-neutral-100'
-                      : 'border-neutral-700 text-neutral-400 hover:border-neutral-500'
-                  }`}
-                >
-                  {t.other}
-                  {(info!.unread[t.channel] ?? 0) > 0 && (
-                    <span className="ml-1.5 rounded-full bg-orange-600 px-1.5 text-[10px] font-semibold text-white">
-                      {info!.unread[t.channel]}
-                    </span>
-                  )}
-                </button>
-              ))}
+      {tab === 'private' && thread === null && (
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="border-b border-neutral-800 p-3">
+            <div className="flex gap-2">
+              <input
+                value={dmName}
+                onChange={(e) => setDmName(e.target.value)}
+                placeholder="Callsign"
+                className="min-w-0 flex-1 rounded border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm text-neutral-100 focus:border-orange-600 focus:outline-none"
+              />
+              <button
+                onClick={() => {
+                  const name = dmName.trim();
+                  if (name) {
+                    setDmName('');
+                    void openDm(name);
+                  }
+                }}
+                className="shrink-0 rounded bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white"
+              >
+                Message
+              </button>
             </div>
+          </div>
+
+          {error && (
+            <p className="m-3 rounded border border-red-900 bg-red-950/60 px-3 py-2 text-sm text-red-300">
+              {error}
+            </p>
+          )}
+
+          {(info?.threads.length ?? 0) === 0 ? (
+            <p className="p-4 text-sm text-neutral-600">
+              No conversations yet. Type a callsign above, or open somebody's profile from the
+              map.
+            </p>
+          ) : (
+            <ul className="divide-y divide-neutral-900">
+              {info!.threads.map((t) => {
+                const last = info!.latest[t.channel];
+                const unread = info!.unread[t.channel] ?? 0;
+                return (
+                  <li key={t.channel}>
+                    <button
+                      onClick={() => setThread(t.channel)}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-neutral-900/60"
+                    >
+                      <Portrait
+                        glyph="star"
+                        tint="ash"
+                        src={`/api/portrait?name=${encodeURIComponent(t.other)}`}
+                        size={36}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-baseline justify-between gap-2">
+                          <span className="truncate text-sm font-semibold text-neutral-100">
+                            {t.other}
+                          </span>
+                          {last && (
+                            <span className="shrink-0 font-mono text-[10px] text-neutral-700">
+                              {timeOf(last.createdAt)}
+                            </span>
+                          )}
+                        </span>
+                        <span className="block truncate text-xs text-neutral-500">
+                          {last ? `${last.author}: ${last.body}` : 'No messages yet'}
+                        </span>
+                      </span>
+                      {unread > 0 && (
+                        <span className="shrink-0 rounded-full bg-orange-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+                          {unread}
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </div>
       )}
 
+      {tab === 'private' && thread !== null && (
+        <button
+          onClick={() => setThread(null)}
+          className="shrink-0 border-b border-neutral-800 px-4 py-2 text-left text-xs text-neutral-400 hover:text-neutral-200"
+        >
+          &larr; All conversations
+        </button>
+      )}
+
+      {showConversation && (
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
         {error && (
           <p className="mb-3 rounded border border-red-900 bg-red-950/60 px-3 py-2 text-sm text-red-300">
@@ -348,6 +417,9 @@ export default function Chat({
         )}
       </div>
 
+      )}
+
+      {showConversation && (
       <form onSubmit={send} className="flex shrink-0 gap-2 border-t border-neutral-800 p-3">
         <input
           value={draft}
@@ -365,6 +437,7 @@ export default function Chat({
           Send
         </button>
       </form>
+      )}
     </div>
   );
 }

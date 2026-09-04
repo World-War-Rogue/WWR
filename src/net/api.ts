@@ -21,6 +21,8 @@ export interface ChatChannels {
   channels: {server: string | null; alliance: string | null; leadership: string | null};
   threads: Array<{channel: string; other: string; updatedAt: number}>;
   unread: Record<string, number>;
+  /** The most recent message in each channel, for previews. */
+  latest: Record<string, {author: string; body: string; createdAt: number}>;
   rank: 'leader' | 'officer' | 'member' | null;
   serverTime: number;
 }

@@ -1657,10 +1657,40 @@ async function handleChatChannels(env: Env, player: PlayerRow): Promise<Response
     for (const row of rows.results ?? []) unread[row.channel] = row.n;
   }
 
+  // The most recent message in each channel, for the collapsed bar and the
+  // private conversation list. One query rather than one per channel: a player
+  // with a dozen conversations would otherwise pay a dozen round trips to
+  // render a list they have not opened.
+  const latest: Record<string, {author: string; body: string; createdAt: number}> = {};
+  if (keys.length > 0) {
+    const placeholders = keys.map((_, i) => `?${i + 1}`).join(', ');
+    const rows = await env.DB.prepare(
+      `SELECT m.channel AS channel, m.body AS body, m.created_at AS createdAt,
+              p.username AS author
+         FROM messages m
+         JOIN players p ON p.id = m.author_id
+         JOIN (SELECT channel, MAX(created_at) AS newest
+                 FROM messages
+                WHERE channel IN (${placeholders})
+                GROUP BY channel) last
+           ON last.channel = m.channel AND last.newest = m.created_at`,
+    )
+      .bind(...keys)
+      .all<{channel: string; body: string; createdAt: number; author: string}>();
+    for (const row of rows.results ?? []) {
+      latest[row.channel] = {
+        author: row.author,
+        body: row.body,
+        createdAt: row.createdAt,
+      };
+    }
+  }
+
   return json({
     channels,
     threads: threads.results ?? [],
     unread,
+    latest,
     rank: viewer.rank,
     serverTime: Date.now(),
   });
