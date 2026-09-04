@@ -10,8 +10,9 @@
  * the people it is about. So `resolveAccess` runs on both.
  */
 import {
+  LANGUAGE_CODES,
   allianceChannel,
-  detectLanguage,
+  detectByScript,
   dmOther,
   leadershipChannel,
   serverChannel,
@@ -165,8 +166,11 @@ export async function readChannel(
  */
 function correctLang(rows: MessageRow[]): MessageRow[] {
   return rows.map((row) => {
-    const lang = detectLanguage(row.body, row.lang);
-    return lang === row.lang ? row : {...row, lang};
+    // Only the script signal, never the word-list guess. The stored value may
+    // have been settled by the classifier, and overruling a model's "es" with
+    // a heuristic's "en" would undo the fix on every read.
+    const lang = detectByScript(row.body);
+    return !lang || lang === row.lang ? row : {...row, lang};
   });
 }
 
@@ -214,6 +218,80 @@ interface TranslationEnv {
 }
 
 export const TRANSLATION_MODEL = '@cf/meta/m2m100-1.2b';
+
+/**
+ * A small instruct model, used only to name the language of a Latin-script
+ * message. Chosen for being the cheapest thing that can answer rather than the
+ * best at anything - the question has twenty possible answers and is asked
+ * about one sentence.
+ */
+export const CLASSIFIER_MODEL = '@cf/meta/llama-3.2-1b-instruct';
+
+/** Pull the generated text out of a text-generation result. */
+export function readGenerated(result: unknown): string | null {
+  if (typeof result === 'string') return result.trim() || null;
+  if (!result || typeof result !== 'object') return null;
+  const record = result as Record<string, unknown>;
+  const direct = record.response ?? record.text;
+  if (typeof direct === 'string' && direct.trim()) return direct.trim();
+  if (record.result && typeof record.result === 'object') return readGenerated(record.result);
+  return null;
+}
+
+/**
+ * Settle the language of a message the script could not settle.
+ *
+ * Runs AFTER the send has been answered, never in front of it. A model call is
+ * several hundred milliseconds and pressing Enter in a chat box has to feel
+ * immediate, so the message is stored with the free guess and this corrects the
+ * row behind it - well before anybody's four-second poll asks to translate it.
+ *
+ * Fails by leaving the row alone. The worst case is what we had before, a
+ * message that does not translate; it is never a message that fails to send.
+ */
+export async function refineLanguage(
+  env: TranslationEnv,
+  messageId: string,
+  body: string,
+  stored: string,
+): Promise<void> {
+  // Hangul, kana, Cyrillic and the rest are already certain - asking a model
+  // to confirm what the characters have said is a call bought for nothing.
+  if (!env.AI || detectByScript(body)) return;
+
+  const text = body.trim();
+  if (text.length < 3) return;
+
+  try {
+    const result = await env.AI.run(CLASSIFIER_MODEL, {
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You identify what language a short chat message is written in. ' +
+            'Answer with exactly one ISO 639-1 code from this list and nothing ' +
+            `else: ${LANGUAGE_CODES.join(', ')}. No explanation, no punctuation.`,
+        },
+        {role: 'user', content: text},
+      ],
+      max_tokens: 4,
+      // Deterministic: the same message must not be filed under two different
+      // languages depending on when it happened to be sent.
+      temperature: 0,
+    });
+
+    const raw = readGenerated(result);
+    if (!raw) return;
+    // Asked for a bare code and mostly gives one, but a stray word or full
+    // stop should not lose the answer sitting inside it.
+    const code = raw.toLowerCase().match(/[a-z]{2}/)?.[0];
+    if (!code || !LANGUAGE_CODES.includes(code) || code === stored) return;
+
+    await env.DB.prepare(`UPDATE messages SET lang = ?2 WHERE id = ?1`).bind(messageId, code).run();
+  } catch (error) {
+    console.log('classify: threw', error instanceof Error ? error.message : String(error));
+  }
+}
 
 /**
  * Pull the translated string out of whatever the model returned.

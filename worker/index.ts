@@ -10,16 +10,20 @@ import {RALLY_COOLDOWN_MS, maySetRally, rallyCooldownLeft} from '../shared/rally
 import {listBattles, readBattle} from './battles';
 import {REPORT_RETENTION_DAYS} from '../shared/battles';
 import {
+  CLASSIFIER_MODEL,
   TRANSLATION_MODEL,
   type Viewer,
   channelsFor,
   readChannel,
   readRecent,
+  readGenerated,
   readTranslation,
+  refineLanguage,
   resolveAccess,
   translateMissing,
 } from './chat';
 import {
+  LANGUAGE_CODES,
   MESSAGE_MAX,
   RETENTION_DAYS,
   detectLanguage,
@@ -856,6 +860,8 @@ async function handleAiCheck(request: Request, env: Env, player: PlayerRow): Pro
 
   const url = new URL(request.url);
   const text = url.searchParams.get('text') ?? 'Hola, vamos a atacar al amanecer.';
+  // 'from' is only the offline guess here; the classifier below overrides it,
+  // which is the whole point of running both.
   const from = url.searchParams.get('from') ?? detectLanguage(text, 'en');
   const to = url.searchParams.get('to') ?? 'en';
 
@@ -872,16 +878,43 @@ async function handleAiCheck(request: Request, env: Env, player: PlayerRow): Pro
 
   const started = Date.now();
   try {
+    // Both models, because they fail independently and the symptom is the
+    // same either way: the classifier deciding a Spanish message is English is
+    // indistinguishable, from the outside, from the translator being down.
+    const classifierRaw = await env.AI.run(CLASSIFIER_MODEL, {
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You identify what language a short chat message is written in. ' +
+            'Answer with exactly one ISO 639-1 code from this list and nothing ' +
+            `else: ${LANGUAGE_CODES.join(', ')}. No explanation, no punctuation.`,
+        },
+        {role: 'user', content: text},
+      ],
+      max_tokens: 4,
+      temperature: 0,
+    });
+    const classifierText = readGenerated(classifierRaw);
+    const classified = classifierText?.toLowerCase().match(/[a-z]{2}/)?.[0] ?? null;
+    const source = classified && LANGUAGE_CODES.includes(classified) ? classified : from;
+
     const raw = await env.AI.run(TRANSLATION_MODEL, {
       text,
-      source_lang: from,
+      source_lang: source,
       target_lang: to,
     });
     return json({
       bound: true,
-      model: TRANSLATION_MODEL,
-      sent: {text, source_lang: from, target_lang: to},
-      detected: from,
+      classifier: {
+        model: CLASSIFIER_MODEL,
+        said: classifierText,
+        parsed: classified,
+      },
+      translator: {model: TRANSLATION_MODEL},
+      sent: {text, source_lang: source, target_lang: to},
+      guessedWithoutModel: from,
+      wouldTranslate: source !== to,
       tookMs: Date.now() - started,
       // Verbatim, so a changed field name is visible rather than inferred.
       raw,
@@ -894,6 +927,7 @@ async function handleAiCheck(request: Request, env: Env, player: PlayerRow): Pro
       sent: {text, source_lang: from, target_lang: to},
       tookMs: Date.now() - started,
       threw: error instanceof Error ? error.message : String(error),
+      note: 'One of the two model calls failed. The message names which.',
     });
   }
 }
@@ -1776,6 +1810,7 @@ async function handleChatSend(
   request: Request,
   env: Env,
   player: PlayerRow,
+  ctx: ExecutionContext,
 ): Promise<Response> {
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   const channelRaw = typeof body?.channel === 'string' ? body.channel : null;
@@ -1794,6 +1829,11 @@ async function handleChatSend(
   if (!access.canWrite) return fail(403, 'You cannot post there.');
 
   const now = Date.now();
+  const messageId = newId();
+  // The instant guess, so the send is not held behind a model call. It is
+  // right for every non-Latin script and a placeholder for the rest, which
+  // refineLanguage settles once the response has gone.
+  const guessedLang = detectLanguage(text, viewer.language);
   const writes: D1PreparedStatement[] = [
     env.DB.prepare(
       `INSERT INTO messages (id, channel, author_id, body, created_at, lang)
@@ -1803,7 +1843,7 @@ async function handleChatSend(
       // actually wrote, or a player typing in someone else's language - the
       // exact case translation exists for - produces a message that claims to
       // already be in the reader's language and is never translated.
-    ).bind(newId(), channelRaw, player.id, text, now, detectLanguage(text, viewer.language)),
+    ).bind(messageId, channelRaw, player.id, text, now, guessedLang),
   ];
 
   const other = dmOther(channelRaw, player.id);
@@ -1832,6 +1872,11 @@ async function handleChatSend(
       .bind(now - RETENTION_DAYS * 86_400_000)
       .run();
   }
+
+  // Settle the language behind the response. Latin script cannot be read off
+  // the characters, and a wrong language here is the difference between a
+  // message that translates and one that silently does not.
+  ctx.waitUntil(refineLanguage(env, messageId, text, guessedLang));
 
   return json({ok: true, serverTime: now});
 }
@@ -2121,7 +2166,7 @@ async function route(
 
   if (endpoint === 'GET /api/chat') return handleChatRead(request, env, player, ctx);
 
-  if (endpoint === 'POST /api/chat') return handleChatSend(request, env, player);
+  if (endpoint === 'POST /api/chat') return handleChatSend(request, env, player, ctx);
 
   if (endpoint === 'GET /api/chat/channels') return handleChatChannels(env, player);
 

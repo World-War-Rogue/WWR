@@ -185,13 +185,36 @@ const LATIN_HINTS: Array<{code: string; words: string[]}> = [
   {code: 'en', words: ['the', 'and', 'you', 'for', 'are', 'with', 'this', 'that', 'have', 'not']},
 ];
 
+/**
+ * The language, when the writing system settles it outright.
+ *
+ * Authoritative: nobody types Hangul by accident. This is the only detection
+ * good enough to overrule a stored value, which is why it is separate from the
+ * guessing below - a weak guess that overwrites a good answer is worse than no
+ * guess at all.
+ */
+export function detectByScript(body: string): string | null {
+  for (const script of SCRIPTS) {
+    if (script.re.test(body)) return script.code;
+  }
+  return null;
+}
+
+/**
+ * The instant, free guess. Right for every non-Latin script and unreliable for
+ * Latin ones, where it is only ever a placeholder until the model answers.
+ *
+ * Word lists cannot carry this on their own. "Hola, vamos a atacar al
+ * amanecer" contains no Spanish function word short enough to be worth listing,
+ * and chat messages are mostly that short - which is exactly how a Spanish
+ * message came through labelled English.
+ */
 export function detectLanguage(body: string, fallback: string): string {
   const text = body.trim();
   if (text.length === 0) return fallback;
 
-  for (const script of SCRIPTS) {
-    if (script.re.test(text)) return script.code;
-  }
+  const script = detectByScript(text);
+  if (script) return script;
 
   // Nothing here is written in the fallback's script, so the fallback is
   // wrong however little else we know. Korean cannot be typed in ASCII, and
