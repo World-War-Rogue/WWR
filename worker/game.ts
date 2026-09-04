@@ -198,83 +198,25 @@ export function settledRadius(population: number): number {
   return Math.sqrt(Math.max(1, population) / (TARGET_OCCUPANCY * Math.PI));
 }
 
-export type SkinId =
-  | 'desert_fob'
-  | 'arctic_station'
-  | 'jungle_outpost'
-  | 'urban_garrison'
-  | 'custom_one'
-  | 'custom_two'
-  | 'signature_one'
-  | 'ember_sentinel';
-
-export interface SkinSpec {
-  id: SkinId;
-  name: string;
-  blurb: string;
-  /** Ground, structure and accent colours the map renderer draws with. */
-  palette: {ground: string; structure: string; accent: string};
-  /**
-   * A one-of-one commission. At most one account in the game may ever hold it,
-   * and that is enforced by a unique index rather than by remembering not to
-   * sell it twice - see migrations/0006_exclusive.sql.
-   */
-  exclusive?: boolean;
-}
-
-export const SKINS: Record<SkinId, SkinSpec> = {
-  desert_fob: {
-    id: 'desert_fob',
-    name: 'Desert FOB',
-    blurb: 'HESCO barriers and sand berms. Built fast, holds hard.',
-    palette: {ground: '#b08248', structure: '#d9c39a', accent: '#e07a29'},
-  },
-  arctic_station: {
-    id: 'arctic_station',
-    name: 'Arctic Station',
-    blurb: 'Radar domes above the treeline. Nothing crosses unseen.',
-    palette: {ground: '#9fb6c6', structure: '#e8f1f6', accent: '#3fa9d6'},
-  },
-  jungle_outpost: {
-    id: 'jungle_outpost',
-    name: 'Jungle Outpost',
-    blurb: 'Camouflage netting and raised platforms. Hard to find.',
-    palette: {ground: '#4e6b3a', structure: '#7b8f5c', accent: '#9fd356'},
-  },
-  urban_garrison: {
-    id: 'urban_garrison',
-    name: 'Urban Garrison',
-    blurb: 'Blast walls and concrete. A city block turned strongpoint.',
-    palette: {ground: '#6b6b6b', structure: '#9aa0a6', accent: '#d64545'},
-  },
-  // Not offered at signup. Reserved for the two custom skins under test.
-  custom_one: {
-    id: 'custom_one',
-    name: 'Custom I',
-    blurb: 'Awaiting reference art.',
-    palette: {ground: '#5b4b6e', structure: '#b9a7d0', accent: '#c084fc'},
-  },
-  custom_two: {
-    id: 'custom_two',
-    name: 'Custom II',
-    blurb: 'Awaiting reference art.',
-    palette: {ground: '#6e5b3a', structure: '#d6c08a', accent: '#facc15'},
-  },
-  ember_sentinel: {
-    id: 'ember_sentinel',
-    name: 'Ember Sentinel',
-    blurb: 'A sworn guard, cast in iron. The sword has not gone out since.',
-    palette: {ground: '#2b2622', structure: '#8b8178', accent: '#ff6a1f'},
-  },
-  // The flagship commission. Sold once, to one player, and never again.
-  signature_one: {
-    id: 'signature_one',
-    name: 'Shadow Empress',
-    blurb: 'She reigns in silence. One of one, and never sold again.',
-    palette: {ground: '#1c1712', structure: '#c9a227', accent: '#f0b429'},
-    exclusive: true,
-  },
-};
+/**
+ * The skin catalogue lives in shared/, imported by this file and by the
+ * client's renderer, so the two cannot disagree about what exists.
+ *
+ * It used to be declared here as well, and the copies drifted the first time a
+ * skin was added: the client knew about Ravenkeep and drew it, the server did
+ * not, so it was missing from Customise and an equip would have been refused.
+ * Re-exported rather than imported at each use site, so nothing else in the
+ * Worker had to change.
+ */
+export {
+  SKIN_IDS,
+  STARTER_SKIN_IDS,
+  isSkinId,
+  type Palette,
+  type SkinId,
+  type SkinIdentity as SkinSpec,
+} from '../shared/skins';
+export {SKIN_IDENTITY as SKINS} from '../shared/skins';
 
 /**
  * Open testing: every base skin is selectable by everyone.
@@ -290,19 +232,6 @@ export const SKINS: Record<SkinId, SkinSpec> = {
  */
 export const ALL_SKINS_UNLOCKED = true;
 
-/** Only these are selectable by a new player. */
-export const STARTER_SKIN_IDS: SkinId[] = [
-  'desert_fob',
-  'arctic_station',
-  'jungle_outpost',
-  'urban_garrison',
-];
-
-export const SKIN_IDS = Object.keys(SKINS) as SkinId[];
-
-export function isSkinId(value: unknown): value is SkinId {
-  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(SKINS, value);
-}
 
 /**
  * Candidate plots for a new arrival.

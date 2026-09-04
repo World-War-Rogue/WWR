@@ -34,45 +34,27 @@ import {
   lightsOf,
 } from './cosmeticsPaint';
 
-export type SkinId =
-  | 'desert_fob'
-  | 'arctic_station'
-  | 'jungle_outpost'
-  | 'urban_garrison'
-  | 'custom_one'
-  | 'custom_two'
-  | 'signature_one'
-  | 'ember_sentinel'
-  | 'ravenkeep';
+/**
+ * What a skin is comes from shared/skins.ts, which the Worker imports too, so
+ * the two sides cannot disagree about which skins exist. What is added here is
+ * only how one is DRAWN - the perimeter recipe, the landmark, the art atlas
+ * and the motion - none of which the server has any opinion about.
+ */
+import {SKIN_IDENTITY, type SkinId, type SkinIdentity} from '../../shared/skins';
 
-export interface Palette {
-  ground: string;
-  structure: string;
-  accent: string;
-  roof: string;
-  wall: string;
-}
+export type {Palette, SkinId} from '../../shared/skins';
+export {SKIN_IDS, STARTER_SKIN_IDS, isSkinId} from '../../shared/skins';
 
-export interface SkinSpec {
-  id: SkinId;
-  name: string;
-  blurb: string;
-  palette: Palette;
+/** How a skin is drawn. Everything here is client-only. */
+export interface SkinPresentation {
   /** Perimeter style: HESCO bastion, snow berm, palisade, or blast wall. */
   perimeter: 'bastion' | 'berm' | 'palisade' | 'blast';
   /** A signature structure that makes the skin recognisable at a glance. */
   landmark: 'tower' | 'dome' | 'canopy' | 'block';
-  starter: boolean;
-  /**
-   * A one-of-one commission. At most one account may ever own it, enforced by
-   * a unique index in the database rather than by remembering not to sell it
-   * twice - see migrations/0006_exclusive.sql.
-   */
-  exclusive?: boolean;
   /**
    * Rendered art, when it exists. A skin with art ignores the drawn recipe
-   * above entirely; the recipe stays as the fallback for as long as the art
-   * has not loaded, and forever for skins that never get any.
+   * entirely; the recipe stays as the fallback for as long as the art has not
+   * loaded, and forever for skins that never get any.
    */
   art?: SkinArt;
   /**
@@ -83,44 +65,25 @@ export interface SkinSpec {
   motion?: SkinMotion;
 }
 
-export const SKINS: Record<SkinId, SkinSpec> = {
+export type SkinSpec = SkinIdentity & SkinPresentation;
+
+const PRESENTATION: Record<SkinId, SkinPresentation> = {
   desert_fob: {
-    id: 'desert_fob',
-    name: 'Desert FOB',
-    blurb: 'HESCO barriers and sand berms. Built fast, holds hard.',
-    palette: {ground: '#b08248', structure: '#d9c39a', accent: '#e07a29', roof: '#8d6636', wall: '#c9ac78'},
     perimeter: 'bastion',
     landmark: 'tower',
-    starter: true,
   },
   arctic_station: {
-    id: 'arctic_station',
-    name: 'Arctic Station',
-    blurb: 'Radar domes above the treeline. Nothing crosses unseen.',
-    palette: {ground: '#9fb6c6', structure: '#e8f1f6', accent: '#3fa9d6', roof: '#7d97a8', wall: '#cddde6'},
     perimeter: 'berm',
     landmark: 'dome',
-    starter: true,
   },
   jungle_outpost: {
-    id: 'jungle_outpost',
-    name: 'Jungle Outpost',
-    blurb: 'Camouflage netting and raised platforms. Hard to find.',
-    palette: {ground: '#4e6b3a', structure: '#7b8f5c', accent: '#9fd356', roof: '#3c5430', wall: '#5f7a45'},
     perimeter: 'palisade',
     landmark: 'canopy',
-    starter: true,
   },
   urban_garrison: {
-    id: 'urban_garrison',
-    name: 'Urban Garrison',
-    blurb: 'Blast walls and concrete. A city block turned strongpoint.',
-    palette: {ground: '#6b6b6b', structure: '#9aa0a6', accent: '#d64545', roof: '#4f5155', wall: '#8a9096'},
     perimeter: 'blast',
     landmark: 'block',
-    starter: true,
   },
-
   // Reserved for the two custom skins. Palettes are placeholders until the
   // reference images land; the renderer already handles them.
   // The two premium slots. No art yet, so they draw with the recipe - but they
@@ -128,45 +91,29 @@ export const SKINS: Record<SkinId, SkinSpec> = {
   // skin will have can be seen and tuned now, on placeholder geometry, before
   // anybody is paid to model anything.
   custom_one: {
-    id: 'custom_one',
-    name: 'Custom I',
-    blurb: 'Awaiting reference art. Motion is live.',
-    palette: {ground: '#5b4b6e', structure: '#b9a7d0', accent: '#c084fc', roof: '#413352', wall: '#8f7cab'},
     perimeter: 'blast',
     landmark: 'tower',
-    starter: false,
     motion: {
       bob: {amplitude: 0.022, periodMs: 3400},
       glow: {color: '#a855f7', radius: 0.85, periodMs: 2600},
     },
   },
   custom_two: {
-    id: 'custom_two',
-    name: 'Custom II',
-    blurb: 'Awaiting reference art. Motion is live.',
-    palette: {ground: '#6e5b3a', structure: '#d6c08a', accent: '#facc15', roof: '#4d3f27', wall: '#a89066'},
     perimeter: 'bastion',
     landmark: 'dome',
-    starter: false,
     motion: {
       bob: {amplitude: 0.016, periodMs: 4200},
       glow: {color: '#facc15', radius: 0.7, periodMs: 3100},
       sway: {amount: 0.03, periodMs: 5200},
     },
   },
-
   // Cut from a single rendered still, like the Empress. Tall and narrow where
   // she is wide and spiky, which is the point: at map zoom the only thing that
   // survives is outline, so a catalogue needs shapes that differ, not just
   // themes that do.
   ember_sentinel: {
-    id: 'ember_sentinel',
-    name: 'Ember Sentinel',
-    blurb: 'A sworn guard, cast in iron. The sword has not gone out since.',
-    palette: {ground: '#2b2622', structure: '#8b8178', accent: '#ff6a1f', roof: '#3a332d', wall: '#5f574e'},
     perimeter: 'blast',
     landmark: 'tower',
-    starter: false,
     art: {
       src: '/skins/ember_sentinel.webp',
       frames: 1,
@@ -188,20 +135,14 @@ export const SKINS: Record<SkinId, SkinSpec> = {
       glow: {color: '#ff6a1f', radius: 0.8, periodMs: 1900},
     },
   },
-
   // Three flat cards - keep, arcane energy, raven - composited into one still.
   // The package it arrived in was built for a 24-frame Blender loop, and it can
   // still become one: `frames: 24, cols: 6` and a new atlas is the entire
   // change. Until then the motion below does the work, which is the same route
   // both other art skins took.
   ravenkeep: {
-    id: 'ravenkeep',
-    name: 'Ravenkeep',
-    blurb: 'The old keep still stands, and something still circles it.',
-    palette: {ground: '#2e2a24', structure: '#c9b48a', accent: '#a855f7', roof: '#3a332a', wall: '#8f7f62'},
     perimeter: 'palisade',
     landmark: 'tower',
-    starter: false,
     art: {
       src: '/skins/ravenkeep.webp',
       frames: 1,
@@ -229,7 +170,6 @@ export const SKINS: Record<SkinId, SkinSpec> = {
       sway: {amount: 0.011, periodMs: 7600},
     },
   },
-
   // The flagship commission. Sold once, to one player, and never again.
   //
   // This is the first skin with real art. `frames: 1` means the atlas is a
@@ -241,14 +181,8 @@ export const SKINS: Record<SkinId, SkinSpec> = {
   // Replacing it with a 24-frame Blender loop later is this block and nothing
   // else: frames 24, cols 6. The art below stays exactly where it is.
   signature_one: {
-    id: 'signature_one',
-    name: 'Shadow Empress',
-    blurb: 'She reigns in silence. One of one, and never sold again.',
-    palette: {ground: '#1c1712', structure: '#c9a227', accent: '#f0b429', roof: '#2b2318', wall: '#8a7434'},
     perimeter: 'blast',
     landmark: 'dome',
-    starter: false,
-    exclusive: true,
     art: {
       src: '/skins/signature_one.webp',
       frames: 1,
@@ -271,6 +205,22 @@ export const SKINS: Record<SkinId, SkinSpec> = {
     },
   },
 };
+
+/**
+ * The catalogue the renderer uses: what a skin is, plus how it is drawn.
+ *
+ * Merged rather than declared, so a skin added to shared/skins.ts appears here
+ * automatically and one the server knows about can never be missing from the
+ * client's list. The reverse - presentation declared for an id the server has
+ * never heard of - stops compiling, which is the failure worth having.
+ */
+export const SKINS: Record<SkinId, SkinSpec> = Object.fromEntries(
+  (Object.keys(SKIN_IDENTITY) as SkinId[]).map((id) => [
+    id,
+    {...SKIN_IDENTITY[id], ...PRESENTATION[id]},
+  ]),
+) as Record<SkinId, SkinSpec>;
+
 
 export const STARTER_SKINS = Object.values(SKINS).filter((s) => s.starter);
 

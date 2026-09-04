@@ -737,8 +737,16 @@ export default function WorldMap({
     <div className="relative h-full w-full overflow-hidden bg-[#0a0906]">
       <canvas ref={canvasRef} className="h-full w-full touch-none" style={{width: w, height: h}} />
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-3">
-        <div className="pointer-events-auto rounded border border-neutral-800 bg-black/70 px-3 py-2 backdrop-blur">
+      {/*
+        My base sits dead centre, where World map sits on the base screen, so
+        the two are the same target and toggling between them is one thumb
+        landing in the same place twice. The world card keeps the left, and the
+        right is deliberately empty rather than balanced - putting anything
+        there would give the eye a second thing to check before pressing the
+        one control that matters.
+      */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 grid grid-cols-[1fr_auto_1fr] items-start gap-3 p-3">
+        <div className="pointer-events-auto justify-self-start rounded border border-neutral-800 bg-black/70 px-3 py-2 backdrop-blur">
           <p className="text-[10px] uppercase tracking-[0.25em] text-orange-500">
             {view?.world.kind === 'event' ? 'Battle theatre' : 'Home world'}
           </p>
@@ -753,10 +761,12 @@ export default function WorldMap({
 
         <button
           onClick={onOpenBase}
-          className="pointer-events-auto rounded border border-neutral-700 bg-black/70 px-3 py-2 text-sm text-neutral-200 backdrop-blur hover:border-orange-600"
+          className="pointer-events-auto justify-self-center rounded bg-neutral-800 px-3 py-2 text-sm font-medium text-neutral-100 backdrop-blur transition hover:bg-neutral-700"
         >
           My base
         </button>
+
+        <span aria-hidden="true" />
       </div>
 
       {camera.zoom < IDENTITY_ZOOM && (

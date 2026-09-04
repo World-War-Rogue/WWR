@@ -82,13 +82,11 @@ function ResourceBar({base}: {base: BaseView}) {
  */
 function PlayerMenu({
   player,
-  base,
   onOpenProfile,
   onOpenCustomize,
   onSignOut,
 }: {
   player: Player;
-  base: BaseView | null;
   onOpenProfile: () => void;
   onOpenCustomize: () => void;
   onSignOut: () => Promise<void>;
@@ -180,8 +178,6 @@ function PlayerMenu({
             <dd className="text-right font-mono text-neutral-200">{profile?.commandPost ?? '—'}</dd>
             <dt className="text-neutral-500">Server</dt>
             <dd className="text-right font-mono text-neutral-200">{profile?.homeWorldId ?? '—'}</dd>
-            <dt className="text-neutral-500">Base</dt>
-            <dd className="truncate text-right text-neutral-200">{base?.name ?? '—'}</dd>
           </dl>
 
           <button
@@ -432,7 +428,6 @@ export default function LiveApp() {
 
         <PlayerMenu
           player={player}
-          base={base}
           onOpenProfile={() => {
             setViewing(null);
             setScreen('profile');
