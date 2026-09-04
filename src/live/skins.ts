@@ -42,7 +42,8 @@ export type SkinId =
   | 'custom_one'
   | 'custom_two'
   | 'signature_one'
-  | 'ember_sentinel';
+  | 'ember_sentinel'
+  | 'ravenkeep';
 
 export interface Palette {
   ground: string;
@@ -185,6 +186,47 @@ export const SKINS: Record<SkinId, SkinSpec> = {
       bob: {amplitude: 0.012, periodMs: 4600},
       // Faster than the bob, because firelight flickers and stone does not.
       glow: {color: '#ff6a1f', radius: 0.8, periodMs: 1900},
+    },
+  },
+
+  // Three flat cards - keep, arcane energy, raven - composited into one still.
+  // The package it arrived in was built for a 24-frame Blender loop, and it can
+  // still become one: `frames: 24, cols: 6` and a new atlas is the entire
+  // change. Until then the motion below does the work, which is the same route
+  // both other art skins took.
+  ravenkeep: {
+    id: 'ravenkeep',
+    name: 'Ravenkeep',
+    blurb: 'The old keep still stands, and something still circles it.',
+    palette: {ground: '#2e2a24', structure: '#c9b48a', accent: '#a855f7', roof: '#3a332a', wall: '#8f7f62'},
+    perimeter: 'palisade',
+    landmark: 'tower',
+    starter: false,
+    art: {
+      src: '/skins/ravenkeep.webp',
+      frames: 1,
+      cols: 1,
+      frameW: 512,
+      frameH: 640,
+      fps: 12,
+      overhang: 0.25,
+      // Only slightly wider than its plot. The keep already fills the frame
+      // edge to edge, unlike the two statue skins that needed pushing outward
+      // to stop them sitting small in the middle of their ground.
+      fill: 1.12,
+    },
+    motion: {
+      // A building, not a monument and not a banner: enough to breathe, not
+      // enough to look like it is floating. Masonry that bobbed like a flag
+      // would give away that it is a flat card.
+      bob: {amplitude: 0.016, periodMs: 4100},
+      // Violet, taken from the arcane energy already in the art. A halo in a
+      // colour the art does not contain reads as a filter laid over it rather
+      // than as light coming off it.
+      glow: {color: '#a855f7', radius: 0.85, periodMs: 2300},
+      // Slower than the bob and much slower than the glow, so the three never
+      // line up and the loop never announces its length.
+      sway: {amount: 0.011, periodMs: 7600},
     },
   },
 
