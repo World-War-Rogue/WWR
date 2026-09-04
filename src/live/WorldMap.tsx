@@ -116,7 +116,13 @@ function drawNameplate(
   ctx.fillText(levelText, badgeX, boxY + boxH / 2 + 0.5);
 }
 
-export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
+export default function WorldMap({
+  onOpenBase,
+  onViewProfile,
+}: {
+  onOpenBase: () => void;
+  onViewProfile: (username: string) => void;
+}) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const {w, h} = useCanvasSize(canvasRef);
 
@@ -618,7 +624,14 @@ export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
             </button>
           </div>
 
-          {!occupied && (
+          {occupied ? (
+            <button
+              onClick={() => onViewProfile(selected.base!.username)}
+              className="mt-3 w-full rounded border border-fuchsia-700 bg-fuchsia-950/40 px-3 py-2 text-sm font-semibold text-fuchsia-200 hover:border-fuchsia-500"
+            >
+              View profile
+            </button>
+          ) : (
             <button
               onClick={() => void moveHere()}
               disabled={moving}

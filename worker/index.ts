@@ -5,6 +5,7 @@
  * static assets binding, which serves the built React client.
  */
 import {handleAdminRequests} from './admin';
+import {type ProfileEdit, loadProfile, validateEdit} from './profile';
 import {
   COSMETIC_SLOTS,
   checkLoadout,
@@ -803,6 +804,44 @@ async function handleEquip(request: Request, env: Env, player: PlayerRow): Promi
   return json({loadout, skin});
 }
 
+/**
+ * Anyone's profile, by callsign.
+ *
+ * Signed-in players only - not because the contents are sensitive, but because
+ * an open endpoint that enumerates players by name is a list of accounts to
+ * try passwords against, and there is no reason to publish one.
+ */
+async function handleProfile(request: Request, env: Env): Promise<Response> {
+  const name = new URL(request.url).searchParams.get('name');
+  if (!name) return fail(400, 'Which player?');
+  const profile = await loadProfile(env.DB, name);
+  if (!profile) return fail(404, 'No such callsign.');
+  return json({profile});
+}
+
+/** Edits your own, and only your own. */
+async function handleEditProfile(
+  request: Request,
+  env: Env,
+  player: PlayerRow,
+): Promise<Response> {
+  const body = (await request.json().catch(() => null)) as ProfileEdit | null;
+  if (!body) return fail(400, 'Nothing to save.');
+
+  const result = validateEdit(body);
+  if (!result.ok) return fail(400, result.error);
+
+  await env.DB.prepare(
+    `UPDATE players SET portrait_glyph = ?2, portrait_tint = ?3, motto = ?4
+      WHERE id = ?1`,
+  )
+    .bind(player.id, result.glyph, result.tint, result.motto)
+    .run();
+
+  const profile = await loadProfile(env.DB, player.username);
+  return json({profile});
+}
+
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
@@ -837,6 +876,10 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
 
   if (endpoint === 'POST /api/base/upgrade') return handleStartUpgrade(request, env, player);
+
+  if (endpoint === 'GET /api/profile') return handleProfile(request, env);
+
+  if (endpoint === 'POST /api/profile') return handleEditProfile(request, env, player);
 
   if (endpoint === 'GET /api/cosmetics') return handleCosmetics(env, player);
 

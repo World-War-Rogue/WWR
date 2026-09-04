@@ -8,6 +8,21 @@
 
 import type {CosmeticItem, CosmeticSlot, Loadout} from '../../shared/cosmetics';
 
+export interface Profile {
+  username: string;
+  portrait: {glyph: string; tint: string};
+  motto: string | null;
+  country: string;
+  homeWorldId: number | null;
+  power: number;
+  commandPost: number;
+  baseName: string;
+  skin: string;
+  alliance: string | null;
+  plot: {x: number; y: number} | null;
+  joinedAt: number | null;
+}
+
 export type ResourceKind = 'fuel' | 'steel' | 'munitions' | 'alloy';
 export type Resources = Record<ResourceKind, number>;
 
@@ -157,6 +172,13 @@ export const api = {
     call<{world: {id: number; name: string}; plot: {x: number; y: number}}>('/api/world/move', {
       method: 'POST',
       body: JSON.stringify(worldId === undefined ? {x, y} : {x, y, worldId}),
+    }),
+  profile: (name: string) =>
+    call<{profile: Profile}>(`/api/profile?name=${encodeURIComponent(name)}`),
+  saveProfile: (edit: {glyph: string; tint: string; motto: string | null}) =>
+    call<{profile: Profile}>('/api/profile', {
+      method: 'POST',
+      body: JSON.stringify(edit),
     }),
   upgrade: (kind: string) =>
     call<BaseView>('/api/base/upgrade', {method: 'POST', body: JSON.stringify({kind})}),

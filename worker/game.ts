@@ -73,6 +73,45 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
 
 export const BUILDING_KINDS = Object.keys(BUILDINGS) as BuildingKind[];
 
+/**
+ * What each building contributes to a player's power rating.
+ *
+ * Not equal, on purpose. Power is the number other players use to decide
+ * whether to attack you, so it should describe how hard you are to take rather
+ * than how rich you are - a refinery makes you worth attacking, a motor pool
+ * makes you expensive to attack. Rating them the same would tell an attacker
+ * nothing and would quietly reward turtling on economy.
+ */
+const POWER_WEIGHT: Record<BuildingKind, number> = {
+  command_post: 60,
+  motor_pool: 45,
+  airfield: 45,
+  barracks: 40,
+  refinery: 30,
+  foundry: 30,
+};
+
+/**
+ * A player's total power.
+ *
+ * Computed from building levels every time it is asked for, never stored. A
+ * stored figure is one that can drift out of step with the base it describes,
+ * and a power number that disagrees with reality is worse than none - it is
+ * the number people decide to attack on.
+ *
+ * Superlinear in level (^1.6) so the gap between a level 10 and a level 20
+ * neighbour reads as the three-fold difference it actually is, rather than the
+ * doubling a linear sum would suggest.
+ */
+export function totalPower(levels: Record<BuildingKind, number>): number {
+  let power = 0;
+  for (const kind of BUILDING_KINDS) {
+    const level = levels[kind] ?? 0;
+    if (level > 0) power += Math.round(Math.pow(level, 1.6) * POWER_WEIGHT[kind]);
+  }
+  return power;
+}
+
 export function isBuildingKind(value: string): value is BuildingKind {
   return Object.prototype.hasOwnProperty.call(BUILDINGS, value);
 }

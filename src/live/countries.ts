@@ -50,7 +50,9 @@ export function languageFor(code: string): string {
 }
 
 let displayNames: Intl.DisplayNames | null = null;
-function nameFor(code: string): string {
+
+/** The English name for an ISO code, from the browser rather than from a table. */
+export function nameFor(code: string): string {
   if (displayNames === null) {
     try {
       displayNames = new Intl.DisplayNames(['en'], {type: 'region'});

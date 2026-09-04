@@ -8,6 +8,7 @@
  */
 import {type FormEvent, useCallback, useEffect, useRef, useState} from 'react';
 import Customize from './Customize';
+import Profile from './Profile';
 import Gate from './Gate';
 import WorldMap from './WorldMap';
 import {
@@ -69,7 +70,10 @@ export default function LiveApp() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [checking, setChecking] = useState(true);
-  const [screen, setScreen] = useState<'base' | 'world' | 'customize'>('base');
+  const [screen, setScreen] = useState<'base' | 'world' | 'customize' | 'profile'>('base');
+  // Whose profile is open. Your own from the base header; somebody else's from
+  // their base on the map.
+  const [viewing, setViewing] = useState<string | null>(null);
 
   const now = useServerClock(base);
 
@@ -131,6 +135,20 @@ export default function LiveApp() {
 
   if (!player) return <Gate onAuthed={setPlayer} />;
 
+  if (screen === 'profile') {
+    const who = viewing ?? player.username;
+    return (
+      <Profile
+        username={who}
+        editable={who === player.username}
+        onClose={() => {
+          setScreen(viewing === null ? 'base' : 'world');
+          setViewing(null);
+        }}
+      />
+    );
+  }
+
   if (screen === 'customize') {
     return (
       <Customize
@@ -146,7 +164,13 @@ export default function LiveApp() {
   if (screen === 'world') {
     return (
       <div className="fixed inset-0">
-        <WorldMap onOpenBase={() => setScreen('base')} />
+        <WorldMap
+          onOpenBase={() => setScreen('base')}
+          onViewProfile={(name) => {
+            setViewing(name);
+            setScreen('profile');
+          }}
+        />
       </div>
     );
   }
@@ -167,6 +191,15 @@ export default function LiveApp() {
               Access requests
             </a>
           )}
+          <button
+            onClick={() => {
+              setViewing(null);
+              setScreen('profile');
+            }}
+            className="rounded border border-neutral-700 px-3 py-2 text-sm font-medium text-neutral-300 hover:border-fuchsia-500"
+          >
+            Profile
+          </button>
           <button
             onClick={() => setScreen('customize')}
             className="rounded border border-neutral-700 px-3 py-2 text-sm font-medium text-neutral-300 hover:border-orange-600"
