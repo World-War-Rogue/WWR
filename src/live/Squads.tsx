@@ -18,11 +18,12 @@ import {
   SQUAD_NAMES,
   SQUAD_SLOTS,
   type Asset,
-  assetPower,
+  type AssetCategory,
 } from '../../shared/assets';
 import {ApiError, type SquadView, api} from '../net/api';
 import AssetIcon from './AssetIcon';
 import ForcesTabs from './ForcesTabs';
+import {t} from '../i18n';
 
 const ROLE_TINT: Record<string, string> = {
   breach: 'text-red-300',
@@ -88,6 +89,8 @@ export default function Squads({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [picking, setPicking] = useState<{squad: string; slot: number} | null>(null);
+  const [pickQuery, setPickQuery] = useState('');
+  const [pickCategory, setPickCategory] = useState<AssetCategory | 'all'>('all');
 
   const load = useCallback(async () => {
     try {
@@ -118,6 +121,12 @@ export default function Squads({
     return map;
   }, [view]);
 
+  useEffect(() => {
+    if (!picking) return;
+    setPickQuery('');
+    setPickCategory('all');
+  }, [picking?.squad, picking?.slot]);
+
   async function assign(squad: string, slot: number, assetId: string | null) {
     setBusy(true);
     setError(null);
@@ -136,18 +145,40 @@ export default function Squads({
   const slotHolds = picking ? view?.squads[picking.squad]?.[picking.slot] ?? null : null;
   const freed = slotHolds ? ASSET_BY_ID[slotHolds]?.lift ?? 0 : 0;
 
-  const bench = useMemo(() => {
-    const owned = (view?.owned ?? [])
+  /**
+   * What the chooser offers. Everything held, filtered, and ordered so what
+   * fits comes first - a list whose top half is greyed out reads as broken.
+   */
+  const choices = useMemo(() => {
+    const q = pickQuery.trim().toLowerCase();
+    const room = remaining + freed;
+    return (view?.owned ?? [])
       .map((o) => ASSET_BY_ID[o.assetId])
-      .filter((a): a is Asset => !!a);
-    return owned.sort(
-      (a, b) =>
-        a.category.localeCompare(b.category) || a.lift - b.lift || a.name.localeCompare(b.name),
-    );
-  }, [view]);
+      .filter((a): a is Asset => !!a)
+      .filter((a) => pickCategory === 'all' || a.category === pickCategory)
+      .filter(
+        (a) =>
+          !q ||
+          a.name.toLowerCase().includes(q) ||
+          a.code.toLowerCase().includes(q) ||
+          a.operator.toLowerCase().includes(q),
+      )
+      .sort((a, b) => {
+        const aFits = a.lift <= room ? 0 : 1;
+        const bFits = b.lift <= room ? 0 : 1;
+        return (
+          aFits - bFits ||
+          a.category.localeCompare(b.category) ||
+          b.lift - a.lift ||
+          a.name.localeCompare(b.name)
+        );
+      });
+  }, [view, pickCategory, pickQuery, remaining, freed]);
 
   return (
-    <div className="flex h-full flex-col">
+    // `relative` so the chooser overlay below can pin itself to this screen
+    // rather than to whatever ancestor happens to be positioned.
+    <div className="relative flex h-full flex-col">
       <div className="flex shrink-0 items-center gap-2 border-b border-neutral-800 px-3 py-3">
         <button
           onClick={onClose}
@@ -234,81 +265,130 @@ export default function Squads({
               })}
             </div>
 
-            {picking ? (
-              <div className="mt-4">
-                <div className="mb-2 flex items-center gap-2">
-                  <h3 className="text-sm font-semibold text-neutral-100">
-                    {picking.squad} · slot {picking.slot + 1}
-                  </h3>
-                  <span className="text-[11px] text-neutral-500">
-                    {remaining + freed} lift free
-                  </span>
-                  {slotHolds && (
-                    <button
-                      onClick={() => void assign(picking.squad, picking.slot, null)}
-                      disabled={busy}
-                      className="rounded border border-neutral-700 px-2 py-0.5 text-[11px] text-neutral-400 hover:border-red-700 hover:text-red-300 disabled:opacity-50"
-                    >
-                      Clear slot
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setPicking(null)}
-                    className="ml-auto text-[11px] text-neutral-500 hover:text-neutral-200"
-                  >
-                    Cancel
-                  </button>
-                </div>
+            <p className="mt-4 text-[11px] leading-relaxed text-neutral-600">
+              {t('squads.hint')}
+            </p>
+          </>
+        )}
+      </div>
 
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                  {bench.map((asset) => {
-                    const where = placedIn.get(asset.id);
-                    const fits = asset.lift <= remaining + freed;
-                    return (
-                      <div key={asset.id}>
-                        <button
-                          onClick={() => void assign(picking.squad, picking.slot, asset.id)}
-                          disabled={busy || !fits}
-                          className={`w-full rounded border px-2 py-2 text-left transition ${
-                            fits
-                              ? 'border-neutral-800 bg-neutral-950 hover:border-orange-600'
-                              : 'border-neutral-900 bg-neutral-950/50 opacity-40'
-                          }`}
-                        >
-                          <span className="flex items-center gap-2">
-                            <AssetIcon asset={asset} size={22} />
-                            <span className="min-w-0 flex-1 truncate text-xs font-semibold text-neutral-100">
-                              {asset.name}
-                            </span>
-                            <span className="shrink-0 font-mono text-[10px] text-neutral-500">
-                              {asset.lift}
-                            </span>
+      {/*
+        The chooser is an overlay, not a panel below the squads.
+        It used to render underneath them, which meant tapping a slot on a
+        phone opened it off the bottom of the screen - the tap looked like it
+        had done nothing. A slot is chosen from the top of the screen, so the
+        choices have to arrive over it.
+      */}
+      {picking && view && (
+        <div className="absolute inset-0 z-30 flex flex-col bg-black/70 backdrop-blur-sm">
+          <button
+            aria-label={t('squads.cancel')}
+            onClick={() => setPicking(null)}
+            className="min-h-[3rem] flex-1 cursor-default"
+          />
+
+          <div className="flex max-h-[78%] flex-col rounded-t-xl border-t border-neutral-700 bg-neutral-950 shadow-2xl">
+            <div className="flex shrink-0 items-center gap-2 border-b border-neutral-800 px-3 py-3">
+              <h3 className="text-sm font-semibold text-neutral-100">
+                {t('squads.slot', {squad: picking.squad, slot: picking.slot + 1})}
+              </h3>
+              <span className="text-[11px] text-neutral-500">
+                {t('squads.liftFree', {amount: remaining + freed})}
+              </span>
+              {slotHolds && (
+                <button
+                  onClick={() => void assign(picking.squad, picking.slot, null)}
+                  disabled={busy}
+                  className="rounded border border-neutral-700 px-2 py-0.5 text-[11px] text-neutral-400 hover:border-red-700 hover:text-red-300 disabled:opacity-50"
+                >
+                  {t('squads.clearSlot')}
+                </button>
+              )}
+              <button
+                onClick={() => setPicking(null)}
+                className="ml-auto rounded border border-neutral-700 px-2 py-1 text-xs text-neutral-300 hover:border-orange-600"
+              >
+                {t('squads.cancel')}
+              </button>
+            </div>
+
+            <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-neutral-800 px-3 py-2">
+              <input
+                value={pickQuery}
+                onChange={(e) => setPickQuery(e.target.value)}
+                placeholder={t('assets.search')}
+                className="w-28 shrink-0 rounded border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-100 placeholder:text-neutral-600 focus:border-orange-600 focus:outline-none"
+              />
+              {(['all', 'armour', 'rotary', 'fixed_wing', 'artillery', 'drone'] as const).map(
+                (key) => (
+                  <button
+                    key={key}
+                    onClick={() => setPickCategory(key)}
+                    className={`shrink-0 rounded border px-2 py-1 text-xs ${
+                      pickCategory === key
+                        ? 'border-orange-600 bg-orange-950/40 text-orange-200'
+                        : 'border-neutral-800 text-neutral-400 hover:border-neutral-600'
+                    }`}
+                  >
+                    {key === 'all' ? t('assets.all') : CATEGORY_LABEL[key]}
+                  </button>
+                ),
+              )}
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {choices.map((asset) => {
+                  const where = placedIn.get(asset.id);
+                  const fits = asset.lift <= remaining + freed;
+                  return (
+                    <div key={asset.id}>
+                      <button
+                        onClick={() => void assign(picking.squad, picking.slot, asset.id)}
+                        disabled={busy || !fits}
+                        className={`flex w-full items-center gap-2 rounded border px-2 py-2 text-left transition ${
+                          fits
+                            ? 'border-neutral-800 bg-neutral-950 hover:border-orange-600'
+                            : 'border-neutral-900 bg-neutral-950/50 opacity-40'
+                        }`}
+                      >
+                        <AssetIcon asset={asset} size={28} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-xs font-semibold text-neutral-100">
+                            {asset.name}
                           </span>
                           <span className="block truncate text-[10px] text-neutral-600">
                             {CATEGORY_LABEL[asset.category]} ·{' '}
                             <span className={ROLE_TINT[asset.role]}>{ROLE_LABEL[asset.role]}</span>
-                            {' · '}
-                            {assetPower(asset, levels.get(asset.id) ?? 1).toLocaleString()}
                           </span>
                           {where && (
-                            <span className="block text-[10px] text-orange-500/80">in {where}</span>
+                            <span className="block text-[10px] text-orange-500/80">
+                              {t('squads.inSquad', {squad: where})}
+                            </span>
                           )}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
+                        </span>
+                        <span className="shrink-0 text-right">
+                          <span className="block font-mono text-[11px] text-neutral-400">
+                            {asset.lift}
+                          </span>
+                          <span className="block text-[9px] uppercase text-neutral-700">
+                            {t('squads.lift')}
+                          </span>
+                        </span>
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
-            ) : (
-              <p className="mt-4 text-[11px] leading-relaxed text-neutral-600">
-                Tap a slot to fill it. Lift is the brake: heavier assets cost more, and the budget
-                comes from your Motor Pool, Airfield and Barracks — so early on a squad has to be
-                mixed, and that is the point.
-              </p>
-            )}
-          </>
-        )}
-      </div>
+              {choices.length === 0 && (
+                <p className="py-6 text-center text-sm text-neutral-600">
+                  {t('assets.nothingMatches')}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
