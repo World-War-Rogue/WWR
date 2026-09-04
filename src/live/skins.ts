@@ -150,33 +150,41 @@ export const SKINS: Record<SkinId, SkinSpec> = {
     },
   },
 
-  // The flagship commission: modelled, rigged and animated to order, sold once.
+  // The flagship commission. Sold once, to one player, and never again.
   //
-  // The art slot below is where the finished atlas goes. It is commented out
-  // rather than pointing at a missing file, because a declared atlas that 404s
-  // logs a warning on every player's console for as long as it is wrong.
+  // This is the first skin with real art. `frames: 1` means the atlas is a
+  // single rendered still and every bit of movement comes from `motion` below
+  // - the rise and fall, the lantern-coloured halo, the slow lean. That is the
+  // cheap half of the pipeline working: one image, no rig, and it still reads
+  // as alive next to bases that are not moving.
   //
-  //   art: {
-  //     src: '/skins/signature_one.webp',
-  //     frames: 24, cols: 6, frameW: 512, frameH: 640, fps: 12, overhang: 0.35,
-  //   },
-  //
-  // Until it lands, the motion below runs on placeholder geometry - which is
-  // deliberate. The movement can be judged and tuned before anyone is paid to
-  // model anything.
+  // Replacing it with a 24-frame Blender loop later is this block and nothing
+  // else: frames 24, cols 6. The art below stays exactly where it is.
   signature_one: {
     id: 'signature_one',
-    name: 'Signature Commission',
-    blurb: 'Modelled, rigged and animated to order. One of one.',
-    palette: {ground: '#241f2e', structure: '#c9b4e8', accent: '#e879f9', roof: '#3a2f4d', wall: '#7c6a99'},
+    name: 'Shadow Empress',
+    blurb: 'She reigns in silence. One of one, and never sold again.',
+    palette: {ground: '#1c1712', structure: '#c9a227', accent: '#f0b429', roof: '#2b2318', wall: '#8a7434'},
     perimeter: 'blast',
     landmark: 'dome',
     starter: false,
     exclusive: true,
+    art: {
+      src: '/skins/signature_one.webp',
+      frames: 1,
+      cols: 1,
+      frameW: 512,
+      frameH: 640,
+      fps: 12,
+      overhang: 0.25,
+    },
     motion: {
-      bob: {amplitude: 0.03, periodMs: 2800},
-      glow: {color: '#e879f9', radius: 1.0, periodMs: 2200},
-      sway: {amount: 0.02, periodMs: 6400},
+      bob: {amplitude: 0.022, periodMs: 3600},
+      // Gold, to match the lanterns the art is already lit by. A halo in a
+      // colour the art does not contain reads as a filter over it rather than
+      // as light coming off it.
+      glow: {color: '#f0b429', radius: 0.95, periodMs: 2600},
+      sway: {amount: 0.015, periodMs: 7200},
     },
   },
 };

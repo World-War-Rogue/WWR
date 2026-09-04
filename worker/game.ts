@@ -223,9 +223,9 @@ export const SKINS: Record<SkinId, SkinSpec> = {
   // The flagship commission. Sold once, to one player, and never again.
   signature_one: {
     id: 'signature_one',
-    name: 'Signature Commission',
-    blurb: 'Modelled, rigged and animated to order. One of one.',
-    palette: {ground: '#241f2e', structure: '#c9b4e8', accent: '#e879f9'},
+    name: 'Shadow Empress',
+    blurb: 'She reigns in silence. One of one, and never sold again.',
+    palette: {ground: '#1c1712', structure: '#c9a227', accent: '#f0b429'},
     exclusive: true,
   },
 };
