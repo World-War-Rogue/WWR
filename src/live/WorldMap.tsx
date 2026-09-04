@@ -237,8 +237,16 @@ function drawRallyMarker(
   ctx.arc(cx, cy, radius, 0, Math.PI * 2);
   ctx.stroke();
 
-  // Cross hairs, broken at the ring so the centre stays readable.
-  const gap = radius * 0.42;
+  // The label sits in the middle of the sight, so the mark and its name are
+  // one object. Above the ring it read as a caption belonging to whatever was
+  // behind it, and on a crowded map that is somebody else's base.
+  const fontSize = Math.max(8, Math.min(13, scale * 0.2));
+  const showLabel = scale > 26;
+
+  // Cross hairs, broken wide enough to clear the letters rather than at a
+  // fixed fraction of the ring - the gap exists to keep the centre readable,
+  // and what has to stay readable is now the text.
+  const gap = showLabel ? Math.max(radius * 0.42, fontSize * 0.95) : radius * 0.42;
   const arm = radius * 1.45;
   ctx.beginPath();
   for (const [dx, dy] of [
@@ -252,23 +260,23 @@ function drawRallyMarker(
   }
   ctx.stroke();
 
-  ctx.fillStyle = '#a5f3fc';
-  ctx.beginPath();
-  ctx.arc(cx, cy, Math.max(1.6, radius * 0.16), 0, Math.PI * 2);
-  ctx.fill();
-
-  // The label only once there is room for it; at strategic zoom the shape is
-  // the whole message.
-  if (scale > 26) {
-    const fontSize = Math.max(9, Math.min(12, scale * 0.18));
+  if (showLabel) {
     ctx.font = `700 ${fontSize}px ui-sans-serif, system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-    ctx.strokeText('RV', cx, cy - radius * 1.95);
+    // Outlined, because the marker stands over whatever ground or art happens
+    // to be under it and cyan on stone is not a contrast you can rely on.
+    ctx.lineWidth = Math.max(2.5, fontSize * 0.3);
+    ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+    ctx.strokeText('RV', cx, cy + 0.5);
     ctx.fillStyle = '#a5f3fc';
-    ctx.fillText('RV', cx, cy - radius * 1.95);
+    ctx.fillText('RV', cx, cy + 0.5);
+  } else {
+    // Too small for letters: the dot is what says there is something here.
+    ctx.fillStyle = '#a5f3fc';
+    ctx.beginPath();
+    ctx.arc(cx, cy, Math.max(1.6, radius * 0.16), 0, Math.PI * 2);
+    ctx.fill();
   }
 
   ctx.restore();

@@ -262,8 +262,26 @@ Phase 1 when they can be tuned against each other.
 | Visby-class | Sweden | Screen |
 | Ada-class | Turkey | Screen |
 
-**76 heroes.** Enough that a 24-hero draft is a real choice, small enough that
-every one can be balanced by hand rather than by formula.
+**72 assets, twelve per category.** Enough that a 24-asset draft is a real
+choice, few enough that every one can be balanced by hand.
+
+They are called **assets** in the game, never heroes. The word is not used
+anywhere a player can see: an M1A2 is an asset, and a squad is six of them.
+
+Built in `shared/assets.ts`. Attributes are not written per row - each asset
+gets `6 + lift * 4` points spread by its role, so power per unit of lift is
+flat across the catalogue and the choice between one heavy asset and two light
+ones is about role rather than efficiency. `auditAssets()` re-checks every row
+against that budget, because the budget is the only thing stopping the
+catalogue acquiring a best asset one edit at a time, and nobody can be relied
+on to add five numbers in their head seventy-two times.
+
+**One thing the catalogue changed about the draft.** Recon and Lift are thin -
+six and four draftable - because the hardware that does those jobs is thin in
+reality. Requiring one Recon per squad would force four of the six on
+everybody and remove the choice. So the squad coverage rule should key on
+**detection**, not on the role name: a squad needs eyes, and an F-35 or a Type
+45 brings them without being labelled Recon.
 
 ---
 

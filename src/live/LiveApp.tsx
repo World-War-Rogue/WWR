@@ -8,6 +8,7 @@
  */
 import {type FormEvent, useCallback, useEffect, useRef, useState} from 'react';
 import Alliance from './Alliance';
+import Assets from './Assets';
 import Battles from './Battles';
 import Chat from './Chat';
 import Customize from './Customize';
@@ -84,11 +85,13 @@ function PlayerMenu({
   player,
   onOpenProfile,
   onOpenCustomize,
+  onOpenAssets,
   onSignOut,
 }: {
   player: Player;
   onOpenProfile: () => void;
   onOpenCustomize: () => void;
+  onOpenAssets: () => void;
   onSignOut: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
@@ -198,6 +201,15 @@ function PlayerMenu({
           >
             Customise base
           </button>
+          <button
+            onClick={() => {
+              setOpen(false);
+              onOpenAssets();
+            }}
+            className="block w-full px-3 py-2.5 text-left text-sm text-neutral-200 hover:bg-neutral-900"
+          >
+            Assets
+          </button>
           {player.role === 'owner' && (
             <a
               href="/api/access/requests"
@@ -226,7 +238,7 @@ export default function LiveApp() {
   const [pending, setPending] = useState<string | null>(null);
   const [checking, setChecking] = useState(true);
   const [screen, setScreen] = useState<
-    'base' | 'world' | 'customize' | 'profile' | 'alliance' | 'battles'
+    'base' | 'world' | 'customize' | 'profile' | 'alliance' | 'battles' | 'assets'
   >('base');
   // Whose profile is open. Your own from the base header; somebody else's from
   // their base on the map.
@@ -376,6 +388,19 @@ export default function LiveApp() {
     );
   }
 
+  // The catalogue is a browsing screen, so it takes the viewport like the
+  // others rather than sharing one with the base it is not about.
+  if (screen === 'assets') {
+    return (
+      <>
+        <div className="fixed inset-0 bg-[#0a0906] text-neutral-200">
+          <Assets onClose={() => setScreen('base')} />
+        </div>
+        {chat}
+      </>
+    );
+  }
+
   // Reports take the whole viewport too: a battle report is a page you read,
   // not a panel you glance at over the map.
   if (screen === 'battles') {
@@ -433,6 +458,7 @@ export default function LiveApp() {
             setScreen('profile');
           }}
           onOpenCustomize={() => setScreen('customize')}
+          onOpenAssets={() => setScreen('assets')}
           onSignOut={async () => {
             await api.logout();
             setPlayer(null);
