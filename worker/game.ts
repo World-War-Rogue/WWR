@@ -230,6 +230,20 @@ export const SKINS: Record<SkinId, SkinSpec> = {
   },
 };
 
+/**
+ * Open testing: every base skin is selectable by everyone.
+ *
+ * Set while a handful of invited testers are trying the game and each of them
+ * wants a different base. It bypasses the ownership check on skins ONLY -
+ * accessory ownership and the one-of-one index are untouched, so flipping this
+ * back to false restores exclusivity without anything to undo.
+ *
+ * One thing to do when it goes back to false: a tester left wearing a skin
+ * they do not own keeps wearing it, because ownership is checked when a skin
+ * is equipped rather than on every read. Reset those bases in the same change.
+ */
+export const ALL_SKINS_UNLOCKED = true;
+
 /** Only these are selectable by a new player. */
 export const STARTER_SKIN_IDS: SkinId[] = [
   'desert_fob',

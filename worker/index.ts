@@ -44,6 +44,7 @@ import {
   SKINS,
   SKIN_IDS,
   STARTER_SKIN_IDS,
+  ALL_SKINS_UNLOCKED,
   type SkinId,
   WORLD_EXTENT,
   candidatePlots,
@@ -732,9 +733,9 @@ async function handleCosmetics(env: Env, player: PlayerRow): Promise<Response> {
   // recorded in the same table keyed by the skin id. That way there is exactly
   // one place to look to answer "may this player wear this", and granting a
   // skin and granting a banner are the same operation.
-  const skinsOwned = SKIN_IDS.filter(
-    (id) => STARTER_SKIN_IDS.includes(id) || owned.has(id),
-  );
+  const skinsOwned = ALL_SKINS_UNLOCKED
+    ? [...SKIN_IDS]
+    : SKIN_IDS.filter((id) => STARTER_SKIN_IDS.includes(id) || owned.has(id));
 
   return json({
     slots: COSMETIC_SLOTS,
@@ -780,7 +781,11 @@ async function handleEquip(request: Request, env: Env, player: PlayerRow): Promi
 
   if (body.skin !== undefined && body.skin !== null) {
     if (!isSkinId(body.skin)) return fail(400, 'That base skin does not exist.');
-    if (!STARTER_SKIN_IDS.includes(body.skin) && !owned.has(body.skin)) {
+    if (
+      !ALL_SKINS_UNLOCKED &&
+      !STARTER_SKIN_IDS.includes(body.skin) &&
+      !owned.has(body.skin)
+    ) {
       return fail(403, 'You do not own that base skin yet.');
     }
     skin = body.skin;
