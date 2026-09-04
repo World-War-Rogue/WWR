@@ -10,6 +10,7 @@ import {type FormEvent, useCallback, useEffect, useRef, useState} from 'react';
 import Alliance from './Alliance';
 import Assets from './Assets';
 import Battles from './Battles';
+import Squads from './Squads';
 import Chat from './Chat';
 import Customize from './Customize';
 import Profile, {Portrait} from './Profile';
@@ -86,12 +87,14 @@ function PlayerMenu({
   onOpenProfile,
   onOpenCustomize,
   onOpenAssets,
+  onOpenSquads,
   onSignOut,
 }: {
   player: Player;
   onOpenProfile: () => void;
   onOpenCustomize: () => void;
   onOpenAssets: () => void;
+  onOpenSquads: () => void;
   onSignOut: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
@@ -204,6 +207,15 @@ function PlayerMenu({
           <button
             onClick={() => {
               setOpen(false);
+              onOpenSquads();
+            }}
+            className="block w-full px-3 py-2.5 text-left text-sm text-neutral-200 hover:bg-neutral-900"
+          >
+            Squads
+          </button>
+          <button
+            onClick={() => {
+              setOpen(false);
               onOpenAssets();
             }}
             className="block w-full px-3 py-2.5 text-left text-sm text-neutral-200 hover:bg-neutral-900"
@@ -238,7 +250,7 @@ export default function LiveApp() {
   const [pending, setPending] = useState<string | null>(null);
   const [checking, setChecking] = useState(true);
   const [screen, setScreen] = useState<
-    'base' | 'world' | 'customize' | 'profile' | 'alliance' | 'battles' | 'assets'
+    'base' | 'world' | 'customize' | 'profile' | 'alliance' | 'battles' | 'assets' | 'squads'
   >('base');
   // Whose profile is open. Your own from the base header; somebody else's from
   // their base on the map.
@@ -388,6 +400,17 @@ export default function LiveApp() {
     );
   }
 
+  if (screen === 'squads') {
+    return (
+      <>
+        <div className="fixed inset-0 bg-[#0a0906] text-neutral-200">
+          <Squads onClose={() => setScreen('base')} />
+        </div>
+        {chat}
+      </>
+    );
+  }
+
   // The catalogue is a browsing screen, so it takes the viewport like the
   // others rather than sharing one with the base it is not about.
   if (screen === 'assets') {
@@ -459,6 +482,7 @@ export default function LiveApp() {
           }}
           onOpenCustomize={() => setScreen('customize')}
           onOpenAssets={() => setScreen('assets')}
+          onOpenSquads={() => setScreen('squads')}
           onSignOut={async () => {
             await api.logout();
             setPlayer(null);

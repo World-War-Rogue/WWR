@@ -6,6 +6,8 @@
  */
 import {handleAdminRequests} from './admin';
 import {ensureRally, lastRalliedAt, rallyTo, readRally, setRally} from './rally';
+import {assignSlot, ensureRoster, readSquads, squadLiftUsed, squadPower} from './squads';
+import {SQUAD_NAMES, isSquadName, squadLiftBudget} from '../shared/assets';
 import {RALLY_COOLDOWN_MS, maySetRally, rallyCooldownLeft} from '../shared/rally';
 import {listBattles, readBattle} from './battles';
 import {REPORT_RETENTION_DAYS} from '../shared/battles';
@@ -965,6 +967,70 @@ async function handleMentionable(
 /** Mentions this player has not looked at, newest first. */
 async function handleMentions(env: Env, player: PlayerRow): Promise<Response> {
   return json({mentions: await pendingMentions(env.DB, player.id)});
+}
+
+/**
+ * The roster and the four squads.
+ *
+ * Lift budgets come from the base's own buildings, so this reads base state
+ * rather than taking a number from the client. Sending the budget down is
+ * fine; believing one that comes back up is not.
+ */
+async function handleSquads(env: Env, player: PlayerRow): Promise<Response> {
+  const now = Date.now();
+  const state = await settleAndLoad(env, player.id, now);
+  if (!state) return fail(404, 'No base found.');
+
+  const [owned, board] = await Promise.all([
+    ensureRoster(env.DB, player.id, now),
+    readSquads(env.DB, player.id),
+  ]);
+
+  const levels = new Map(owned.map((o) => [o.assetId, o.level]));
+  const budget = squadLiftBudget(state.levels);
+
+  return json({
+    owned,
+    squads: board,
+    lift: {
+      budget,
+      used: Object.fromEntries(
+        SQUAD_NAMES.map((name) => [name, squadLiftUsed(board, name)]),
+      ),
+    },
+    power: Object.fromEntries(
+      SQUAD_NAMES.map((name) => [name, squadPower(board, levels, name)]),
+    ),
+    // Echoed so the squad screen can explain where the budget came from
+    // without asking for the base separately.
+    buildings: {
+      motor_pool: state.levels.motor_pool,
+      airfield: state.levels.airfield,
+      barracks: state.levels.barracks,
+    },
+  });
+}
+
+/** Put an asset in a slot, move it there from another squad, or clear a slot. */
+async function handleAssign(request: Request, env: Env, player: PlayerRow): Promise<Response> {
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const squad = body?.squad;
+  const slot = Number(body?.slot);
+  const assetId = body?.assetId;
+
+  if (!isSquadName(squad)) return fail(400, 'No such squad.');
+  if (!Number.isInteger(slot)) return fail(400, 'No such slot.');
+  if (assetId !== null && typeof assetId !== 'string') return fail(400, 'No such asset.');
+
+  const now = Date.now();
+  const state = await settleAndLoad(env, player.id, now);
+  if (!state) return fail(404, 'No base found.');
+  await ensureRoster(env.DB, player.id, now);
+
+  const result = await assignSlot(env.DB, player.id, squad, slot, assetId, state.levels);
+  if (!result.ok) return fail(409, result.error);
+
+  return handleSquads(env, player);
 }
 
 async function handleStartUpgrade(request: Request, env: Env, player: PlayerRow): Promise<Response> {
@@ -2221,6 +2287,10 @@ async function route(
   }
 
   if (endpoint === 'POST /api/base/upgrade') return handleStartUpgrade(request, env, player);
+
+  if (endpoint === 'GET /api/squads') return handleSquads(env, player);
+
+  if (endpoint === 'POST /api/squads/assign') return handleAssign(request, env, player);
 
   if (endpoint === 'GET /api/chat') return handleChatRead(request, env, player, ctx);
 

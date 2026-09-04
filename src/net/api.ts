@@ -181,6 +181,14 @@ export interface WorldView {
   rally: RallyPoint | null;
 }
 
+export interface SquadView {
+  owned: Array<{assetId: string; level: number}>;
+  squads: Record<string, Array<string | null>>;
+  lift: {budget: number; used: Record<string, number>};
+  power: Record<string, number>;
+  buildings: {motor_pool: number; airfield: number; barracks: number};
+}
+
 export interface RallyPoint {
   x: number;
   y: number;
@@ -281,6 +289,12 @@ export const api = {
       '/api/rally',
       {method: 'POST'},
     ),
+  squads: () => call<SquadView>('/api/squads'),
+  assignSlot: (squad: string, slot: number, assetId: string | null) =>
+    call<SquadView>('/api/squads/assign', {
+      method: 'POST',
+      body: JSON.stringify({squad, slot, assetId}),
+    }),
   battles: (scope: 'mine' | 'alliance', before?: number) => {
     const params = new URLSearchParams({scope});
     if (before !== undefined) params.set('before', String(before));

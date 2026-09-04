@@ -1041,3 +1041,64 @@ export function auditAssets(): string[] {
   }
   return problems;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Lift                                                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * How much a squad can carry.
+ *
+ * This is the brake on stacking heavy assets, and it is what stops "no asset
+ * is stronger than another" from being a slogan: bigger numbers cost more
+ * lift, so a squad of six Abrams is not a choice anybody can make. It also
+ * gives three buildings a consequence - the Motor Pool, the Airfield and the
+ * Barracks have been upgrade buttons with nothing behind them since the game
+ * had buildings.
+ *
+ * A squad has six slots AND a budget, and early on the budget is the binding
+ * one: a new base can fill perhaps three slots with anything heavy, so its
+ * first squad is necessarily mixed and learns the counter web by being made
+ * to. Late, the budget stops binding and the six slots take over, which is the
+ * right way round - by then the player is choosing shape, not affording it.
+ */
+export const BASE_LIFT = 10;
+
+export function squadLiftBudget(levels: {
+  motor_pool: number;
+  airfield: number;
+  barracks: number;
+}): number {
+  return (
+    BASE_LIFT +
+    Math.floor(0.8 * (levels.motor_pool + levels.airfield) + 0.5 * levels.barracks)
+  );
+}
+
+export function isSquadName(value: unknown): value is SquadName {
+  return typeof value === 'string' && (SQUAD_NAMES as readonly string[]).includes(value);
+}
+
+/**
+ * What a level does to an attribute.
+ *
+ * The same curve for every asset, deliberately. Levelling raises what an asset
+ * already is rather than closing the gap to something else, so an Abrams at 30
+ * is a better Abrams and never becomes a drone. Superlinear, so the choice of
+ * WHICH eight to carry matters more than owning many at level one.
+ */
+export function attributeAtLevel(base: number, level: number): number {
+  return Math.round(base * (1 + 0.06 * (level - 1) ** 1.15));
+}
+
+/** Power contributed by one asset at one level. What a squad is compared on. */
+export function assetPower(asset: Asset, level: number): number {
+  const a = asset.attributes;
+  const total =
+    attributeAtLevel(a.firepower, level) +
+    attributeAtLevel(a.armour, level) +
+    attributeAtLevel(a.mobility, level) +
+    attributeAtLevel(a.range, level) +
+    attributeAtLevel(a.detection, level);
+  return Math.round(total * 6);
+}
