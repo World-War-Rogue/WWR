@@ -84,10 +84,13 @@ export default function Chat({
     return () => window.clearInterval(id);
   }, [open, loadChannels]);
 
-  // Switching channel starts the history again.
+  // Switching channel starts the history again, and drops whatever was half
+  // typed. Carrying a draft across is how a message meant for your alliance
+  // gets sent to a stranger, and there is no undo for that.
   useEffect(() => {
     sinceRef.current = null;
     setMessages([]);
+    setDraft('');
   }, [channel]);
 
   // The live poll.
