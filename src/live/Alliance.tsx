@@ -317,7 +317,7 @@ export default function Alliance({
                           onClick={() => {
                             if (
                               window.confirm(
-                                `Hand leadership to ${m.username}? You become an officer.`,
+                                `Hand command to ${m.username}? You become a lieutenant.`,
                               )
                             ) {
                               void run(() => api.allianceRank(m.username, 'handover'));
@@ -325,7 +325,7 @@ export default function Alliance({
                           }}
                           className="rounded border border-amber-800 px-2 py-1 text-[11px] text-amber-300"
                         >
-                          Make leader
+                          Make general
                         </button>
                       )}
                       <button

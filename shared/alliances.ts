@@ -17,11 +17,28 @@ export const RANK_ORDER: Record<AllianceRank, number> = {
   member: 1,
 };
 
+/**
+ * What each rank is called in the game.
+ *
+ * The stored values stay 'leader', 'officer' and 'member'. Renaming the labels
+ * is a presentation change; renaming the data would be a migration, every
+ * permission check rewritten, and a window where old rows mean nothing - all
+ * to say the same thing in different words.
+ */
 export const RANK_LABEL: Record<AllianceRank, string> = {
-  leader: 'Leader',
-  officer: 'Officer',
-  member: 'Member',
+  leader: 'General',
+  officer: 'Lieutenant',
+  member: 'Soldier',
 };
+
+/**
+ * How many lieutenants an alliance may have.
+ *
+ * The cap is what makes the rank worth having and what keeps the leadership
+ * channel a room rather than a crowd - a general who can promote everybody has
+ * promoted nobody.
+ */
+export const MAX_LIEUTENANTS = 10;
 
 /**
  * Tags are letters only, and shown in brackets before a callsign.

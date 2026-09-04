@@ -17,6 +17,7 @@ import {
   ALLIANCE_CAPACITY,
   type AllianceRank,
   DESCRIPTION_MAX,
+  MAX_LIEUTENANTS,
 } from '../shared/alliances';
 import {
   type ProfileEdit,
@@ -1239,7 +1240,7 @@ async function handleDecideApplication(
 ): Promise<Response> {
   const membership = await membershipOf(env.DB, player.id);
   if (!membership) return fail(409, 'You are not in an alliance.');
-  if (membership.rank === 'member') return fail(403, 'Officers and leaders only.');
+  if (membership.rank === 'member') return fail(403, 'Lieutenants and the general only.');
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   const username = typeof body?.username === 'string' ? body.username : null;
@@ -1329,7 +1330,18 @@ async function handleAllianceRank(
     // Only a leader creates or unmakes officers. An officer promoting another
     // officer would be creating a peer who could then act on nobody, and
     // demoting one would be acting sideways.
-    if (membership.rank !== 'leader') return fail(403, 'Leaders only.');
+    if (membership.rank !== 'leader') return fail(403, 'Only the general may do that.');
+    if (action === 'promote') {
+      const count = await env.DB.prepare(
+        `SELECT COUNT(*) AS n FROM alliance_members
+          WHERE alliance_id = ?1 AND rank = 'officer'`,
+      )
+        .bind(membership.alliance.id)
+        .first<{n: number}>();
+      if ((count?.n ?? 0) >= MAX_LIEUTENANTS) {
+        return fail(409, `An alliance may have at most ${MAX_LIEUTENANTS} lieutenants.`);
+      }
+    }
     const rank: AllianceRank = action === 'promote' ? 'officer' : 'member';
     await env.DB.prepare(`UPDATE alliance_members SET rank = ?2 WHERE player_id = ?1`)
       .bind(target.id, rank)
@@ -1338,7 +1350,7 @@ async function handleAllianceRank(
   }
 
   if (action === 'handover') {
-    if (membership.rank !== 'leader') return fail(403, 'Leaders only.');
+    if (membership.rank !== 'leader') return fail(403, 'Only the general may do that.');
     // Both writes or neither. A half-applied handover leaves an alliance with
     // two leaders or none, and either is worse than the change not happening.
     await env.DB.batch([
@@ -1363,7 +1375,7 @@ async function handleAllianceSettings(
 ): Promise<Response> {
   const membership = await membershipOf(env.DB, player.id);
   if (!membership) return fail(409, 'You are not in an alliance.');
-  if (membership.rank !== 'leader') return fail(403, 'Leaders only.');
+  if (membership.rank !== 'leader') return fail(403, 'Only the general may do that.');
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) return fail(400, 'Nothing to change.');
