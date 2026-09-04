@@ -8,6 +8,7 @@
  */
 import {type FormEvent, useCallback, useEffect, useRef, useState} from 'react';
 import Alliance from './Alliance';
+import Chat from './Chat';
 import Customize from './Customize';
 import Profile from './Profile';
 import Gate from './Gate';
@@ -136,61 +137,92 @@ export default function LiveApp() {
 
   if (!player) return <Gate onAuthed={setPlayer} />;
 
+  // Chat is pinned to every signed-in screen rather than being one of them, so
+  // it is reachable from the map without leaving the map.
+  const chat = (
+    <Chat
+      me={player.username}
+      onViewProfile={(name) => {
+        setViewing(name);
+        setScreen('profile');
+      }}
+    />
+  );
+
   if (screen === 'alliance') {
     return (
-      <Alliance
-        me={player.username}
-        onClose={() => setScreen('base')}
-        onViewProfile={(name) => {
-          setViewing(name);
-          setScreen('profile');
-        }}
-      />
+      <>
+        <div className="pb-16">
+          <Alliance
+            me={player.username}
+            onClose={() => setScreen('base')}
+            onViewProfile={(name) => {
+              setViewing(name);
+              setScreen('profile');
+            }}
+          />
+        </div>
+        {chat}
+      </>
     );
   }
 
   if (screen === 'profile') {
     const who = viewing ?? player.username;
     return (
-      <Profile
-        username={who}
-        editable={who === player.username}
-        onClose={() => {
-          setScreen(viewing === null ? 'base' : 'world');
-          setViewing(null);
-        }}
-      />
+      <>
+        <div className="pb-16">
+          <Profile
+            username={who}
+            editable={who === player.username}
+            onClose={() => {
+              setScreen(viewing === null ? 'base' : 'world');
+              setViewing(null);
+            }}
+          />
+        </div>
+        {chat}
+      </>
     );
   }
 
   if (screen === 'customize') {
     return (
-      <Customize
-        onClose={() => {
-          setScreen('base');
-          void refresh();
-        }}
-      />
+      <>
+        <div className="pb-16">
+          <Customize
+            onClose={() => {
+              setScreen('base');
+              void refresh();
+            }}
+          />
+        </div>
+        {chat}
+      </>
     );
   }
 
   // The map owns the whole viewport - it is a canvas, not a page section.
   if (screen === 'world') {
     return (
-      <div className="fixed inset-0">
-        <WorldMap
-          onOpenBase={() => setScreen('base')}
-          onViewProfile={(name) => {
-            setViewing(name);
-            setScreen('profile');
-          }}
-        />
-      </div>
+      <>
+        <div className="fixed inset-0">
+          <WorldMap
+            onOpenBase={() => setScreen('base')}
+            onViewProfile={(name) => {
+              setViewing(name);
+              setScreen('profile');
+            }}
+          />
+        </div>
+        {chat}
+      </>
     );
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-5 py-8">
+    <>
+    <div className="mx-auto max-w-3xl px-5 pb-24 pt-8">
       <header className="flex items-center justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-orange-500">Forward Operating Base</p>
@@ -315,5 +347,7 @@ export default function LiveApp() {
         </>
       )}
     </div>
+    {chat}
+    </>
   );
 }

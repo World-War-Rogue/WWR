@@ -8,6 +8,23 @@
 
 import type {CosmeticItem, CosmeticSlot, Loadout} from '../../shared/cosmetics';
 
+export interface ChatMessage {
+  id: string;
+  author: string;
+  body: string;
+  createdAt: number;
+  rank: 'leader' | 'officer' | 'member' | null;
+  hasPortrait: number;
+}
+
+export interface ChatChannels {
+  channels: {server: string | null; alliance: string | null; leadership: string | null};
+  threads: Array<{channel: string; other: string; updatedAt: number}>;
+  unread: Record<string, number>;
+  rank: 'leader' | 'officer' | 'member' | null;
+  serverTime: number;
+}
+
 export interface AllianceSummary {
   id: string;
   tag: string;
@@ -217,6 +234,24 @@ export const api = {
     call<{world: {id: number; name: string}; plot: {x: number; y: number}}>('/api/world/move', {
       method: 'POST',
       body: JSON.stringify(worldId === undefined ? {x, y} : {x, y, worldId}),
+    }),
+  chatChannels: () => call<ChatChannels>('/api/chat/channels'),
+  chatRead: (channel: string, since?: number) => {
+    const params = new URLSearchParams({channel});
+    if (since !== undefined) params.set('since', String(since));
+    return call<{channel: string; messages: ChatMessage[]; serverTime: number}>(
+      `/api/chat?${params.toString()}`,
+    );
+  },
+  chatSend: (channel: string, body: string) =>
+    call<{ok: true; serverTime: number}>('/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({channel, body}),
+    }),
+  chatOpenDm: (username: string) =>
+    call<{channel: string; other: string}>('/api/chat/dm', {
+      method: 'POST',
+      body: JSON.stringify({username}),
     }),
   alliance: () => call<AllianceView>('/api/alliance'),
   browseAlliances: () =>

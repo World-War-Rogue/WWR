@@ -6,6 +6,20 @@
  */
 import {handleAdminRequests} from './admin';
 import {
+  type Viewer,
+  channelsFor,
+  readChannel,
+  readRecent,
+  resolveAccess,
+} from './chat';
+import {
+  MESSAGE_MAX,
+  RETENTION_DAYS,
+  dmChannel,
+  dmOther,
+  flattenMessage,
+} from '../shared/chat';
+import {
   atCapacity,
   createAlliance,
   mayActOn,
@@ -1481,6 +1495,210 @@ async function handleAllianceCrest(
   return handleAlliance(env, player);
 }
 
+/** Everything about this player that decides which channels they belong to. */
+async function chatViewer(env: Env, player: PlayerRow): Promise<Viewer> {
+  const [home, membership] = await Promise.all([
+    env.DB.prepare(`SELECT home_world_id AS id FROM bases WHERE player_id = ?1`)
+      .bind(player.id)
+      .first<{id: number | null}>(),
+    membershipOf(env.DB, player.id),
+  ]);
+  return {
+    playerId: player.id,
+    homeWorldId: home?.id ?? null,
+    allianceId: membership?.alliance.id ?? null,
+    rank: membership?.rank ?? null,
+  };
+}
+
+/**
+ * Reads a channel.
+ *
+ * Access is checked here as well as on send. A channel string in a request is
+ * a claim, not a credential - if reads were trusted because writes were
+ * checked, alliance planning would be readable by the people it is about.
+ */
+async function handleChatRead(
+  request: Request,
+  env: Env,
+  player: PlayerRow,
+): Promise<Response> {
+  const url = new URL(request.url);
+  const channel = url.searchParams.get('channel');
+  if (!channel) return fail(400, 'Which channel?');
+
+  const viewer = await chatViewer(env, player);
+  const access = resolveAccess(channel, viewer);
+  if (!access.ok) return fail(403, access.error);
+
+  const sinceRaw = url.searchParams.get('since');
+  const since = sinceRaw === null ? null : Number(sinceRaw);
+
+  const messages =
+    since === null || !Number.isFinite(since)
+      ? await readRecent(env.DB, channel, 80)
+      : await readChannel(env.DB, channel, since, 200);
+
+  // Opening a channel marks it read. Anything arriving after this instant is
+  // what the unread badge is counting.
+  const now = Date.now();
+  await env.DB.prepare(
+    `INSERT INTO channel_reads (player_id, channel, last_read_at)
+     VALUES (?1, ?2, ?3)
+     ON CONFLICT(player_id, channel) DO UPDATE SET last_read_at = excluded.last_read_at`,
+  )
+    .bind(player.id, channel, now)
+    .run();
+
+  return json({channel, messages, serverTime: now});
+}
+
+/**
+ * Sends a message.
+ *
+ * Both sides of a private conversation get a thread row, so it appears in the
+ * recipient's Private tab without them having to already know it exists -
+ * otherwise the first message to somebody would be invisible to them.
+ */
+async function handleChatSend(
+  request: Request,
+  env: Env,
+  player: PlayerRow,
+): Promise<Response> {
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const channelRaw = typeof body?.channel === 'string' ? body.channel : null;
+  const textRaw = typeof body?.body === 'string' ? body.body : null;
+  if (!channelRaw || textRaw === null) return fail(400, 'Nothing to send.');
+
+  const text = flattenMessage(textRaw);
+  if (text.length === 0) return fail(400, 'Say something.');
+  if (text.length > MESSAGE_MAX) {
+    return fail(400, `Messages are ${MESSAGE_MAX} characters or fewer.`);
+  }
+
+  const viewer = await chatViewer(env, player);
+  const access = resolveAccess(channelRaw, viewer);
+  if (!access.ok) return fail(403, access.error);
+  if (!access.canWrite) return fail(403, 'You cannot post there.');
+
+  const now = Date.now();
+  const writes: D1PreparedStatement[] = [
+    env.DB.prepare(
+      `INSERT INTO messages (id, channel, author_id, body, created_at)
+       VALUES (?1, ?2, ?3, ?4, ?5)`,
+    ).bind(newId(), channelRaw, player.id, text, now),
+  ];
+
+  const other = dmOther(channelRaw, player.id);
+  if (other) {
+    for (const [owner, partner] of [
+      [player.id, other],
+      [other, player.id],
+    ]) {
+      writes.push(
+        env.DB.prepare(
+          `INSERT INTO dm_threads (player_id, other_id, channel, updated_at)
+           VALUES (?1, ?2, ?3, ?4)
+           ON CONFLICT(player_id, other_id) DO UPDATE SET updated_at = excluded.updated_at`,
+        ).bind(owner, partner, channelRaw, now),
+      );
+    }
+  }
+
+  await env.DB.batch(writes);
+
+  // Pruning rides on sending rather than on a schedule, because a Worker has
+  // no background. One send in roughly two hundred pays for it, which is often
+  // enough to keep the table bounded and rare enough to be invisible.
+  if (Math.random() < 0.005) {
+    await env.DB.prepare(`DELETE FROM messages WHERE created_at < ?1`)
+      .bind(now - RETENTION_DAYS * 86_400_000)
+      .run();
+  }
+
+  return json({ok: true, serverTime: now});
+}
+
+/** Which channels this player has, and how much is unread in each. */
+async function handleChatChannels(env: Env, player: PlayerRow): Promise<Response> {
+  const viewer = await chatViewer(env, player);
+  const channels = channelsFor(viewer);
+
+  const threads = await env.DB.prepare(
+    `SELECT t.channel AS channel, p.username AS other, t.updated_at AS updatedAt
+       FROM dm_threads t
+       JOIN players p ON p.id = t.other_id
+      WHERE t.player_id = ?1
+      ORDER BY t.updated_at DESC
+      LIMIT 50`,
+  )
+    .bind(player.id)
+    .all<{channel: string; other: string; updatedAt: number}>();
+
+  const keys = [channels.server, channels.alliance, channels.leadership]
+    .concat((threads.results ?? []).map((t) => t.channel))
+    .filter((k): k is string => k !== null);
+
+  const unread: Record<string, number> = {};
+  if (keys.length > 0) {
+    const placeholders = keys.map((_, i) => `?${i + 2}`).join(', ');
+    const rows = await env.DB.prepare(
+      `SELECT m.channel AS channel, COUNT(*) AS n
+         FROM messages m
+         LEFT JOIN channel_reads r
+                ON r.channel = m.channel AND r.player_id = ?1
+        WHERE m.channel IN (${placeholders})
+          AND m.author_id <> ?1
+          AND m.created_at > COALESCE(r.last_read_at, 0)
+        GROUP BY m.channel`,
+    )
+      .bind(player.id, ...keys)
+      .all<{channel: string; n: number}>();
+    for (const row of rows.results ?? []) unread[row.channel] = row.n;
+  }
+
+  return json({
+    channels,
+    threads: threads.results ?? [],
+    unread,
+    rank: viewer.rank,
+    serverTime: Date.now(),
+  });
+}
+
+/** Opens (or finds) a private conversation with somebody, by callsign. */
+async function handleChatOpenDm(
+  request: Request,
+  env: Env,
+  player: PlayerRow,
+): Promise<Response> {
+  const body = (await request.json().catch(() => null)) as {username?: unknown} | null;
+  const username = typeof body?.username === 'string' ? body.username : null;
+  if (!username) return fail(400, 'Who with?');
+
+  const other = await env.DB.prepare(
+    `SELECT id, username FROM players WHERE username = ?1 COLLATE NOCASE`,
+  )
+    .bind(username)
+    .first<{id: string; username: string}>();
+  if (!other) return fail(404, 'No such callsign.');
+  if (other.id === player.id) return fail(400, 'That one is you.');
+
+  const channel = dmChannel(player.id, other.id);
+  // Only the opener's own thread row is created. The recipient's appears when
+  // there is something in it to see - a list of conversations nobody has
+  // spoken in is a list of people who tried to talk to you and did not.
+  await env.DB.prepare(
+    `INSERT INTO dm_threads (player_id, other_id, channel, updated_at)
+     VALUES (?1, ?2, ?3, ?4)
+     ON CONFLICT(player_id, other_id) DO NOTHING`,
+  )
+    .bind(player.id, other.id, channel, Date.now())
+    .run();
+
+  return json({channel, other: other.username});
+}
+
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
@@ -1515,6 +1733,14 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
 
   if (endpoint === 'POST /api/base/upgrade') return handleStartUpgrade(request, env, player);
+
+  if (endpoint === 'GET /api/chat') return handleChatRead(request, env, player);
+
+  if (endpoint === 'POST /api/chat') return handleChatSend(request, env, player);
+
+  if (endpoint === 'GET /api/chat/channels') return handleChatChannels(env, player);
+
+  if (endpoint === 'POST /api/chat/dm') return handleChatOpenDm(request, env, player);
 
   if (endpoint === 'GET /api/portrait') return handlePortraitImage(request, env);
 
