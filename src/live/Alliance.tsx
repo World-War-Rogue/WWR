@@ -95,11 +95,20 @@ export default function Alliance({
   const rank = view?.rank ?? 'member';
   const canManage = rank === 'leader' || rank === 'officer';
 
+  // Every field, before the button does anything. An alliance with no stated
+  // purpose is one nobody browsing can tell apart from the others, and the
+  // browse list is where the decision to join is actually made.
+  const createReady =
+    validTag(tag) && validName(name) && description.trim().length >= 8;
+
   async function create(e: FormEvent) {
     e.preventDefault();
     if (!validTag(tag)) return setError(TAG_RULE);
     if (!validName(name)) return setError(NAME_RULE);
-    await run(() => api.createAlliance({tag, name, description, openJoin}));
+    if (description.trim().length < 8) {
+      return setError('Say what the alliance is for, in a sentence or more.');
+    }
+    await run(() => api.createAlliance({tag, name, description: description.trim(), openJoin}));
     setBrowse(null);
   }
 
@@ -345,7 +354,7 @@ export default function Alliance({
             <input
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="What it is for. Optional."
+              placeholder="What it is for. Other players read this before joining."
               maxLength={240}
               className="mt-3 w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 focus:border-orange-600 focus:outline-none"
             />
@@ -360,13 +369,13 @@ export default function Alliance({
             </label>
             <button
               type="submit"
-              disabled={busy}
+              disabled={busy || !createReady}
               className="mt-4 rounded bg-orange-600 px-5 py-2 text-sm font-semibold text-white disabled:bg-neutral-800 disabled:text-neutral-500"
             >
               Found it
             </button>
             <p className="mt-2 text-xs text-neutral-600">
-              {TAG_RULE} Up to {ALLIANCE_CAPACITY} members.
+              {TAG_RULE} All three fields are required. Up to {ALLIANCE_CAPACITY} members.
             </p>
           </form>
 
@@ -383,24 +392,60 @@ export default function Alliance({
                 {browse.map((a) => (
                   <div
                     key={a.id}
-                    className="flex items-center justify-between gap-3 rounded border border-neutral-800 bg-neutral-900/60 px-3 py-2"
+                    className="rounded border border-neutral-800 bg-neutral-900/60 p-3"
                   >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-neutral-100">
-                        [{a.tag}] {a.name}
-                      </p>
-                      <p className="truncate text-xs text-neutral-500">
-                        {a.members} members · {a.openJoin ? 'Open' : 'Applications reviewed'}
-                        {a.description ? ` · ${a.description}` : ''}
-                      </p>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-neutral-100">
+                          <span className="font-mono text-orange-400">[{a.tag}]</span> {a.name}
+                        </p>
+                        <p className="mt-0.5 truncate text-xs text-neutral-500">
+                          Led by {a.leader ?? 'nobody'}
+                        </p>
+                      </div>
+                      <button
+                        disabled={busy || a.members >= ALLIANCE_CAPACITY}
+                        onClick={() => void run(() => api.joinAlliance(a.id))}
+                        className="shrink-0 rounded bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white disabled:bg-neutral-800 disabled:text-neutral-500"
+                      >
+                        {a.members >= ALLIANCE_CAPACITY
+                          ? 'Full'
+                          : a.openJoin
+                            ? 'Join'
+                            : 'Apply'}
+                      </button>
                     </div>
-                    <button
-                      disabled={busy}
-                      onClick={() => void run(() => api.joinAlliance(a.id))}
-                      className="shrink-0 rounded bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-                    >
-                      {a.openJoin ? 'Join' : 'Apply'}
-                    </button>
+
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      <div className="rounded border border-neutral-800 bg-neutral-950/60 px-2 py-1.5">
+                        <p className="text-[10px] uppercase tracking-wider text-neutral-500">
+                          Power
+                        </p>
+                        <p className="font-mono text-sm text-neutral-100">
+                          {formatNumber(a.power)}
+                        </p>
+                      </div>
+                      <div className="rounded border border-neutral-800 bg-neutral-950/60 px-2 py-1.5">
+                        <p className="text-[10px] uppercase tracking-wider text-neutral-500">
+                          Members
+                        </p>
+                        <p className="font-mono text-sm text-neutral-100">
+                          {a.members}/{ALLIANCE_CAPACITY}
+                        </p>
+                      </div>
+                      <div className="rounded border border-neutral-800 bg-neutral-950/60 px-2 py-1.5">
+                        <p className="text-[10px] uppercase tracking-wider text-neutral-500">
+                          Entry
+                        </p>
+                        <p className="text-sm text-neutral-100">
+                          {a.openJoin ? 'Open' : 'Reviewed'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {a.description && (
+                      <p className="mt-2 text-xs text-neutral-400">{a.description}</p>
+                    )}
                   </div>
                 ))}
               </div>

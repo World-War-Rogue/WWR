@@ -76,6 +76,7 @@ import {
   isBuildingKind,
   maxAllowedLevel,
   productionPerHour,
+  totalPower,
   upgradeCost,
   upgradeDurationMs,
 } from './game';
@@ -956,45 +957,102 @@ async function handleAlliance(env: Env, player: PlayerRow): Promise<Response> {
   });
 }
 
-/** Every alliance on this player's home server, for somebody looking to join. */
+/**
+ * Every alliance on this player's home server.
+ *
+ * Carries the four things somebody actually decides on: how strong it is, who
+ * runs it, how full it is, and whether they can walk in. A list of names and
+ * member counts makes every alliance look the same, which is the one thing a
+ * join screen must not do.
+ *
+ * Power is summed in TypeScript from raw building levels rather than computed
+ * in SQL. Doing the arithmetic in the query would be faster and would create a
+ * second definition of power that drifts from the one on the profile - and two
+ * numbers that disagree about the same alliance is worse than one query.
+ */
 async function handleBrowseAlliances(env: Env, player: PlayerRow): Promise<Response> {
   const home = await env.DB.prepare(`SELECT home_world_id AS id FROM bases WHERE player_id = ?1`)
     .bind(player.id)
     .first<{id: number | null}>();
   if (!home?.id) return fail(409, 'You have not been deployed yet.');
 
-  const rows = await env.DB.prepare(
-    `SELECT a.id AS id, a.tag AS tag, a.name AS name, a.description AS description,
-            a.open_join AS open_join, COUNT(m.player_id) AS members
-       FROM alliances a
-       LEFT JOIN alliance_members m ON m.alliance_id = a.id
-      WHERE a.home_world_id = ?1
-      GROUP BY a.id
-      ORDER BY members DESC, a.created_at ASC
-      LIMIT 100`,
-  )
-    .bind(home.id)
-    .all<{
-      id: string;
-      tag: string;
-      name: string;
-      description: string | null;
-      open_join: number;
-      members: number;
-    }>();
+  const [list, levels] = await Promise.all([
+    env.DB.prepare(
+      `SELECT a.id AS id, a.tag AS tag, a.name AS name, a.description AS description,
+              a.open_join AS open_join, COUNT(m.player_id) AS members,
+              (SELECT p.username
+                 FROM alliance_members lm
+                 JOIN players p ON p.id = lm.player_id
+                WHERE lm.alliance_id = a.id AND lm.rank = 'leader'
+                LIMIT 1) AS leader
+         FROM alliances a
+         LEFT JOIN alliance_members m ON m.alliance_id = a.id
+        WHERE a.home_world_id = ?1
+        GROUP BY a.id
+        LIMIT 100`,
+    )
+      .bind(home.id)
+      .all<{
+        id: string;
+        tag: string;
+        name: string;
+        description: string | null;
+        open_join: number;
+        members: number;
+        leader: string | null;
+      }>(),
+    env.DB.prepare(
+      `SELECT m.alliance_id AS aid, b.player_id AS pid, b.kind AS kind, b.level AS level
+         FROM alliance_members m
+         JOIN alliances a ON a.id = m.alliance_id
+         JOIN buildings b ON b.player_id = m.player_id
+        WHERE a.home_world_id = ?1`,
+    )
+      .bind(home.id)
+      .all<{aid: string; pid: string; kind: string; level: number}>(),
+  ]);
 
-  return json({
-    homeWorldId: home.id,
-    capacity: ALLIANCE_CAPACITY,
-    alliances: (rows.results ?? []).map((r) => ({
+  // Levels, grouped per player, then power per player, then summed per
+  // alliance. Going straight from rows to a total would double-count, because
+  // power is not linear in level.
+  const byPlayer = new Map<string, {aid: string; levels: Record<BuildingKind, number>}>();
+  for (const row of levels.results ?? []) {
+    if (!isBuildingKind(row.kind)) continue;
+    let entry = byPlayer.get(row.pid);
+    if (!entry) {
+      entry = {
+        aid: row.aid,
+        levels: Object.fromEntries(BUILDING_KINDS.map((k) => [k, 0])) as Record<
+          BuildingKind,
+          number
+        >,
+      };
+      byPlayer.set(row.pid, entry);
+    }
+    entry.levels[row.kind] = row.level;
+  }
+
+  const powerByAlliance = new Map<string, number>();
+  for (const {aid, levels: own} of byPlayer.values()) {
+    powerByAlliance.set(aid, (powerByAlliance.get(aid) ?? 0) + totalPower(own));
+  }
+
+  const alliances = (list.results ?? [])
+    .map((r) => ({
       id: r.id,
       tag: r.tag,
       name: r.name,
       description: r.description,
       openJoin: r.open_join === 1,
       members: r.members,
-    })),
-  });
+      leader: r.leader,
+      power: powerByAlliance.get(r.id) ?? 0,
+    }))
+    // Strongest first. Somebody browsing is looking for the alliance worth
+    // joining, and that is the order that answers it.
+    .sort((a, b) => b.power - a.power || b.members - a.members);
+
+  return json({homeWorldId: home.id, capacity: ALLIANCE_CAPACITY, alliances});
 }
 
 /** Founds an alliance. The founder becomes its leader. */
@@ -1017,6 +1075,12 @@ async function handleCreateAlliance(
   const tag = typeof body.tag === 'string' ? body.tag.trim() : '';
   const name = typeof body.name === 'string' ? body.name : '';
   const description = typeof body.description === 'string' ? body.description.trim() : '';
+  // Required, not optional. An alliance with no stated purpose is one nobody
+  // browsing can tell apart from the others, and the browse list is where the
+  // decision to join is actually made.
+  if (description.length < 8) {
+    return fail(400, 'Say what the alliance is for, in a sentence or more.');
+  }
 
   const result = await createAlliance(
     env.DB,
@@ -1025,7 +1089,7 @@ async function handleCreateAlliance(
     newId(),
     tag,
     name,
-    description === '' ? null : description,
+    description,
     body.openJoin !== false,
     Date.now(),
   );

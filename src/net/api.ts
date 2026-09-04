@@ -15,6 +15,10 @@ export interface AllianceSummary {
   description: string | null;
   openJoin: boolean;
   members: number;
+  /** Callsign of whoever runs it. Null only if the leader row is missing. */
+  leader: string | null;
+  /** Every member's power added together. */
+  power: number;
 }
 
 export interface AllianceMember {
