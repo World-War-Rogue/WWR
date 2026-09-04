@@ -118,3 +118,105 @@ export function productionPerHour(levels: Record<BuildingKind, number>): Record<
 
 export const STORAGE_CAP = (commandPostLevel: number) =>
   Math.floor(5000 * Math.pow(1.5, Math.max(0, commandPostLevel - 1)));
+
+/* ------------------------------------------------------------------ world */
+
+/** A base occupies a 4x4 block of world tiles. */
+export const PLOT_TILES = 4;
+
+/** Hard population limit for a single server. */
+export const SERVER_CAPACITY = 1000;
+
+/** How many servers the world must still be navigable after merging. */
+export const MERGE_FACTOR = 8;
+
+/**
+ * Share of plots occupied inside the settled area.
+ *
+ * This is the number that decides how the world feels. Too high and there is
+ * no room to manoeuvre between bases; too low and players never see a
+ * neighbour, which is the whole point of a shared map. At 12% a full server
+ * settles a disc about 51 plots across, and eight merged servers reach 146.
+ */
+export const TARGET_OCCUPANCY = 0.12;
+
+/**
+ * Half-width of the world in plots: the world runs -EXTENT..EXTENT on both
+ * axes. Sized to hold a full 8-server merge at the target occupancy with room
+ * left over, so a merge never forces players into each other's laps.
+ */
+export const WORLD_EXTENT = 200;
+
+/** Radius in plots that a given population settles at the target occupancy. */
+export function settledRadius(population: number): number {
+  return Math.sqrt(Math.max(1, population) / (TARGET_OCCUPANCY * Math.PI));
+}
+
+export type SkinId = 'desert_fob' | 'arctic_station' | 'jungle_outpost' | 'urban_garrison';
+
+export interface SkinSpec {
+  id: SkinId;
+  name: string;
+  blurb: string;
+  /** Ground, structure and accent colours the map renderer draws with. */
+  palette: {ground: string; structure: string; accent: string};
+}
+
+export const SKINS: Record<SkinId, SkinSpec> = {
+  desert_fob: {
+    id: 'desert_fob',
+    name: 'Desert FOB',
+    blurb: 'HESCO barriers and sand berms. Built fast, holds hard.',
+    palette: {ground: '#b08248', structure: '#d9c39a', accent: '#e07a29'},
+  },
+  arctic_station: {
+    id: 'arctic_station',
+    name: 'Arctic Station',
+    blurb: 'Radar domes above the treeline. Nothing crosses unseen.',
+    palette: {ground: '#9fb6c6', structure: '#e8f1f6', accent: '#3fa9d6'},
+  },
+  jungle_outpost: {
+    id: 'jungle_outpost',
+    name: 'Jungle Outpost',
+    blurb: 'Camouflage netting and raised platforms. Hard to find.',
+    palette: {ground: '#4e6b3a', structure: '#7b8f5c', accent: '#9fd356'},
+  },
+  urban_garrison: {
+    id: 'urban_garrison',
+    name: 'Urban Garrison',
+    blurb: 'Blast walls and concrete. A city block turned strongpoint.',
+    palette: {ground: '#6b6b6b', structure: '#9aa0a6', accent: '#d64545'},
+  },
+};
+
+export const SKIN_IDS = Object.keys(SKINS) as SkinId[];
+
+export function isSkinId(value: unknown): value is SkinId {
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(SKINS, value);
+}
+
+/**
+ * Candidate plots for a new arrival.
+ *
+ * The settled area grows with the square root of the population, so players
+ * cluster into a recognisable world instead of scattering across an empty
+ * grid. Candidates are random rather than scanned in order, so two players
+ * registering at the same instant rarely contend for the same plot.
+ */
+export function candidatePlots(population: number, attempts: number): Array<{x: number; y: number}> {
+  // Grow the settled area to keep density constant as the population rises,
+  // with a small floor so the first few arrivals are not stacked on one plot.
+  const radius = Math.min(WORLD_EXTENT, Math.max(6, settledRadius(population + 1)));
+  const out: Array<{x: number; y: number}> = [];
+  for (let i = 0; i < attempts; i += 1) {
+    // Square-rooting the distance spreads arrivals evenly over the disc rather
+    // than piling them into the centre.
+    const angle = Math.random() * Math.PI * 2;
+    const distance = Math.sqrt(Math.random()) * radius;
+    out.push({
+      x: Math.round(Math.cos(angle) * distance),
+      y: Math.round(Math.sin(angle) * distance),
+    });
+  }
+  return out;
+}
