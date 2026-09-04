@@ -14,7 +14,7 @@
  * glance.
  */
 
-export type Allegiance = 'ally' | 'server' | 'neutral' | 'hostile';
+export type Allegiance = 'you' | 'ally' | 'server' | 'neutral' | 'hostile';
 
 export interface AllegianceColours {
   /** Fills the whole plot. This is the only thing carrying meaning out here. */
@@ -25,21 +25,25 @@ export interface AllegianceColours {
 }
 
 /**
- * The four states, and nothing else.
+ * The five states, and nothing else.
  *
  * Chosen far apart in brightness as well as hue, because hue alone does not
  * survive a dim screen, a phone in sunlight, or a colour-blind player - and
  * this is the one place in the game where misreading a colour loses a battle.
- * Read as greyscale the four still separate: gold near white, green and blue
- * in the middle at different weights, red darkest.
+ * Read as greyscale they still separate, in order: red darkest, then blue,
+ * green, magenta, gold near white.
  *
- * There is no colour for yourself. Four meanings is already the most a player
- * can hold in their head at a glance, and your own base is the one you can
- * always find another way: it gets a white outline in your own allegiance's
- * colour, so it stays part of the picture rather than becoming a fifth thing
- * to learn.
+ * Your own base is a colour of its own rather than a marker laid over another
+ * one. Finding yourself is not a judgement about somebody else - it is the
+ * first thing anyone does when the map opens, and an outline is something you
+ * have to look for where a colour nothing else uses is something you land on.
  */
 export const ALLEGIANCE: Record<Allegiance, AllegianceColours> = {
+  // Magenta because nothing else in the game is anywhere near it. The ground
+  // is sand, salt, olive and rock; the other four states run red, gold, green
+  // and blue. This is the one hue that cannot be mistaken for a tile or for a
+  // neighbour on any terrain, which is exactly what "where am I" needs.
+  you: {fill: '#e879f9', top: '#f5d0fe', label: 'You'},
   ally: {fill: '#16a34a', top: '#4ade80', label: 'Your alliance'},
   // Gold rather than orange. Orange sits 25 degrees from red on the colour
   // wheel - the tightest pair in the set, and the two were being confused at
@@ -86,6 +90,11 @@ export interface Subject {
  * is the whole reason the event is worth attending.
  */
 export function allegianceOf(subject: Subject, viewer: Viewer): Allegiance {
+  // Ahead of everything, including war. You are not an entry in your own threat
+  // assessment, and somebody hunting for their own base should not have to
+  // reason about who they are currently fighting in order to find it.
+  if (subject.username === viewer.username) return 'you';
+
   if (subject.atWar === true) return 'hostile';
 
   const theirs = subject.allianceId ?? null;
@@ -124,7 +133,6 @@ export function drawAllegianceMarker(
   py: number,
   size: number,
   allegiance: Allegiance,
-  isYou: boolean,
 ): void {
   const c = ALLEGIANCE[allegiance];
 
@@ -140,14 +148,6 @@ export function drawAllegianceMarker(
   ctx.strokeStyle = 'rgba(0,0,0,0.35)';
   ctx.lineWidth = 1;
   ctx.strokeRect(px + 0.5, py + 0.5, size, size);
-
-  if (isYou) {
-    // Your own base keeps its allegiance colour and is found by its outline
-    // instead, so finding yourself never costs a fifth meaning.
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = Math.max(1.5, size * 0.09);
-    ctx.strokeRect(px + ctx.lineWidth / 2, py + ctx.lineWidth / 2, size - ctx.lineWidth, size - ctx.lineWidth);
-  }
 
   ctx.restore();
 }
