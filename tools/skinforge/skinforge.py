@@ -16,19 +16,32 @@ The build is config-driven so that producing a skin is editing a JSON file
 rather than rebuilding a scene by hand, which is the difference between a skin
 taking an afternoon and taking a week.
 
-Two ways to get depth out of flat art:
+Two ways to get depth out of flat art, and one thing to get right first.
 
-  relief   The image becomes the surface of a plane and its own brightness
-           drives displacement, so light rakes across real geometry rather
-           than across a picture of geometry. Best for a single rendered
-           image of a whole base - the case we actually have.
+The thing to get right: whether the art is already drawn in perspective.
 
-  cards    Regions of the image stand up as separate planes at different
-           depths. Costs a cut-out per layer and buys real parallax: the
-           towers pass in front of each other as the camera breathes.
+  billboard  (default) The image stands facing the camera and is pushed
+             toward it along its own brightness. Use this for art that
+             already looks three-dimensional - a rendered base seen from
+             above at an angle. The picture arrives on screen exactly as
+             drawn, and the displacement gives the light something real to
+             rake across as the base moves.
 
-Both render through the same camera and the same output settings, so a skin
-can start as relief and be rebuilt as cards without touching anything else.
+  ground     The image lies flat and is displaced upward, then viewed at the
+             camera's angle. Correct only for art drawn as a flat plan - a
+             top-down blueprint, a painted floor. Feeding a perspective
+             render through this squashes it, because it applies the camera
+             angle a second time to art that already has it baked in.
+
+Then, for either of those:
+
+  cards      Regions of the image stand up as separate planes at different
+             depths. Costs a cut-out per layer and buys real parallax: the
+             towers pass in front of each other as the base breathes.
+
+Everything renders through the same camera and the same output settings, so a
+skin can start as one and be rebuilt as another without touching anything
+else.
 """
 
 import json
@@ -71,11 +84,12 @@ def build_camera(scene, cfg) -> None:
 
     width = cfg['frame']['w']
     height = cfg['frame']['h']
+    aspect = height / width
 
     # Blender's ortho_scale spans the LARGER frame dimension. The frames are
     # taller than they are wide, so scaling to make the footprint fill the
     # width means scaling by the aspect ratio.
-    data.ortho_scale = FOOTPRINT * (height / width)
+    data.ortho_scale = FOOTPRINT * aspect
 
     camera = bpy.data.objects.new('SkinCamera', data)
     scene.collection.objects.link(camera)
@@ -85,13 +99,24 @@ def build_camera(scene, cfg) -> None:
     camera.location = (0.0, -distance * math.sin(tilt), distance * math.cos(tilt))
     camera.rotation_euler = (tilt, 0.0, 0.0)
 
-    # Slide the camera along its own up axis so the footprint sits on the
-    # bottom edge of the frame and the headroom is all above it, which is what
-    # the game's `overhang` expects.
-    headroom = (height / width) - 1.0
-    data.shift_y = -headroom / 2.0 * (width / height) - cfg.get('framing', {}).get('lift', 0.0)
+    lift = cfg.get('framing', {}).get('lift', 0.0)
+    if mode_of(cfg) == 'billboard':
+        # The billboard already fills the frame, headroom included, because the
+        # source image was authored with the footprint on its bottom edge.
+        # Shifting here would move art that is already framed.
+        data.shift_y = -lift
+    else:
+        # Slide the camera along its own up axis so the footprint sits on the
+        # bottom edge of the frame and the headroom is all above it, which is
+        # what the game's `overhang` expects.
+        data.shift_y = -(aspect - 1.0) / 2.0 / aspect - lift
 
     scene.camera = camera
+
+
+def mode_of(cfg) -> str:
+    """Billboard unless told otherwise - most source art is already in perspective."""
+    return cfg.get('mode', 'billboard')
 
 
 def build_lighting(scene, cfg) -> None:
@@ -185,16 +210,29 @@ def image_material(name: str, image, emissive_from_brightness: float):
 
 def build_relief(scene, cfg, image):
     """
-    The image as a displaced surface lying on the ground.
+    The image as a displaced surface.
+
+    In billboard mode the surface faces the camera and is pushed toward it, so
+    the render arrives looking exactly like the source and the displacement
+    only gives the light something real to move across. In ground mode it lies
+    flat and is pushed upward, which is right for a plan drawing and wrong for
+    anything already drawn in perspective.
 
     Subdivision is what the relief is made of, so it is generous - at 512px
-    output the mesh is cheaper than the render is.
+    output the mesh is far cheaper than the render.
     """
     relief = cfg.get('relief', {})
+    aspect = cfg['frame']['h'] / cfg['frame']['w']
 
     bpy.ops.mesh.primitive_plane_add(size=FOOTPRINT, location=(0, 0, 0))
     plane = bpy.context.active_object
     plane.name = 'Base'
+
+    if mode_of(cfg) == 'billboard':
+        # Turned to face the camera, and stretched to the frame's proportions
+        # so the source image maps to the output one pixel for one pixel.
+        plane.rotation_euler = (math.radians(CAMERA_TILT_DEG), 0.0, 0.0)
+        plane.scale = (1.0, aspect, 1.0)
 
     modifier = plane.modifiers.new('Subdivide', 'SUBSURF')
     modifier.subdivision_type = 'SIMPLE'

@@ -1,6 +1,9 @@
 {
   "id": "signature_one",
 
+  "//mode": "billboard for art already drawn in perspective; ground only for flat plan drawings.",
+  "mode": "billboard",
+
   "//source": "A cut-out PNG of the base alone, in tools/skinforge/art/.",
   "source": "art/signature_one.png",
 
