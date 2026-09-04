@@ -33,6 +33,20 @@ const MAX_ZOOM = 190;
  * distinct silhouettes answer a question nobody asked while burying that one.
  */
 const IDENTITY_ZOOM = 42;
+
+/**
+ * The zoom Home returns you to, and the zoom the map opens at.
+ *
+ * One number for both, because "where the map starts" and "take me back"
+ * should be the same place - a player who pans away and presses Home is asking
+ * to undo the panning, not to arrive somewhere new.
+ *
+ * Comfortably above IDENTITY_ZOOM so you land on your own base as art rather
+ * than as a coloured square. The old default of 40 was two pixels below the
+ * threshold, so the map opened in strategic mode and a new player's first
+ * sight of their base was a block.
+ */
+const HOME_ZOOM = 72;
 const FETCH_MARGIN = 6; // plots of slack around the viewport, so panning is not a stutter of requests
 
 interface Camera {
@@ -106,7 +120,7 @@ export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const {w, h} = useCanvasSize(canvasRef);
 
-  const [camera, setCamera] = useState<Camera>({cx: 0, cy: 0, zoom: 40});
+  const [camera, setCamera] = useState<Camera>({cx: 0, cy: 0, zoom: HOME_ZOOM});
   const [view, setView] = useState<WorldView | null>(null);
   const [selected, setSelected] = useState<{x: number; y: number; base: PlacedBase | null} | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -159,7 +173,7 @@ export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
   // looking at their neighbours rather than at empty ground.
   useEffect(() => {
     if (centred || !view?.you.plot) return;
-    setCamera((c) => ({...c, cx: view.you.plot!.x + 0.5, cy: view.you.plot!.y + 0.5}));
+    setCamera({cx: view.you.plot.x + 0.5, cy: view.you.plot.y + 0.5, zoom: HOME_ZOOM});
     setCentred(true);
   }, [view, centred]);
 
@@ -529,17 +543,38 @@ export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
             {btn.label}
           </button>
         ))}
-        {view?.you.plot && (
+      </div>
+
+      {view?.you.plot && (
+        <div className="pointer-events-none absolute bottom-3 right-3">
           <button
             onClick={() =>
-              setCamera((c) => ({...c, cx: view.you.plot!.x + 0.5, cy: view.you.plot!.y + 0.5}))
+              setCamera({
+                cx: view.you.plot!.x + 0.5,
+                cy: view.you.plot!.y + 0.5,
+                zoom: HOME_ZOOM,
+              })
             }
-            className="pointer-events-auto rounded border border-neutral-700 bg-black/70 px-3 text-sm text-neutral-200 backdrop-blur hover:border-orange-600"
+            title="Back to your base"
+            className="pointer-events-auto flex h-11 items-center gap-2 rounded border border-neutral-700 bg-black/70 px-4 text-sm font-semibold text-neutral-100 backdrop-blur transition hover:border-fuchsia-500 hover:text-fuchsia-200"
           >
-            Recentre
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 10.5 12 3l9 7.5" />
+              <path d="M5 9.5V20h14V9.5" />
+            </svg>
+            Home
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {error && (
         <div className="absolute inset-x-3 bottom-20 rounded border border-red-900 bg-red-950/80 px-3 py-2 text-sm text-red-200 backdrop-blur">
