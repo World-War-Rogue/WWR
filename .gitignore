@@ -6,3 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Scratch and working files. Things I generate for you to look at land here -
+# screenshots, concept pages, frame grabs - and they are not part of the game.
+# The folder stays on disk; it just stops showing up as changes to commit.
+Claude outputs/
