@@ -7,6 +7,7 @@
  * gets wired to these same endpoints once the foundation is trusted.
  */
 import {type FormEvent, useCallback, useEffect, useRef, useState} from 'react';
+import {setLanguage, t} from '../i18n';
 import Alliance from './Alliance';
 import Assets from './Assets';
 import Battles from './Battles';
@@ -170,19 +171,19 @@ function PlayerMenu({
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-neutral-100">{player.username}</p>
               <p className="truncate text-[11px] text-neutral-500">
-                {profile?.alliance ? `[${profile.alliance.tag}] ${profile.alliance.name}` : 'No alliance'}
+                {profile?.alliance ? `[${profile.alliance.tag}] ${profile.alliance.name}` : t('menu.noAlliance')}
               </p>
             </div>
           </div>
 
           <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 border-b border-neutral-800 px-3 py-3 text-[11px]">
-            <dt className="text-neutral-500">Power</dt>
+            <dt className="text-neutral-500">{t('menu.power')}</dt>
             <dd className="text-right font-mono text-neutral-200">
               {profile ? profile.power.toLocaleString() : '—'}
             </dd>
-            <dt className="text-neutral-500">Command Post</dt>
+            <dt className="text-neutral-500">{t('menu.commandPost')}</dt>
             <dd className="text-right font-mono text-neutral-200">{profile?.commandPost ?? '—'}</dd>
-            <dt className="text-neutral-500">Server</dt>
+            <dt className="text-neutral-500">{t('menu.server')}</dt>
             <dd className="text-right font-mono text-neutral-200">{profile?.homeWorldId ?? '—'}</dd>
           </dl>
 
@@ -193,7 +194,7 @@ function PlayerMenu({
             }}
             className="block w-full px-3 py-2.5 text-left text-sm text-neutral-200 hover:bg-neutral-900"
           >
-            View full profile
+            {t('menu.viewProfile')}
           </button>
           <button
             onClick={() => {
@@ -202,7 +203,7 @@ function PlayerMenu({
             }}
             className="block w-full px-3 py-2.5 text-left text-sm text-neutral-200 hover:bg-neutral-900"
           >
-            Customise base
+            {t('menu.customise')}
           </button>
           <button
             onClick={() => {
@@ -211,7 +212,7 @@ function PlayerMenu({
             }}
             className="block w-full px-3 py-2.5 text-left text-sm text-neutral-200 hover:bg-neutral-900"
           >
-            Squads
+            {t('menu.squads')}
           </button>
           <button
             onClick={() => {
@@ -220,14 +221,14 @@ function PlayerMenu({
             }}
             className="block w-full px-3 py-2.5 text-left text-sm text-neutral-200 hover:bg-neutral-900"
           >
-            Assets
+            {t('menu.assets')}
           </button>
           {player.role === 'owner' && (
             <a
               href="/api/access/requests"
               className="block w-full px-3 py-2.5 text-left text-sm text-orange-400 hover:bg-neutral-900"
             >
-              Access requests
+              {t('menu.accessRequests')}
             </a>
           )}
 
@@ -235,7 +236,7 @@ function PlayerMenu({
             onClick={() => void onSignOut()}
             className="block w-full border-t border-neutral-800 px-3 py-2.5 text-left text-sm text-neutral-500 hover:bg-neutral-900 hover:text-red-300"
           >
-            Sign out
+            {t('menu.signOut')}
           </button>
         </div>
       )}
@@ -249,6 +250,8 @@ export default function LiveApp() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [checking, setChecking] = useState(true);
+  /** Bumped when the language changes, purely to force a redraw. */
+  const [, setLangTick] = useState(0);
   const [screen, setScreen] = useState<
     'base' | 'world' | 'customize' | 'profile' | 'alliance' | 'battles' | 'assets' | 'squads'
   >('base');
@@ -274,6 +277,17 @@ export default function LiveApp() {
       .catch(() => undefined)
       .finally(() => setChecking(false));
   }, []);
+
+  // The interface language follows the player's choice, applied before
+  // anything below this renders. `t` reads a module variable rather than a
+  // context because it is also called from canvas drawing code, which has no
+  // component around it to read a context from.
+  useEffect(() => {
+    setLanguage(player?.language ?? 'en');
+    // Nudge a re-render so screens already mounted redraw in the new language
+    // rather than waiting for the next thing that happens to change.
+    setLangTick((n) => n + 1);
+  }, [player?.language]);
 
   useEffect(() => {
     if (player) void refresh();
@@ -464,14 +478,14 @@ export default function LiveApp() {
           >
             <path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z" />
           </svg>
-          Alliance
+          {t('nav.alliance')}
         </button>
 
         <button
           onClick={() => setScreen('world')}
           className="rounded bg-neutral-800 px-3 py-2 text-sm font-medium text-neutral-100 transition hover:bg-neutral-700"
         >
-          World map
+          {t('nav.worldMap')}
         </button>
 
         <PlayerMenu

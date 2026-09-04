@@ -150,13 +150,15 @@ interface PlayerRow {
   id: string;
   username: string;
   role: string;
+  /** Their chosen language. Drives chat translation AND the interface. */
+  locale: string;
 }
 
 async function authenticate(request: Request, env: Env): Promise<PlayerRow | null> {
   const token = readSessionCookie(request);
   if (!token) return null;
   const row = await env.DB.prepare(
-    `SELECT p.id AS id, p.username AS username, p.role AS role
+    `SELECT p.id AS id, p.username AS username, p.role AS role, p.locale AS locale
        FROM sessions s JOIN players p ON p.id = s.player_id
       WHERE s.token = ?1 AND s.expires_at > ?2`,
   )
@@ -2273,7 +2275,11 @@ async function route(
   const player = await authenticate(request, env);
   if (!player) return fail(401, 'Not signed in.');
 
-  if (endpoint === 'GET /api/me') return json({player});
+  // The interface language rides along with the player, so the client knows
+  // which dictionary to draw in before it renders anything.
+  if (endpoint === 'GET /api/me') {
+    return json({player: {...player, language: isLanguage(player.locale) ? player.locale : 'en'}});
+  }
 
   if (endpoint === 'GET /api/access/requests') return handleAdminRequests(env, player);
 

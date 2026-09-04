@@ -201,6 +201,8 @@ export interface Player {
   id: string;
   username: string;
   role?: string;
+  /** The language the interface is drawn in. Chosen in the profile. */
+  language?: string;
 }
 
 export class ApiError extends Error {
