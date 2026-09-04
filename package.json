@@ -11,7 +11,8 @@
     "lint": "tsc --noEmit && tsc --noEmit -p worker",
     "db:migrate": "wrangler d1 migrations apply wwr-db --remote",
     "db:migrate:local": "wrangler d1 migrations apply wwr-db --local",
-    "db:status": "wrangler d1 migrations list wwr-db --remote"
+    "db:status": "wrangler d1 migrations list wwr-db --remote",
+    "recovery": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/refresh-recovery.ps1"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
