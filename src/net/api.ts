@@ -20,6 +20,18 @@ export interface ChatMessage {
   lang: string;
   /** Present when the reader's language differs and a translation exists. */
   translated: string | null;
+  /** The message this one answers, when it answers one. */
+  replyTo: string | null;
+  replyAuthor: string | null;
+  replyBody: string | null;
+}
+
+export interface PendingMention {
+  messageId: string;
+  channel: string;
+  createdAt: number;
+  author: string;
+  body: string;
 }
 
 export interface ChatChannels {
@@ -290,11 +302,16 @@ export const api = {
       `/api/chat?${params.toString()}`,
     );
   },
-  chatSend: (channel: string, body: string) =>
-    call<{ok: true; serverTime: number}>('/api/chat', {
+  chatSend: (channel: string, body: string, replyTo?: string | null) =>
+    call<{ok: true; serverTime: number; mentioned: string[]}>('/api/chat', {
       method: 'POST',
-      body: JSON.stringify({channel, body}),
+      body: JSON.stringify(replyTo ? {channel, body, replyTo} : {channel, body}),
     }),
+  chatMentionable: (channel: string) =>
+    call<{channel: string; names: string[]}>(
+      `/api/chat/mentionable?channel=${encodeURIComponent(channel)}`,
+    ),
+  chatMentions: () => call<{mentions: PendingMention[]}>('/api/chat/mentions'),
   chatCreateGroup: (name: string) =>
     call<{channel: string; id: string; name: string}>('/api/chat/group', {
       method: 'POST',

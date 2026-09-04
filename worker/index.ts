@@ -14,6 +14,10 @@ import {
   TRANSLATION_MODEL,
   type Viewer,
   channelsFor,
+  clearMentions,
+  mentionableIn,
+  pendingMentions,
+  recordMentions,
   readChannel,
   readRecent,
   readGenerated,
@@ -932,6 +936,36 @@ async function handleAiCheck(request: Request, env: Env, player: PlayerRow): Pro
   }
 }
 
+/**
+ * Who can be named in this channel.
+ *
+ * The autocomplete list. It is the same query the send path checks a mention
+ * against, on purpose: two lists would drift, and the drift would show up as
+ * somebody being notified about a channel they cannot open.
+ */
+async function handleMentionable(
+  request: Request,
+  env: Env,
+  player: PlayerRow,
+): Promise<Response> {
+  const channel = new URL(request.url).searchParams.get('channel');
+  if (!channel) return fail(400, 'Which channel?');
+
+  const viewer = await chatViewer(env, player);
+  const access = resolveAccess(channel, viewer);
+  if (!access.ok) return fail(403, access.error);
+
+  const people = await mentionableIn(env.DB, channel, viewer);
+  // Only the names. Player ids are the server's business, and the client needs
+  // nothing but a string to complete.
+  return json({channel, names: people.map((p) => p.username)});
+}
+
+/** Mentions this player has not looked at, newest first. */
+async function handleMentions(env: Env, player: PlayerRow): Promise<Response> {
+  return json({mentions: await pendingMentions(env.DB, player.id)});
+}
+
 async function handleStartUpgrade(request: Request, env: Env, player: PlayerRow): Promise<Response> {
   const body = (await request.json().catch(() => null)) as {kind?: unknown} | null;
   const kind = body?.kind;
@@ -1785,6 +1819,12 @@ async function handleChatRead(
   // model call.
   ctx.waitUntil(translateMissing(env, messages, viewer.language));
 
+  // Opening a channel clears the mentions in it. This is a separate act from
+  // marking the channel read - a mention is a thing somebody is waiting on an
+  // answer to, so it is cleared by looking at the channel it is in, never by
+  // the badge maths below.
+  ctx.waitUntil(clearMentions(env.DB, player.id, {channel}, Date.now()));
+
   // Opening a channel marks it read. Anything arriving after this instant is
   // what the unread badge is counting.
   const now = Date.now();
@@ -1828,6 +1868,18 @@ async function handleChatSend(
   if (!access.ok) return fail(403, access.error);
   if (!access.canWrite) return fail(403, 'You cannot post there.');
 
+  // The message being answered, if any. Verified to be in the same channel:
+  // without that check a reply could quote a line out of a channel the reader
+  // cannot open, and the quote would be shown to everybody who can.
+  const replyToRaw = typeof body?.replyTo === 'string' ? body.replyTo : null;
+  let replyTo: string | null = null;
+  if (replyToRaw) {
+    const parent = await env.DB.prepare(`SELECT channel FROM messages WHERE id = ?1`)
+      .bind(replyToRaw)
+      .first<{channel: string}>();
+    if (parent?.channel === channelRaw) replyTo = replyToRaw;
+  }
+
   const now = Date.now();
   const messageId = newId();
   // The instant guess, so the send is not held behind a model call. It is
@@ -1836,14 +1888,14 @@ async function handleChatSend(
   const guessedLang = detectLanguage(text, viewer.language);
   const writes: D1PreparedStatement[] = [
     env.DB.prepare(
-      `INSERT INTO messages (id, channel, author_id, body, created_at, lang)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
+      `INSERT INTO messages (id, channel, author_id, body, created_at, lang, reply_to)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
       // Detected from the body, NOT taken from the author's preference. The
       // preference says what they want to read; this has to say what they
       // actually wrote, or a player typing in someone else's language - the
       // exact case translation exists for - produces a message that claims to
       // already be in the reader's language and is never translated.
-    ).bind(messageId, channelRaw, player.id, text, now, guessedLang),
+    ).bind(messageId, channelRaw, player.id, text, now, guessedLang, replyTo),
   ];
 
   const other = dmOther(channelRaw, player.id);
@@ -1873,12 +1925,17 @@ async function handleChatSend(
       .run();
   }
 
+  // Mentions are resolved against who can actually read this channel, so
+  // naming somebody who is not in it notifies nobody rather than handing them
+  // a line of text out of a room they cannot open.
+  const mentioned = await recordMentions(env.DB, messageId, channelRaw, text, viewer, now);
+
   // Settle the language behind the response. Latin script cannot be read off
   // the characters, and a wrong language here is the difference between a
   // message that translates and one that silently does not.
   ctx.waitUntil(refineLanguage(env, messageId, text, guessedLang));
 
-  return json({ok: true, serverTime: now});
+  return json({ok: true, serverTime: now, mentioned});
 }
 
 /** Which channels this player has, and how much is unread in each. */
@@ -2169,6 +2226,10 @@ async function route(
   if (endpoint === 'POST /api/chat') return handleChatSend(request, env, player, ctx);
 
   if (endpoint === 'GET /api/chat/channels') return handleChatChannels(env, player);
+
+  if (endpoint === 'GET /api/chat/mentionable') return handleMentionable(request, env, player);
+
+  if (endpoint === 'GET /api/chat/mentions') return handleMentions(env, player);
 
   if (endpoint === 'POST /api/chat/dm') return handleChatOpenDm(request, env, player);
 

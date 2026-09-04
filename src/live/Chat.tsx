@@ -22,9 +22,46 @@ import {
   TAB_LABEL,
 } from '../../shared/chat';
 import {RANK_LABEL} from '../../shared/alliances';
-import {GROUP_NAME_MAX, groupIdOf} from '../../shared/chat';
-import {ApiError, type ChatChannels, type ChatMessage, api} from '../net/api';
+import {
+  GROUP_NAME_MAX,
+  groupIdOf,
+  mentionQueryAt,
+  rankMentions,
+  replySnippet,
+} from '../../shared/chat';
+import {
+  ApiError,
+  type ChatChannels,
+  type ChatMessage,
+  type PendingMention,
+  api,
+} from '../net/api';
 import {Portrait} from './Profile';
+
+/**
+ * Split a message so callsigns can be picked out of it.
+ *
+ * Done at render rather than stored as markup, because the message body is
+ * player-authored text and the one thing it must never become is markup. The
+ * pieces are returned as data and React puts them in the DOM as text.
+ */
+function withMentions(body: string, me: string): Array<{text: string; mention: boolean; self: boolean}> {
+  const out: Array<{text: string; mention: boolean; self: boolean}> = [];
+  const re = /(^|[^A-Za-z0-9_-])@([A-Za-z0-9_-]{2,24})/g;
+  let last = 0;
+  for (const m of body.matchAll(re)) {
+    const at = (m.index ?? 0) + m[1].length;
+    if (at > last) out.push({text: body.slice(last, at), mention: false, self: false});
+    out.push({
+      text: `@${m[2]}`,
+      mention: true,
+      self: m[2].toLowerCase() === me.toLowerCase(),
+    });
+    last = at + m[2].length + 1;
+  }
+  if (last < body.length) out.push({text: body.slice(last), mention: false, self: false});
+  return out;
+}
 
 /** While open. Fast enough to feel live, slow enough to be cheap. */
 const OPEN_POLL_MS = 4000;
@@ -52,6 +89,20 @@ export default function Chat({
   const [dmName, setDmName] = useState('');
   const [groupName, setGroupName] = useState('');
   const [addName, setAddName] = useState('');
+
+  /** The message being answered, held until it is sent or dismissed. */
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  /** Callsigns that can be named here, fetched per channel and cached. */
+  const [mentionable, setMentionable] = useState<string[]>([]);
+  const [mentionQuery, setMentionQuery] = useState<{query: string; start: number} | null>(null);
+  const [mentionPick, setMentionPick] = useState(0);
+  /** Mentions of me I have not looked at yet. */
+  const [mentions, setMentions] = useState<PendingMention[]>([]);
+  /** A message to scroll to and flash, set when jumping from a mention. */
+  const [jumpTo, setJumpTo] = useState<string | null>(null);
+
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const messageRefs = useRef(new Map<string, HTMLDivElement>());
 
   const sinceRef = useRef<number | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -146,13 +197,105 @@ export default function Chat({
     if (channel) setLastChannel(channel);
   }, [channel]);
 
+  // The roster for autocomplete, per channel. Fetched when the channel opens
+  // rather than on each `@`, so the menu appears the instant it is typed - a
+  // dropdown that arrives after the next keystroke is worse than none.
+  useEffect(() => {
+    if (!channel) {
+      setMentionable([]);
+      return;
+    }
+    let live = true;
+    api
+      .chatMentionable(channel)
+      .then((r) => {
+        if (live) setMentionable(r.names);
+      })
+      .catch(() => {
+        if (live) setMentionable([]);
+      });
+    return () => {
+      live = false;
+    };
+  }, [channel]);
+
+  // A reply and a half-typed mention both belong to the channel they started
+  // in. Carrying either across would attach an answer to the wrong
+  // conversation, which is the exact confusion replies exist to end.
+  useEffect(() => {
+    setReplyTo(null);
+    setMentionQuery(null);
+  }, [channel]);
+
+  // Poll for mentions of me. Slower than the channel poll: the badge is a
+  // nudge, not a conversation, and it keeps running while chat is shut.
+  useEffect(() => {
+    const pull = () =>
+      api
+        .chatMentions()
+        .then((r) => setMentions(r.mentions))
+        .catch(() => undefined);
+    void pull();
+    const id = window.setInterval(pull, open ? OPEN_POLL_MS * 2 : IDLE_POLL_MS);
+    return () => window.clearInterval(id);
+  }, [open]);
+
+  // Scroll a jumped-to message into view once it is on screen, and flash it.
+  // Without the flash, a jump into a busy channel lands you somewhere with no
+  // indication of which line you were sent to look at.
+  useEffect(() => {
+    if (!jumpTo) return;
+    const node = messageRefs.current.get(jumpTo);
+    if (!node) return;
+    node.scrollIntoView({block: 'center', behavior: 'smooth'});
+    const id = window.setTimeout(() => setJumpTo(null), 2200);
+    return () => window.clearTimeout(id);
+  }, [jumpTo, messages]);
+
+  const suggestions = mentionQuery === null ? [] : rankMentions(mentionable, mentionQuery.query);
+
+  /** Put the highlighted callsign into the draft, replacing what was typed. */
+  function completeMention(name: string) {
+    if (!mentionQuery) return;
+    const caretNow = inputRef.current?.selectionStart ?? draft.length;
+    const before = draft.slice(0, mentionQuery.start);
+    const after = draft.slice(caretNow);
+    setDraft(`${before}@${name} ${after}`);
+    setMentionQuery(null);
+    setMentionPick(0);
+    // Caret goes after the name just inserted, not to the end of the line -
+    // people name somebody in the middle of a sentence.
+    const caret = before.length + name.length + 2;
+    window.setTimeout(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(caret, caret);
+    }, 0);
+  }
+
+  /** Open a mention: switch to its channel and scroll to the line. */
+  function goToMention(m: PendingMention) {
+    setOpen(true);
+    setMentions((current) => current.filter((x) => x.messageId !== m.messageId));
+    if (m.channel.startsWith('server:')) setTab('server');
+    else if (m.channel.startsWith('alliance:')) setTab('alliance');
+    else if (m.channel.startsWith('leadership:')) setTab('leadership');
+    else {
+      setTab('private');
+      setThread(m.channel);
+    }
+    setJumpTo(m.messageId);
+  }
+
   async function send(e: FormEvent) {
     e.preventDefault();
     const text = draft.trim();
     if (!channel || text === '') return;
     setDraft('');
+    const answering = replyTo;
+    setReplyTo(null);
+    setMentionQuery(null);
     try {
-      await api.chatSend(channel, text);
+      await api.chatSend(channel, text, answering?.id ?? null);
       const result = await api.chatRead(channel, sinceRef.current ?? undefined);
       sinceRef.current = result.serverTime;
       if (result.messages.length > 0) {
@@ -161,6 +304,7 @@ export default function Chat({
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'That did not send.');
       setDraft(text);
+      setReplyTo(answering);
     }
   }
 
@@ -189,27 +333,56 @@ export default function Chat({
       ? info?.latest[lastChannel] ?? null
       : info?.latest[info?.channels.server ?? ''] ?? null;
 
+    // Being named is not the same as having unread messages, so it does not
+    // share the unread badge. A player can have forty unread lines they do not
+    // care about and one that was aimed at them, and the second is the only
+    // one worth interrupting them for - so it gets its own row above the bar,
+    // and pressing it goes straight to the line rather than to the channel.
+    const newest = mentions[0];
+
     return (
-      <button
-        onClick={() => setOpen(true)}
-        className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t border-neutral-800 bg-neutral-950/95 px-4 py-3 text-left backdrop-blur"
-      >
-        <span className="min-w-0 flex-1 truncate text-sm">
-          {preview ? (
-            <>
-              <span className="font-semibold text-neutral-300">{preview.author}</span>
-              <span className="text-neutral-500"> {preview.body}</span>
-            </>
-          ) : (
-            <span className="text-neutral-600">Comms</span>
-          )}
-        </span>
-        {totalUnread > 0 && (
-          <span className="shrink-0 rounded-full bg-orange-600 px-2 py-0.5 text-xs font-semibold text-white">
-            {totalUnread}
-          </span>
+      <div className="fixed inset-x-0 bottom-0 z-40">
+        {newest && (
+          <button
+            onClick={() => goToMention(newest)}
+            className="flex w-full items-center gap-2 border-t border-orange-800 bg-orange-950/90 px-4 py-2 text-left backdrop-blur"
+          >
+            <span className="shrink-0 rounded bg-orange-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+              @
+            </span>
+            <span className="min-w-0 flex-1 truncate text-xs">
+              <span className="font-semibold text-orange-200">{newest.author}</span>
+              <span className="text-orange-300/70"> {newest.body}</span>
+            </span>
+            {mentions.length > 1 && (
+              <span className="shrink-0 text-[10px] text-orange-400/70">
+                +{mentions.length - 1}
+              </span>
+            )}
+          </button>
         )}
-      </button>
+
+        <button
+          onClick={() => setOpen(true)}
+          className="flex w-full items-center gap-3 border-t border-neutral-800 bg-neutral-950/95 px-4 py-3 text-left backdrop-blur"
+        >
+          <span className="min-w-0 flex-1 truncate text-sm">
+            {preview ? (
+              <>
+                <span className="font-semibold text-neutral-300">{preview.author}</span>
+                <span className="text-neutral-500"> {preview.body}</span>
+              </>
+            ) : (
+              <span className="text-neutral-600">Comms</span>
+            )}
+          </span>
+          {totalUnread > 0 && (
+            <span className="shrink-0 rounded-full bg-orange-600 px-2 py-0.5 text-xs font-semibold text-white">
+              {totalUnread}
+            </span>
+          )}
+        </button>
+      </div>
     );
   }
 
@@ -217,6 +390,14 @@ export default function Chat({
     <div className="fixed inset-0 z-50 flex flex-col bg-neutral-950">
       <header className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
         <p className="text-xs uppercase tracking-[0.3em] text-orange-500">Comms</p>
+        {mentions.length > 0 && (
+          <button
+            onClick={() => goToMention(mentions[0])}
+            className="rounded border border-orange-700 bg-orange-950/60 px-2 py-1 text-xs font-semibold text-orange-200"
+          >
+            @{mentions.length}
+          </button>
+        )}
         <button
           onClick={() => setOpen(false)}
           className="rounded border border-neutral-700 px-3 py-1.5 text-sm text-neutral-300 hover:border-orange-600"
@@ -497,7 +678,16 @@ export default function Chat({
         ) : (
           <div className="space-y-3">
             {messages.map((m) => (
-              <div key={m.id} className="flex gap-2">
+              <div
+                key={m.id}
+                ref={(node) => {
+                  if (node) messageRefs.current.set(m.id, node);
+                  else messageRefs.current.delete(m.id);
+                }}
+                className={`flex gap-2 rounded transition-colors duration-700 ${
+                  jumpTo === m.id ? 'bg-orange-950/50 ring-1 ring-orange-700' : ''
+                }`}
+              >
                 <button onClick={() => onViewProfile(m.author)} className="shrink-0">
                   <Portrait
                     glyph="star"
@@ -529,7 +719,44 @@ export default function Chat({
                       {timeOf(m.createdAt)}
                     </span>
                   </p>
-                  <p className="break-words text-sm text-neutral-300">{m.body}</p>
+                  {/*
+                    What this answers, above the answer. A quote is the only
+                    way a channel with three conversations in it stays
+                    readable, and it is clickable because the next thing you
+                    want is the line it came from.
+                  */}
+                  {m.replyTo && (
+                    <button
+                      onClick={() => m.replyTo && setJumpTo(m.replyTo)}
+                      className="mb-1 flex w-full min-w-0 gap-1.5 border-l-2 border-neutral-700 pl-2 text-left hover:border-orange-600"
+                    >
+                      <span className="shrink-0 text-[11px] font-semibold text-neutral-500">
+                        {m.replyAuthor ?? 'someone'}
+                      </span>
+                      <span className="min-w-0 truncate text-[11px] text-neutral-600">
+                        {m.replyBody ? replySnippet(m.replyBody) : 'message removed'}
+                      </span>
+                    </button>
+                  )}
+
+                  <p className="break-words text-sm text-neutral-300">
+                    {withMentions(m.body, me).map((part, i) =>
+                      part.mention ? (
+                        <span
+                          key={i}
+                          className={
+                            part.self
+                              ? 'rounded bg-orange-600/30 px-1 font-semibold text-orange-200'
+                              : 'font-semibold text-sky-400'
+                          }
+                        >
+                          {part.text}
+                        </span>
+                      ) : (
+                        <span key={i}>{part.text}</span>
+                      ),
+                    )}
+                  </p>
                   {m.translated && (
                     // The original stays above. A translation that replaced it
                     // would hide the fact that a machine guessed, and a player
@@ -541,6 +768,16 @@ export default function Chat({
                       {m.translated}
                     </p>
                   )}
+
+                  <button
+                    onClick={() => {
+                      setReplyTo(m);
+                      inputRef.current?.focus();
+                    }}
+                    className="mt-0.5 text-[11px] text-neutral-600 hover:text-orange-400"
+                  >
+                    Reply
+                  </button>
                 </div>
               </div>
             ))}
@@ -552,13 +789,103 @@ export default function Chat({
       )}
 
       {showConversation && (
-      <form onSubmit={send} className="flex shrink-0 gap-2 border-t border-neutral-800 p-3">
+      <div className="relative shrink-0 border-t border-neutral-800">
+        {/*
+          What you are answering, held above the box until it is sent. Shown
+          here rather than only on the message so it cannot be forgotten
+          halfway through typing a reply to the wrong line.
+        */}
+        {replyTo && (
+          <div className="flex items-center gap-2 border-b border-neutral-800 bg-neutral-900/60 px-3 py-1.5">
+            <span className="shrink-0 text-[11px] uppercase tracking-wider text-neutral-500">
+              Replying to
+            </span>
+            <span className="shrink-0 text-[11px] font-semibold text-neutral-300">
+              {replyTo.author}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-[11px] text-neutral-600">
+              {replySnippet(replyTo.body)}
+            </span>
+            <button
+              onClick={() => setReplyTo(null)}
+              className="shrink-0 text-neutral-500 hover:text-neutral-200"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {/*
+          The callsign menu. Above the box, because it is below the fold on a
+          phone otherwise, and the keyboard is already covering that half.
+        */}
+        {suggestions.length > 0 && (
+          <ul className="absolute inset-x-3 bottom-full mb-1 overflow-hidden rounded border border-neutral-700 bg-neutral-950 shadow-lg">
+            {suggestions.map((name, i) => (
+              <li key={name}>
+                <button
+                  onMouseDown={(e) => {
+                    // mousedown, not click: click fires after the input has
+                    // already lost focus and the caret position with it.
+                    e.preventDefault();
+                    completeMention(name);
+                  }}
+                  onMouseEnter={() => setMentionPick(i)}
+                  className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm ${
+                    i === mentionPick ? 'bg-orange-950/60 text-orange-200' : 'text-neutral-300'
+                  }`}
+                >
+                  <Portrait
+                    glyph="star"
+                    tint="ash"
+                    src={`/api/portrait?name=${encodeURIComponent(name)}`}
+                    size={20}
+                  />
+                  {name}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+      <form onSubmit={send} className="flex gap-2 p-3">
         <input
+          ref={inputRef}
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            setMentionQuery(mentionQueryAt(e.target.value, e.target.selectionStart ?? 0));
+            setMentionPick(0);
+          }}
+          onKeyDown={(e) => {
+            if (suggestions.length === 0) return;
+            // While the menu is open it owns these keys. Enter picking a name
+            // instead of sending is the whole point of an autocomplete, and
+            // letting the form see it would post a half-typed callsign.
+            if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              setMentionPick((i) => (i + 1) % suggestions.length);
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault();
+              setMentionPick((i) => (i - 1 + suggestions.length) % suggestions.length);
+            } else if (e.key === 'Enter' || e.key === 'Tab') {
+              e.preventDefault();
+              completeMention(suggestions[Math.min(mentionPick, suggestions.length - 1)]);
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              setMentionQuery(null);
+            }
+          }}
+          onKeyUp={(e) => {
+            // Arrow keys and clicks move the caret without changing the text,
+            // so the menu has to be re-evaluated on movement too.
+            const el = e.currentTarget;
+            setMentionQuery(mentionQueryAt(el.value, el.selectionStart ?? 0));
+          }}
+          onBlur={() => setMentionQuery(null)}
           maxLength={MESSAGE_MAX}
           disabled={!channel}
-          placeholder={channel ? `Message ${TAB_LABEL[tab]}` : 'No channel'}
+          placeholder={channel ? `Message ${TAB_LABEL[tab]} - @ to name someone` : 'No channel'}
           className="min-w-0 flex-1 rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-600 focus:border-orange-600 focus:outline-none disabled:opacity-50"
         />
         <button
@@ -569,6 +896,7 @@ export default function Chat({
           Send
         </button>
       </form>
+      </div>
       )}
     </div>
   );

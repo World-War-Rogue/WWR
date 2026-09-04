@@ -15,6 +15,7 @@ import {
   detectByScript,
   dmOther,
   leadershipChannel,
+  mentionsIn,
   serverChannel,
 } from '../shared/chat';
 
@@ -117,6 +118,10 @@ export interface MessageRow {
   lang: string;
   /** Filled in when the reader's language differs and a translation exists. */
   translated: string | null;
+  /** The message this one answers, when it answers one. */
+  replyTo: string | null;
+  replyAuthor: string | null;
+  replyBody: string | null;
 }
 
 /**
@@ -138,13 +143,16 @@ export async function readChannel(
       `SELECT m.id AS id, p.username AS author, m.body AS body,
               m.created_at AS createdAt, am.rank AS rank, m.lang AS lang,
               (CASE WHEN pp.player_id IS NULL THEN 0 ELSE 1 END) AS hasPortrait,
-              t.body AS translated
+              t.body AS translated,
+              m.reply_to AS replyTo, rp.username AS replyAuthor, rm.body AS replyBody
          FROM messages m
          JOIN players p ON p.id = m.author_id
          LEFT JOIN alliance_members am ON am.player_id = m.author_id
          LEFT JOIN player_portraits pp ON pp.player_id = m.author_id
          LEFT JOIN message_translations t
                 ON t.message_id = m.id AND t.lang = ?4
+         LEFT JOIN messages rm ON rm.id = m.reply_to
+         LEFT JOIN players rp ON rp.id = rm.author_id
         WHERE m.channel = ?1 AND m.created_at > ?2
         ORDER BY m.created_at ASC
         LIMIT ?3`,
@@ -192,13 +200,16 @@ export async function readRecent(
       `SELECT m.id AS id, p.username AS author, m.body AS body,
               m.created_at AS createdAt, am.rank AS rank, m.lang AS lang,
               (CASE WHEN pp.player_id IS NULL THEN 0 ELSE 1 END) AS hasPortrait,
-              t.body AS translated
+              t.body AS translated,
+              m.reply_to AS replyTo, rp.username AS replyAuthor, rm.body AS replyBody
          FROM messages m
          JOIN players p ON p.id = m.author_id
          LEFT JOIN alliance_members am ON am.player_id = m.author_id
          LEFT JOIN player_portraits pp ON pp.player_id = m.author_id
          LEFT JOIN message_translations t
                 ON t.message_id = m.id AND t.lang = ?3
+         LEFT JOIN messages rm ON rm.id = m.reply_to
+         LEFT JOIN players rp ON rp.id = rm.author_id
         WHERE m.channel = ?1
         ORDER BY m.created_at DESC
         LIMIT ?2`,
@@ -381,5 +392,197 @@ export async function translateMissing(
     } catch {
       // Cache write failed; it will be retried on the next read.
     }
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Mentions                                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Everybody who could be named in this channel.
+ *
+ * This is the autocomplete list AND the guest list a mention is checked
+ * against, deliberately the same query. If they were separate, the check would
+ * eventually drift from the offer and somebody would be notified about a
+ * channel they cannot open - which hands them a line of text from it.
+ */
+export async function mentionableIn(
+  db: D1Database,
+  channel: string,
+  viewer: Viewer,
+): Promise<Array<{id: string; username: string}>> {
+  const access = resolveAccess(channel, viewer);
+  if (!access.ok) return [];
+
+  if (channel.startsWith('server:')) {
+    const id = Number(channel.slice('server:'.length));
+    const rows = await db
+      .prepare(
+        `SELECT p.id AS id, p.username AS username
+           FROM players p
+           JOIN bases b ON b.player_id = p.id
+          WHERE b.home_world_id = ?1
+          ORDER BY p.username
+          LIMIT 400`,
+      )
+      .bind(id)
+      .all<{id: string; username: string}>();
+    return rows.results ?? [];
+  }
+
+  if (channel.startsWith('alliance:') || channel.startsWith('leadership:')) {
+    const id = channel.slice(channel.indexOf(':') + 1);
+    // Leadership is the general and the lieutenants only, so naming a soldier
+    // there must not reach them - they cannot open the channel to read it.
+    const ranks = channel.startsWith('leadership:')
+      ? `AND m.rank IN ('leader','officer')`
+      : '';
+    const rows = await db
+      .prepare(
+        `SELECT p.id AS id, p.username AS username
+           FROM alliance_members m
+           JOIN players p ON p.id = m.player_id
+          WHERE m.alliance_id = ?1 ${ranks}
+          ORDER BY p.username`,
+      )
+      .bind(id)
+      .all<{id: string; username: string}>();
+    return rows.results ?? [];
+  }
+
+  if (channel.startsWith('group:')) {
+    const id = channel.slice('group:'.length);
+    const rows = await db
+      .prepare(
+        `SELECT p.id AS id, p.username AS username
+           FROM chat_group_members g
+           JOIN players p ON p.id = g.player_id
+          WHERE g.group_id = ?1
+          ORDER BY p.username`,
+      )
+      .bind(id)
+      .all<{id: string; username: string}>();
+    return rows.results ?? [];
+  }
+
+  if (channel.startsWith('dm:')) {
+    const other = dmOther(channel, viewer.playerId);
+    if (!other) return [];
+    const rows = await db
+      .prepare(`SELECT id, username FROM players WHERE id IN (?1, ?2) ORDER BY username`)
+      .bind(viewer.playerId, other)
+      .all<{id: string; username: string}>();
+    return rows.results ?? [];
+  }
+
+  return [];
+}
+
+/**
+ * Turn the callsigns in a message into rows, for the people it may reach.
+ *
+ * A name that matches nobody in the channel is dropped without comment. That
+ * covers a typo and it covers naming somebody who is not there, and the two
+ * should behave the same: telling the sender which callsigns exist elsewhere
+ * would make chat a membership oracle for every private channel in the game.
+ *
+ * Mentioning yourself is dropped too. It happens by accident when quoting, and
+ * a badge for something you just typed is noise.
+ */
+export async function recordMentions(
+  db: D1Database,
+  messageId: string,
+  channel: string,
+  body: string,
+  viewer: Viewer,
+  now: number,
+): Promise<string[]> {
+  const names = mentionsIn(body);
+  if (names.length === 0) return [];
+
+  const roster = await mentionableIn(db, channel, viewer);
+  const byName = new Map(roster.map((r) => [r.username.toLowerCase(), r]));
+
+  const hit = names
+    .map((name) => byName.get(name))
+    .filter((row): row is {id: string; username: string} => !!row && row.id !== viewer.playerId);
+  if (hit.length === 0) return [];
+
+  await db.batch(
+    hit.map((row) =>
+      db
+        .prepare(
+          `INSERT INTO message_mentions (message_id, player_id, channel, created_at)
+           VALUES (?1, ?2, ?3, ?4) ON CONFLICT DO NOTHING`,
+        )
+        .bind(messageId, row.id, channel, now),
+    ),
+  );
+  return hit.map((row) => row.username);
+}
+
+export interface PendingMention {
+  messageId: string;
+  channel: string;
+  createdAt: number;
+  author: string;
+  body: string;
+}
+
+/** Unseen mentions for one player, newest first. What the badge counts. */
+export async function pendingMentions(
+  db: D1Database,
+  playerId: string,
+  limit = 20,
+): Promise<PendingMention[]> {
+  const rows = await db
+    .prepare(
+      `SELECT mm.message_id AS messageId, mm.channel AS channel, mm.created_at AS createdAt,
+              p.username AS author, m.body AS body
+         FROM message_mentions mm
+         JOIN messages m ON m.id = mm.message_id
+         JOIN players p ON p.id = m.author_id
+        WHERE mm.player_id = ?1 AND mm.seen_at IS NULL
+        ORDER BY mm.created_at DESC
+        LIMIT ?2`,
+    )
+    .bind(playerId, limit)
+    .all<PendingMention>();
+  return rows.results ?? [];
+}
+
+/**
+ * Mark mentions seen.
+ *
+ * Scoped to one message when the player jumps to it, and to a whole channel
+ * when they have actually opened and read it. Deliberately NOT tied to
+ * channel_reads: scrolling past a busy channel should not clear a mention
+ * somebody is waiting on an answer to.
+ */
+export async function clearMentions(
+  db: D1Database,
+  playerId: string,
+  scope: {messageId?: string; channel?: string},
+  now: number,
+): Promise<void> {
+  if (scope.messageId) {
+    await db
+      .prepare(
+        `UPDATE message_mentions SET seen_at = ?3
+          WHERE player_id = ?1 AND message_id = ?2 AND seen_at IS NULL`,
+      )
+      .bind(playerId, scope.messageId, now)
+      .run();
+    return;
+  }
+  if (scope.channel) {
+    await db
+      .prepare(
+        `UPDATE message_mentions SET seen_at = ?3
+          WHERE player_id = ?1 AND channel = ?2 AND seen_at IS NULL`,
+      )
+      .bind(playerId, scope.channel, now)
+      .run();
   }
 }

@@ -243,3 +243,86 @@ export function detectLanguage(body: string, fallback: string): string {
   const needed = words.length > 8 ? 2 : 1;
   return bestScore >= needed ? best : latinFallback;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Mentions                                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Callsigns named in a message.
+ *
+ * The pattern deliberately stops at the characters a callsign may contain.
+ * Being greedier would swallow the punctuation after a name - "@BatKat," would
+ * look up a player called "BatKat," and quietly match nobody - and being
+ * stricter about word boundaries would break "(@BatKat)".
+ *
+ * Returns them lowercased and deduplicated. Matching is case-insensitive
+ * because nobody types a callsign's capitalisation correctly under pressure,
+ * and that is exactly when people are being called.
+ */
+export const MENTION_PATTERN = /(^|[^A-Za-z0-9_-])@([A-Za-z0-9_-]{2,24})/g;
+
+export function mentionsIn(body: string): string[] {
+  const found = new Set<string>();
+  for (const match of body.matchAll(MENTION_PATTERN)) {
+    found.add(match[2].toLowerCase());
+  }
+  return [...found];
+}
+
+/**
+ * The partial callsign being typed at the caret, or null.
+ *
+ * Only looks at the run immediately before the caret and gives up the moment
+ * it sees whitespace, so an `@` earlier in the line does not keep the
+ * autocomplete open for the rest of the message. An empty run counts - typing
+ * a bare `@` should open the list, not wait for a first letter.
+ */
+export function mentionQueryAt(text: string, caret: number): {query: string; start: number} | null {
+  let i = caret - 1;
+  while (i >= 0) {
+    const ch = text[i];
+    if (ch === '@') {
+      // An address only starts a mention at the start of a line or after
+      // whitespace, so an email address does not open the menu mid-word.
+      const before = i > 0 ? text[i - 1] : ' ';
+      if (!/\s/.test(before) && i !== 0) return null;
+      return {query: text.slice(i + 1, caret).toLowerCase(), start: i};
+    }
+    if (!/[A-Za-z0-9_-]/.test(ch)) return null;
+    if (caret - i > 25) return null;
+    i -= 1;
+  }
+  return null;
+}
+
+/** How many names the autocomplete offers at once. */
+export const MENTION_SUGGESTIONS = 6;
+
+/**
+ * Rank the candidates for a partial callsign.
+ *
+ * Prefix matches come before contained matches, because somebody typing "bat"
+ * means BatKat far more often than they mean CombatEngineer, and within each
+ * group the shorter name wins - it is the one they finished typing.
+ */
+export function rankMentions(candidates: string[], query: string): string[] {
+  if (!query) return candidates.slice(0, MENTION_SUGGESTIONS);
+  const q = query.toLowerCase();
+  const scored: Array<{name: string; rank: number}> = [];
+  for (const name of candidates) {
+    const lower = name.toLowerCase();
+    if (lower.startsWith(q)) scored.push({name, rank: 0});
+    else if (lower.includes(q)) scored.push({name, rank: 1});
+  }
+  scored.sort((a, b) => a.rank - b.rank || a.name.length - b.name.length || a.name.localeCompare(b.name));
+  return scored.slice(0, MENTION_SUGGESTIONS).map((s) => s.name);
+}
+
+/** The quoted line shown above a reply. Long enough to identify, short enough to skim. */
+export const REPLY_SNIPPET_MAX = 90;
+
+export function replySnippet(body: string): string {
+  const flat = flattenMessage(body);
+  return flat.length <= REPLY_SNIPPET_MAX ? flat : `${flat.slice(0, REPLY_SNIPPET_MAX - 1)}…`;
+}
