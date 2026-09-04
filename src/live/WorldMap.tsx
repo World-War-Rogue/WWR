@@ -12,7 +12,9 @@
  */
 import {type RefObject, useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {ApiError, type PlacedBase, type WorldView, api} from '../net/api';
+import {EffectLayer, type EffectSource} from './effects';
 import {DEFAULT_SEASON, seasonSpec, terrainAt} from './terrain';
+import {normaliseLoadout} from '../../shared/cosmetics';
 import {drawBase as paintBase, skinSpec} from './skins';
 
 const MIN_ZOOM = 14; // pixels per plot when fully zoomed out
@@ -99,6 +101,13 @@ export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
 
   const cameraRef = useRef(camera);
   cameraRef.current = camera;
+
+  // Effects live outside React state: they change every frame, and putting
+  // them through a re-render would cost more than the drawing does.
+  const effectsRef = useRef(new EffectLayer());
+  const frameRef = useRef<number | null>(null);
+  const lastFrameRef = useRef(0);
+  const [, forceDraw] = useState(0);
 
   const basesByPlot = useMemo(() => {
     const map = new Map<string, PlacedBase>();
@@ -305,8 +314,20 @@ export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
         base.y,
         base.level,
         base.username === you,
+        normaliseLoadout(base),
       );
     }
+
+    // Effects sit above the bases and below the nameplates, so a plate is
+    // never obscured by the smoke coming off its own base.
+    effectsRef.current.draw(
+      ctx,
+      (ex, ey) =>
+        ex >= firstX && ex <= lastX && ey >= firstY && ey <= lastY
+          ? {px: toScreenX(ex), py: toScreenY(ey)}
+          : null,
+      zoom,
+    );
 
     if (zoom > 26) {
       for (const base of visible) {
@@ -321,6 +342,55 @@ export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
       }
     }
   }, [camera, view, w, h, selected]);
+
+  // Drives the animation loop only while something is actually moving. A map
+  // of static bases costs nothing; a burning one runs at frame rate.
+  useEffect(() => {
+    const layer = effectsRef.current;
+    const step = (time: number) => {
+      const delta = lastFrameRef.current ? Math.min(64, time - lastFrameRef.current) : 16;
+      lastFrameRef.current = time;
+      layer.update(delta);
+      forceDraw((n) => (n + 1) % 1_000_000);
+      frameRef.current = layer.busy ? window.requestAnimationFrame(step) : null;
+    };
+    if (layer.busy && frameRef.current === null) {
+      lastFrameRef.current = 0;
+      frameRef.current = window.requestAnimationFrame(step);
+    }
+    return () => {
+      if (frameRef.current !== null) {
+        window.cancelAnimationFrame(frameRef.current);
+        frameRef.current = null;
+      }
+    };
+  });
+
+  // Until combat exists, effects can be exercised from the console:
+  //   wwrBurn(x, y)  - set a plot alight
+  //   wwrBlast(x, y) - play the destruction ring
+  useEffect(() => {
+    const layer = effectsRef.current;
+    const w = window as unknown as Record<string, unknown>;
+    w.wwrBurn = (x: number, y: number, minutes = 5) => {
+      const sources: EffectSource[] = [
+        {x, y, kind: 'smoke', intensity: 1, until: Date.now() + minutes * 60000},
+      ];
+      layer.sync(sources, Date.now());
+      layer.sync([...sources, {x, y, kind: 'fire', intensity: 0.8, until: Date.now() + minutes * 60000}], Date.now());
+      forceDraw((n) => n + 1);
+      return `burning ${x},${y}`;
+    };
+    w.wwrBlast = (x: number, y: number) => {
+      layer.addBlast(x, y);
+      forceDraw((n) => n + 1);
+      return `blast ${x},${y}`;
+    };
+    return () => {
+      delete w.wwrBurn;
+      delete w.wwrBlast;
+    };
+  }, []);
 
   async function moveHere() {
     if (!selected) return;
