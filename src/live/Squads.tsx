@@ -21,6 +21,7 @@ import {
   assetPower,
 } from '../../shared/assets';
 import {ApiError, type SquadView, api} from '../net/api';
+import AssetIcon from './AssetIcon';
 
 const ROLE_TINT: Record<string, string> = {
   breach: 'text-red-300',
@@ -54,15 +55,20 @@ function Slot({
       }`}
     >
       {asset ? (
-        <>
-          <span className="truncate text-xs font-semibold text-neutral-100">{asset.name}</span>
-          <span className={`truncate text-[10px] ${ROLE_TINT[asset.role]}`}>
-            {ROLE_LABEL[asset.role]}
+        <span className="flex items-center gap-1.5">
+          <AssetIcon asset={asset} size={26} />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-xs font-semibold text-neutral-100">
+              {asset.name}
+            </span>
+            <span className={`block truncate text-[10px] ${ROLE_TINT[asset.role]}`}>
+              {ROLE_LABEL[asset.role]}
+            </span>
+            <span className="block font-mono text-[10px] text-neutral-600">
+              lift {asset.lift} · lv {level}
+            </span>
           </span>
-          <span className="font-mono text-[10px] text-neutral-600">
-            lift {asset.lift} · lv {level}
-          </span>
-        </>
+        </span>
       ) : (
         <span className="text-center text-[11px] text-neutral-700">empty</span>
       )}
@@ -262,8 +268,9 @@ export default function Squads({onClose}: {onClose: () => void}) {
                               : 'border-neutral-900 bg-neutral-950/50 opacity-40'
                           }`}
                         >
-                          <span className="flex items-baseline justify-between gap-2">
-                            <span className="truncate text-xs font-semibold text-neutral-100">
+                          <span className="flex items-center gap-2">
+                            <AssetIcon asset={asset} size={22} />
+                            <span className="min-w-0 flex-1 truncate text-xs font-semibold text-neutral-100">
                               {asset.name}
                             </span>
                             <span className="shrink-0 font-mono text-[10px] text-neutral-500">

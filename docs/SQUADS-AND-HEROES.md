@@ -389,3 +389,50 @@ who does trademark law before the catalogue ships, and worth knowing that the
 fallback is cheap: the designations (M1A2, AH-64E, MQ-9A) carry far less
 trademark weight than the popular names (Abrams, Apache, Reaper), so the whole
 catalogue can be renamed to designations in one data file if it ever has to be.
+
+---
+
+## 11. What an asset looks like
+
+Three places need a picture and they are not the same problem: a roster card
+around 64px browsed at leisure, the map as small as 12px and moving among fifty
+other things, and a battle in the middle where facing decides the reading. One
+image cannot be all three - art that reads on a card is grey mud at map scale,
+and a sprite that reads at map scale is a smudge on a card.
+
+So it is layered exactly the way base skins are. Underneath, a **category
+silhouette** drawn from vector paths in `shared/assetArt.ts`: free, sharp at
+any size, identical in the browser and on the canvas, and carrying no design
+rights. Over it, **per-asset art if and when it is bought**, the same way
+`SkinArt` sits over a base's drawn recipe.
+
+The silhouettes are **top-down**, because that is the view the map uses and the
+map is the view that cannot compromise. A top-down tank still reads as a tank
+on a card; a three-quarter tank reads as nothing from above. They point up, in
+a 24x24 box, so the map can rotate one to a heading with a single transform.
+
+Each has to differ in **gross form**, not detail, because at fourteen pixels
+only the outline survives. A wide tracked box, a rotor disc, a swept delta, a
+tube cluster, a long thin wing, a narrow blade. Six variations on a rectangle
+would not work, and the first attempt proved it - a tall narrow armour shape
+read as a bottle and was indistinguishable from the ship at map size.
+
+**On the map an asset takes its owner's allegiance colour**, because there the
+only question is whose it is - the same rule the bases already follow. On a
+roster card everything belongs to the player, so the colour says what the thing
+is instead.
+
+### If per-asset art is commissioned
+
+Do not buy photographs. Real photographs of military hardware are copyrighted
+by whoever took them; US federal images are public domain in the US and cover
+perhaps twenty of the seventy-two, and every Leopard, K2, Merkava, Rafale and
+Type 055 image is a manufacturer's press photo. On a game that sells things
+that is not a risk worth carrying.
+
+What to buy instead is one consistent set of **top-down three-quarter renders**,
+512x512, transparent background, lit from the same angle, in the register the
+base skins already use. The brief in `docs/CHATGPT-SKIN-BRIEF.md` transfers
+almost unchanged - the framing rule, the plain-light-background rule and the
+content rules are the same. Art drops in per asset; anything without it keeps
+the silhouette forever, so the catalogue is never half-broken.

@@ -11,6 +11,7 @@
  * you nothing; the point of the row is comparison.
  */
 import {useMemo, useState} from 'react';
+import AssetIcon from './AssetIcon';
 import {
   ASSETS,
   ATTRIBUTE_MAX,
@@ -85,8 +86,11 @@ function Card({asset}: {asset: Asset}) {
           : 'border-neutral-800 bg-neutral-950'
       }`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
+      <div className="flex items-start gap-2">
+        <span className="mt-0.5 shrink-0">
+          <AssetIcon asset={asset} size={34} />
+        </span>
+        <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-neutral-100">{asset.name}</p>
           <p className="truncate font-mono text-[10px] text-neutral-600">
             {asset.code} · {asset.operator}
