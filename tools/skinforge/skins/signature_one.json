@@ -1,0 +1,24 @@
+{
+  "id": "signature_one",
+
+  "//source": "A cut-out PNG of the base alone, in tools/skinforge/art/.",
+  "source": "art/signature_one.png",
+
+  "frame": {"w": 512, "h": 640, "frames": 24, "fps": 12},
+  "cols": 6,
+
+  "//relief": "How much real depth is pulled out of the flat art. Raise height until the light rakes; too far and the image tears.",
+  "relief": {"subdivisions": 6, "height": 0.32, "mid_level": 0.15},
+
+  "//emission": "Brightest parts of the image glow. Lanterns and windows want this; a pale wall does not.",
+  "emission": 2.4,
+
+  "//motion": "bob is in footprint units, sway in degrees, spin in full turns per loop.",
+  "motion": {"bob": 0.02, "sway": 2.0, "spin": 0.0},
+
+  "light": {"key_energy": 4.0, "key_tilt": 48.0, "key_turn": -38.0, "fill_energy": 1.2, "ambient": 0.35},
+  "samples": 64,
+
+  "//framing": "lift nudges the subject down the frame if the headroom looks wrong.",
+  "framing": {"lift": 0.0}
+}
