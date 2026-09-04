@@ -7,6 +7,7 @@
  * gets wired to these same endpoints once the foundation is trusted.
  */
 import {type FormEvent, useCallback, useEffect, useRef, useState} from 'react';
+import WorldMap from './WorldMap';
 import {
   ApiError,
   type BaseView,
@@ -36,10 +37,18 @@ function useServerClock(base: BaseView | null) {
   return () => Date.now() + offsetRef.current;
 }
 
+const STARTER_SKINS = [
+  {id: 'desert_fob', name: 'Desert FOB', blurb: 'HESCO barriers and sand berms.', swatch: '#b08248', accent: '#e07a29'},
+  {id: 'arctic_station', name: 'Arctic Station', blurb: 'Radar domes above the treeline.', swatch: '#9fb6c6', accent: '#3fa9d6'},
+  {id: 'jungle_outpost', name: 'Jungle Outpost', blurb: 'Netting and raised platforms.', swatch: '#4e6b3a', accent: '#9fd356'},
+  {id: 'urban_garrison', name: 'Urban Garrison', blurb: 'Blast walls and concrete.', swatch: '#6b6b6b', accent: '#d64545'},
+];
+
 function AuthPanel({onAuthed}: {onAuthed: (player: Player) => void}) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [skin, setSkin] = useState(STARTER_SKINS[0].id);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -48,7 +57,8 @@ function AuthPanel({onAuthed}: {onAuthed: (player: Player) => void}) {
     setBusy(true);
     setError(null);
     try {
-      const result = mode === 'login' ? await api.login(username, password) : await api.register(username, password);
+      const result =
+        mode === 'login' ? await api.login(username, password) : await api.register(username, password, skin);
       onAuthed(result.player);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not reach the server.');
@@ -87,6 +97,34 @@ function AuthPanel({onAuthed}: {onAuthed: (player: Player) => void}) {
             className="mt-1 w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 outline-none focus:border-orange-500"
           />
         </label>
+
+        {mode === 'register' && (
+          <div>
+            <span className="text-xs uppercase tracking-widest text-neutral-500">Base type</span>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {STARTER_SKINS.map((option) => {
+                const active = option.id === skin;
+                return (
+                  <button
+                    type="button"
+                    key={option.id}
+                    onClick={() => setSkin(option.id)}
+                    className={`rounded border p-2 text-left ${active ? 'border-orange-500 bg-orange-950/30' : 'border-neutral-800 bg-neutral-900/60 hover:border-neutral-600'}`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span
+                        className="inline-block h-4 w-4 rounded-sm"
+                        style={{backgroundColor: option.swatch, boxShadow: `inset 0 0 0 2px ${option.accent}`}}
+                      />
+                      <span className="text-sm font-medium text-neutral-100">{option.name}</span>
+                    </span>
+                    <span className="mt-1 block text-[11px] leading-snug text-neutral-500">{option.blurb}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {error && <p className="rounded border border-red-900 bg-red-950/60 px-3 py-2 text-sm text-red-300">{error}</p>}
 
@@ -142,6 +180,7 @@ export default function LiveApp() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [checking, setChecking] = useState(true);
+  const [screen, setScreen] = useState<'base' | 'world'>('base');
 
   const now = useServerClock(base);
 
@@ -203,6 +242,15 @@ export default function LiveApp() {
 
   if (!player) return <AuthPanel onAuthed={setPlayer} />;
 
+  // The map owns the whole viewport - it is a canvas, not a page section.
+  if (screen === 'world') {
+    return (
+      <div className="fixed inset-0">
+        <WorldMap onOpenBase={() => setScreen('base')} />
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-3xl px-5 py-8">
       <header className="flex items-center justify-between">
@@ -210,16 +258,24 @@ export default function LiveApp() {
           <p className="text-xs uppercase tracking-[0.3em] text-orange-500">Forward Operating Base</p>
           <h1 className="text-xl font-semibold text-neutral-100">{base?.name ?? '…'}</h1>
         </div>
-        <button
-          onClick={async () => {
-            await api.logout();
-            setPlayer(null);
-            setBase(null);
-          }}
-          className="text-sm text-neutral-500 underline underline-offset-4 hover:text-neutral-300"
-        >
-          Sign out, {player.username}
-        </button>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setScreen('world')}
+            className="rounded bg-neutral-800 px-3 py-2 text-sm font-medium text-neutral-100 hover:bg-neutral-700"
+          >
+            World map
+          </button>
+          <button
+            onClick={async () => {
+              await api.logout();
+              setPlayer(null);
+              setBase(null);
+            }}
+            className="text-sm text-neutral-500 underline underline-offset-4 hover:text-neutral-300"
+          >
+            Sign out
+          </button>
+        </div>
       </header>
 
       {error && (

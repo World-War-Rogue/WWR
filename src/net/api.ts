@@ -35,6 +35,31 @@ export interface BaseView {
   job: {kind: string; toLevel: number; startedAt: number; completesAt: number} | null;
 }
 
+export interface SkinSpec {
+  id: string;
+  name: string;
+  blurb: string;
+  palette: {ground: string; structure: string; accent: string};
+}
+
+export interface PlacedBase {
+  x: number;
+  y: number;
+  skin: string;
+  username: string;
+  level: number;
+  worldId: number;
+}
+
+export interface WorldView {
+  viewport: {x: number; y: number; w: number; h: number};
+  world: {id: number; name: string; kind: string; extent: number; closesAt: number | null};
+  worlds: Array<{id: number; name: string; kind: string}>;
+  you: {username: string; plot: {x: number; y: number} | null};
+  skins: Record<string, SkinSpec>;
+  bases: PlacedBase[];
+}
+
 export interface Player {
   id: string;
   username: string;
@@ -82,10 +107,10 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   me: () => call<{player: Player}>('/api/me'),
-  register: (username: string, password: string) =>
+  register: (username: string, password: string, skin: string) =>
     call<{player: Player}>('/api/auth/register', {
       method: 'POST',
-      body: JSON.stringify({username, password}),
+      body: JSON.stringify({username, password, skin}),
     }),
   login: (username: string, password: string) =>
     call<{player: Player}>('/api/auth/login', {
@@ -94,6 +119,16 @@ export const api = {
     }),
   logout: () => call<{ok: true}>('/api/auth/logout', {method: 'POST'}),
   base: () => call<BaseView>('/api/base'),
+  world: (x: number, y: number, w: number, h: number, worldId?: number) => {
+    const params = new URLSearchParams({x: String(x), y: String(y), w: String(w), h: String(h)});
+    if (worldId !== undefined) params.set('world', String(worldId));
+    return call<WorldView>(`/api/world?${params.toString()}`);
+  },
+  move: (x: number, y: number, worldId?: number) =>
+    call<{world: {id: number; name: string}; plot: {x: number; y: number}}>('/api/world/move', {
+      method: 'POST',
+      body: JSON.stringify(worldId === undefined ? {x, y} : {x, y, worldId}),
+    }),
   upgrade: (kind: string) =>
     call<BaseView>('/api/base/upgrade', {method: 'POST', body: JSON.stringify({kind})}),
 };

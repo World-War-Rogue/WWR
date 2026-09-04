@@ -4,11 +4,18 @@ import App from './App.tsx';
 import LiveApp from './live/LiveApp.tsx';
 import './index.css';
 
-// The server-backed base lives behind #/live while the foundation is being
+// The server-backed client lives behind #/live while the foundation is being
 // built out. The existing tactical client is untouched at the root URL, so
 // work on real persistence cannot break what is already deployed.
-const isLive = window.location.hash.startsWith('#/live');
+const isLive = () => window.location.hash.startsWith('#/live');
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>{isLive ? <LiveApp /> : <App />}</StrictMode>,
-);
+const root = createRoot(document.getElementById('root')!);
+
+function render() {
+  root.render(<StrictMode>{isLive() ? <LiveApp /> : <App />}</StrictMode>);
+}
+
+// Changing only the hash does not reload the page, so without this a link to
+// #/live from an already-open tab appears to do nothing at all.
+window.addEventListener('hashchange', render);
+render();
