@@ -35,6 +35,8 @@ export interface AllianceRow {
   home_world_id: number;
   open_join: number;
   created_at: number;
+  emblem_tint: string;
+  has_crest: number;
 }
 
 export interface MemberView {
@@ -43,7 +45,7 @@ export interface MemberView {
   power: number;
   commandPost: number;
   joinedAt: number;
-  portrait: {glyph: string; tint: string; image: string | null};
+  portrait: {glyph: string; tint: string; hasImage: boolean};
 }
 
 export interface Membership {
@@ -60,9 +62,12 @@ export async function membershipOf(
     .prepare(
       `SELECT a.id AS id, a.tag AS tag, a.name AS name, a.description AS description,
               a.home_world_id AS home_world_id, a.open_join AS open_join,
-              a.created_at AS created_at, m.rank AS rank
+              a.created_at AS created_at, a.emblem_tint AS emblem_tint,
+              (CASE WHEN ap.alliance_id IS NULL THEN 0 ELSE 1 END) AS has_crest,
+              m.rank AS rank
          FROM alliance_members m
          JOIN alliances a ON a.id = m.alliance_id
+         LEFT JOIN alliance_portraits ap ON ap.alliance_id = a.id
         WHERE m.player_id = ?1`,
     )
     .bind(playerId)
@@ -85,7 +90,7 @@ export async function rosterOf(db: D1Database, allianceId: string): Promise<Memb
     .prepare(
       `SELECT m.player_id AS id, m.rank AS rank, m.joined_at AS joined_at,
               p.username AS username, p.portrait_glyph AS glyph, p.portrait_tint AS tint,
-              pp.data_url AS image
+              (CASE WHEN pp.player_id IS NULL THEN 0 ELSE 1 END) AS image
          FROM alliance_members m
          JOIN players p ON p.id = m.player_id
          LEFT JOIN player_portraits pp ON pp.player_id = m.player_id
@@ -99,7 +104,7 @@ export async function rosterOf(db: D1Database, allianceId: string): Promise<Memb
       username: string;
       glyph: string;
       tint: string;
-      image: string | null;
+      image: number;
     }>();
 
   const rows = members.results ?? [];
@@ -138,7 +143,7 @@ export async function rosterOf(db: D1Database, allianceId: string): Promise<Memb
         power: totalPower(levels),
         commandPost: levels.command_post,
         joinedAt: row.joined_at,
-        portrait: {glyph: row.glyph, tint: row.tint, image: row.image},
+        portrait: {glyph: row.glyph, tint: row.tint, hasImage: row.image === 1},
       };
     })
     // Leaders first, then by power. An alliance roster is a chain of command

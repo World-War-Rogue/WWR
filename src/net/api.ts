@@ -15,6 +15,8 @@ export interface AllianceSummary {
   description: string | null;
   openJoin: boolean;
   members: number;
+  emblemTint: string;
+  hasCrest: boolean;
   /** Callsign of whoever runs it. Null only if the leader row is missing. */
   leader: string | null;
   /** Every member's power added together. */
@@ -27,7 +29,7 @@ export interface AllianceMember {
   power: number;
   commandPost: number;
   joinedAt: number;
-  portrait: {glyph: string; tint: string; image: string | null};
+  portrait: {glyph: string; tint: string; hasImage: boolean};
 }
 
 export interface AllianceView {
@@ -40,6 +42,8 @@ export interface AllianceView {
     openJoin: boolean;
     createdAt: number;
     capacity: number;
+    emblemTint: string;
+    hasCrest: boolean;
   } | null;
   rank?: 'leader' | 'officer' | 'member';
   roster?: AllianceMember[];
@@ -49,7 +53,7 @@ export interface AllianceView {
 
 export interface Profile {
   username: string;
-  portrait: {glyph: string; tint: string; image: string | null};
+  portrait: {glyph: string; tint: string; hasImage: boolean};
   motto: string | null;
   country: string;
   homeWorldId: number | null;
@@ -245,6 +249,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({username, action}),
     }),
+  setAllianceCrest: (body: {image?: string | null; tint?: string}) =>
+    call<AllianceView>('/api/alliance/crest', {method: 'POST', body: JSON.stringify(body)}),
   allianceSettings: (body: {description: string; openJoin: boolean}) =>
     call<AllianceView>('/api/alliance/settings', {
       method: 'POST',

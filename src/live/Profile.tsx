@@ -23,30 +23,36 @@ import {nameFor} from './countries';
 import {drawGlyph} from './cosmeticsPaint';
 import {skinSpec} from './skins';
 
-/** The portrait itself: a glyph on a tint, drawn rather than loaded. */
+/**
+ * A portrait: an uploaded picture when there is one, a drawn glyph when not.
+ *
+ * `src` is a URL rather than the image data. Inlining pictures into a list
+ * payload means a hundred-member roster ships two megabytes of base64 before
+ * the first name appears; as URLs the browser fetches them in parallel and
+ * caches them, and the roster renders straight away.
+ */
 export function Portrait({
   glyph,
   tint,
-  image,
+  src,
   size = 88,
 }: {
   glyph: string;
   tint: string;
-  image?: string | null;
+  src?: string | null;
   size?: number;
 }) {
   const ref = useRef<HTMLCanvasElement | null>(null);
+  const [failed, setFailed] = useState(false);
 
-  // An uploaded picture is an <img>, not a canvas draw. The browser decodes and
-  // scales it far better than a hand-rolled draw would, and it keeps working if
-  // the canvas context is ever unavailable.
-  if (image) {
+  if (src && !failed) {
     return (
       <img
-        src={image}
+        src={src}
         alt=""
         width={size}
         height={size}
+        onError={() => setFailed(true)}
         style={{width: size, height: size, objectFit: 'cover'}}
         className="shrink-0 rounded-lg border border-neutral-700"
       />
@@ -123,6 +129,9 @@ export default function Profile({
   const [motto, setMotto] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Bumped after an upload so the browser refetches instead of showing the
+  // cached copy of the picture that was just replaced.
+  const [stamp, setStamp] = useState(0);
   const [pending, setPending] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
@@ -192,11 +201,19 @@ export default function Profile({
         <>
           <div className="mt-6 flex items-start gap-4">
             <div className="relative shrink-0">
-              <Portrait glyph={glyph} tint={tint} image={profile.portrait.image} />
+              <Portrait
+                glyph={glyph}
+                tint={tint}
+                src={
+                  profile.portrait.hasImage
+                    ? `/api/portrait?name=${encodeURIComponent(profile.username)}&v=${stamp}`
+                    : null
+                }
+              />
               {editable && (
                 <button
                   type="button"
-                  title={profile.portrait.image ? 'Change your picture' : 'Add a picture'}
+                  title={profile.portrait.hasImage ? 'Change your picture' : 'Add a picture'}
                   onClick={() => fileRef.current?.click()}
                   className="absolute -bottom-2 -right-2 flex h-7 w-7 items-center justify-center rounded-full border border-neutral-600 bg-neutral-900 text-lg leading-none text-neutral-200 transition hover:border-orange-500 hover:text-orange-300"
                 >
@@ -261,7 +278,10 @@ export default function Profile({
                   setError(null);
                   api
                     .setPortrait(dataUrl)
-                    .then(({profile: saved}) => setProfile(saved))
+                    .then(({profile: saved}) => {
+                      setProfile(saved);
+                      setStamp(Date.now());
+                    })
                     .catch((err) =>
                       setError(
                         err instanceof ApiError ? err.message : 'Could not save that picture.',
@@ -273,13 +293,16 @@ export default function Profile({
             </div>
           )}
 
-          {editable && profile.portrait.image && !pending && (
+          {editable && profile.portrait.hasImage && !pending && (
             <button
               onClick={() => {
                 setBusy(true);
                 api
                   .setPortrait(null)
-                  .then(({profile: saved}) => setProfile(saved))
+                  .then(({profile: saved}) => {
+                    setProfile(saved);
+                    setStamp(Date.now());
+                  })
                   .catch(() => setError('Could not remove that picture.'))
                   .finally(() => setBusy(false));
               }}

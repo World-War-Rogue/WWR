@@ -10,7 +10,7 @@
  * refuses anything else, so hiding a control a player cannot use saves them a
  * click - it does not make the rule.
  */
-import {type FormEvent, useCallback, useEffect, useState} from 'react';
+import {type FormEvent, useCallback, useEffect, useRef, useState} from 'react';
 import {
   ALLIANCE_CAPACITY,
   NAME_RULE,
@@ -26,7 +26,14 @@ import {
   api,
   formatNumber,
 } from '../net/api';
+import {Crest} from './Crest';
+import PortraitCrop from './PortraitCrop';
 import {Portrait} from './Profile';
+import {
+  PORTRAIT_ACCEPT,
+  PORTRAIT_MAX_SOURCE_BYTES,
+  PORTRAIT_TINTS,
+} from '../../shared/portraits';
 
 function RankBadge({rank}: {rank: 'leader' | 'officer' | 'member'}) {
   const tone =
@@ -55,6 +62,9 @@ export default function Alliance({
   const [browse, setBrowse] = useState<AllianceSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [stamp, setStamp] = useState(0);
+  const [pendingCrest, setPendingCrest] = useState<File | null>(null);
+  const crestRef = useRef<HTMLInputElement | null>(null);
 
   const [tag, setTag] = useState('');
   const [name, setName] = useState('');
@@ -115,11 +125,37 @@ export default function Alliance({
   return (
     <div className="mx-auto max-w-3xl px-5 py-8">
       <header className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-orange-500">Alliance</p>
-          <h1 className="text-xl font-semibold text-neutral-100">
-            {alliance ? `[${alliance.tag}] ${alliance.name}` : 'Unaffiliated'}
-          </h1>
+        <div className="flex min-w-0 items-start gap-3">
+          {alliance && (
+            <div className="relative shrink-0">
+              <Crest
+                tag={alliance.tag}
+                tint={alliance.emblemTint}
+                src={
+                  alliance.hasCrest
+                    ? `/api/alliance/crest?id=${encodeURIComponent(alliance.id)}&v=${stamp}`
+                    : null
+                }
+                size={64}
+              />
+              {rank === 'leader' && (
+                <button
+                  type="button"
+                  title={alliance.hasCrest ? 'Change the crest' : 'Add a crest'}
+                  onClick={() => crestRef.current?.click()}
+                  className="absolute -bottom-2 -right-2 flex h-7 w-7 items-center justify-center rounded-full border border-neutral-600 bg-neutral-900 text-lg leading-none text-neutral-200 transition hover:border-orange-500 hover:text-orange-300"
+                >
+                  +
+                </button>
+              )}
+            </div>
+          )}
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-[0.3em] text-orange-500">Alliance</p>
+            <h1 className="truncate text-xl font-semibold text-neutral-100">
+              {alliance ? `[${alliance.tag}] ${alliance.name}` : 'Unaffiliated'}
+            </h1>
+          </div>
         </div>
         <button
           onClick={onClose}
@@ -128,6 +164,39 @@ export default function Alliance({
           Done
         </button>
       </header>
+
+      <input
+        ref={crestRef}
+        type="file"
+        accept={PORTRAIT_ACCEPT}
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = '';
+          if (!file) return;
+          if (file.size > PORTRAIT_MAX_SOURCE_BYTES) {
+            setError('That picture is too large. Try one under 16MB.');
+            return;
+          }
+          setError(null);
+          setPendingCrest(file);
+        }}
+      />
+
+      {pendingCrest && (
+        <div className="mt-6">
+          <PortraitCrop
+            file={pendingCrest}
+            onCancel={() => setPendingCrest(null)}
+            onDone={(dataUrl) => {
+              setPendingCrest(null);
+              void run(() => api.setAllianceCrest({image: dataUrl})).then(() =>
+                setStamp(Date.now()),
+              );
+            }}
+          />
+        </div>
+      )}
 
       {error && (
         <p className="mt-6 rounded border border-red-900 bg-red-950/60 px-3 py-2 text-sm text-red-300">
@@ -200,7 +269,11 @@ export default function Alliance({
                   <Portrait
                     glyph={m.portrait.glyph}
                     tint={m.portrait.tint}
-                    image={m.portrait.image}
+                    src={
+                      m.portrait.hasImage
+                        ? `/api/portrait?name=${encodeURIComponent(m.username)}`
+                        : null
+                    }
                     size={40}
                   />
                   <div className="min-w-0 flex-1">
@@ -302,6 +375,43 @@ export default function Alliance({
                 />
                 Anyone may join without applying
               </label>
+              <p className="mt-4 text-xs uppercase tracking-wider text-neutral-500">
+                Crest colour
+              </p>
+              <p className="mt-1 text-xs text-neutral-600">
+                Used behind the tag when no picture is set.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {PORTRAIT_TINTS.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    title={t.name}
+                    disabled={busy}
+                    onClick={() => void run(() => api.setAllianceCrest({tint: t.id}))}
+                    style={{background: t.background}}
+                    className={`h-8 w-8 rounded border transition ${
+                      alliance.emblemTint === t.id
+                        ? 'border-orange-400 ring-2 ring-orange-500/50'
+                        : 'border-neutral-700'
+                    }`}
+                  />
+                ))}
+              </div>
+
+              {alliance.hasCrest && (
+                <button
+                  disabled={busy}
+                  onClick={() =>
+                    void run(() => api.setAllianceCrest({image: null})).then(() =>
+                      setStamp(Date.now()),
+                    )
+                  }
+                  className="mt-3 text-xs text-neutral-500 underline underline-offset-4 hover:text-neutral-300"
+                >
+                  Remove crest
+                </button>
+              )}
             </section>
           )}
 
@@ -395,13 +505,25 @@ export default function Alliance({
                     className="rounded border border-neutral-800 bg-neutral-900/60 p-3"
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate font-semibold text-neutral-100">
-                          <span className="font-mono text-orange-400">[{a.tag}]</span> {a.name}
-                        </p>
-                        <p className="mt-0.5 truncate text-xs text-neutral-500">
-                          Led by {a.leader ?? 'nobody'}
-                        </p>
+                      <div className="flex min-w-0 items-start gap-3">
+                        <Crest
+                          tag={a.tag}
+                          tint={a.emblemTint}
+                          src={
+                            a.hasCrest
+                              ? `/api/alliance/crest?id=${encodeURIComponent(a.id)}`
+                              : null
+                          }
+                          size={48}
+                        />
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold text-neutral-100">
+                            <span className="font-mono text-orange-400">[{a.tag}]</span> {a.name}
+                          </p>
+                          <p className="mt-0.5 truncate text-xs text-neutral-500">
+                            Led by {a.leader ?? 'nobody'}
+                          </p>
+                        </div>
                       </div>
                       <button
                         disabled={busy || a.members >= ALLIANCE_CAPACITY}

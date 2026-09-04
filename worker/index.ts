@@ -22,10 +22,12 @@ import {
   type ProfileEdit,
   clearPortrait,
   loadProfile,
+  imageResponse,
   savePortrait,
   validateEdit,
   validatePortrait,
 } from './profile';
+import {isPortraitTint} from '../shared/portraits';
 import {
   COSMETIC_SLOTS,
   checkLoadout,
@@ -950,6 +952,8 @@ async function handleAlliance(env: Env, player: PlayerRow): Promise<Response> {
       openJoin: alliance.open_join === 1,
       createdAt: alliance.created_at,
       capacity: ALLIANCE_CAPACITY,
+      emblemTint: alliance.emblem_tint,
+      hasCrest: alliance.has_crest === 1,
     },
     rank,
     roster,
@@ -979,7 +983,9 @@ async function handleBrowseAlliances(env: Env, player: PlayerRow): Promise<Respo
   const [list, levels] = await Promise.all([
     env.DB.prepare(
       `SELECT a.id AS id, a.tag AS tag, a.name AS name, a.description AS description,
-              a.open_join AS open_join, COUNT(m.player_id) AS members,
+              a.open_join AS open_join, a.emblem_tint AS emblem_tint,
+              (CASE WHEN ap.alliance_id IS NULL THEN 0 ELSE 1 END) AS has_crest,
+              COUNT(m.player_id) AS members,
               (SELECT p.username
                  FROM alliance_members lm
                  JOIN players p ON p.id = lm.player_id
@@ -987,6 +993,7 @@ async function handleBrowseAlliances(env: Env, player: PlayerRow): Promise<Respo
                 LIMIT 1) AS leader
          FROM alliances a
          LEFT JOIN alliance_members m ON m.alliance_id = a.id
+         LEFT JOIN alliance_portraits ap ON ap.alliance_id = a.id
         WHERE a.home_world_id = ?1
         GROUP BY a.id
         LIMIT 100`,
@@ -1000,6 +1007,8 @@ async function handleBrowseAlliances(env: Env, player: PlayerRow): Promise<Respo
         open_join: number;
         members: number;
         leader: string | null;
+        emblem_tint: string;
+        has_crest: number;
       }>(),
     env.DB.prepare(
       `SELECT m.alliance_id AS aid, b.player_id AS pid, b.kind AS kind, b.level AS level
@@ -1047,6 +1056,8 @@ async function handleBrowseAlliances(env: Env, player: PlayerRow): Promise<Respo
       members: r.members,
       leader: r.leader,
       power: powerByAlliance.get(r.id) ?? 0,
+      emblemTint: r.emblem_tint,
+      hasCrest: r.has_crest === 1,
     }))
     // Strongest first. Somebody browsing is looking for the alliance worth
     // joining, and that is the order that answers it.
@@ -1370,6 +1381,94 @@ async function handleAllianceSettings(
   return handleAlliance(env, player);
 }
 
+/** A player's uploaded portrait, as an image rather than as JSON. */
+async function handlePortraitImage(request: Request, env: Env): Promise<Response> {
+  const name = new URL(request.url).searchParams.get('name');
+  if (!name) return fail(400, 'Which player?');
+
+  const row = await env.DB.prepare(
+    `SELECT pp.mime AS mime, pp.data_url AS data_url, pp.updated_at AS updated_at
+       FROM players p
+       JOIN player_portraits pp ON pp.player_id = p.id
+      WHERE p.username = ?1 COLLATE NOCASE`,
+  )
+    .bind(name)
+    .first<{mime: string; data_url: string; updated_at: number}>();
+  if (!row) return fail(404, 'No portrait.');
+
+  return imageResponse(request, row.data_url, row.mime, row.updated_at);
+}
+
+/** An alliance's uploaded crest. */
+async function handleAllianceCrestImage(request: Request, env: Env): Promise<Response> {
+  const id = new URL(request.url).searchParams.get('id');
+  if (!id) return fail(400, 'Which alliance?');
+
+  const row = await env.DB.prepare(
+    `SELECT mime, data_url, updated_at FROM alliance_portraits WHERE alliance_id = ?1`,
+  )
+    .bind(id)
+    .first<{mime: string; data_url: string; updated_at: number}>();
+  if (!row) return fail(404, 'No crest.');
+
+  return imageResponse(request, row.data_url, row.mime, row.updated_at);
+}
+
+/**
+ * Sets or removes the alliance crest, and its fallback colour.
+ *
+ * Leaders only. A crest is the alliance's identity in every list it appears
+ * in, and letting an officer change it means the thing other players recognise
+ * an alliance by can be altered by somebody who did not found it.
+ */
+async function handleAllianceCrest(
+  request: Request,
+  env: Env,
+  player: PlayerRow,
+): Promise<Response> {
+  const membership = await membershipOf(env.DB, player.id);
+  if (!membership) return fail(409, 'You are not in an alliance.');
+  if (membership.rank !== 'leader') return fail(403, 'Leaders only.');
+
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  if (!body) return fail(400, 'Nothing received.');
+
+  if (typeof body.tint === 'string' && isPortraitTint(body.tint)) {
+    await env.DB.prepare(`UPDATE alliances SET emblem_tint = ?2 WHERE id = ?1`)
+      .bind(membership.alliance.id, body.tint)
+      .run();
+  }
+
+  if (body.image === null) {
+    await env.DB.prepare(`DELETE FROM alliance_portraits WHERE alliance_id = ?1`)
+      .bind(membership.alliance.id)
+      .run();
+    return handleAlliance(env, player);
+  }
+
+  if (body.image !== undefined) {
+    const result = validatePortrait(body.image);
+    if (!result.ok) return fail(400, result.error);
+    await env.DB.prepare(
+      `INSERT INTO alliance_portraits (alliance_id, mime, data_url, bytes, updated_at)
+       VALUES (?1, ?2, ?3, ?4, ?5)
+       ON CONFLICT(alliance_id) DO UPDATE SET
+         mime = excluded.mime, data_url = excluded.data_url,
+         bytes = excluded.bytes, updated_at = excluded.updated_at`,
+    )
+      .bind(
+        membership.alliance.id,
+        result.mime,
+        result.dataUrl,
+        result.bytes,
+        Date.now(),
+      )
+      .run();
+  }
+
+  return handleAlliance(env, player);
+}
+
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
@@ -1404,6 +1503,12 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
 
   if (endpoint === 'POST /api/base/upgrade') return handleStartUpgrade(request, env, player);
+
+  if (endpoint === 'GET /api/portrait') return handlePortraitImage(request, env);
+
+  if (endpoint === 'GET /api/alliance/crest') return handleAllianceCrestImage(request, env);
+
+  if (endpoint === 'POST /api/alliance/crest') return handleAllianceCrest(request, env, player);
 
   if (endpoint === 'GET /api/alliance') return handleAlliance(env, player);
 

@@ -29,8 +29,12 @@ import {
 
 export interface PublicProfile {
   username: string;
-  /** `image` is null unless they have uploaded one; the glyph is the fallback. */
-  portrait: {glyph: string; tint: string; image: string | null};
+  /**
+   * `hasImage` says an uploaded picture exists; it is fetched from
+   * /api/portrait rather than carried here, so a roster of a hundred does not
+   * ship two megabytes of base64 before the first name appears.
+   */
+  portrait: {glyph: string; tint: string; hasImage: boolean};
   motto: string | null;
   /** ISO 3166-1 alpha-2. The client turns it into a flag and a name. */
   country: string;
@@ -59,7 +63,7 @@ interface Row {
   home_world_id: number | null;
   plot_x: number | null;
   plot_y: number | null;
-  portrait_image: string | null;
+  portrait_image: number | null;
   alliance_tag: string | null;
   alliance_name: string | null;
 }
@@ -81,7 +85,7 @@ export async function loadProfile(
               p.motto AS motto, p.approved_at AS approved_at,
               b.name AS base_name, b.skin AS skin, b.home_world_id AS home_world_id,
               pl.plot_x AS plot_x, pl.plot_y AS plot_y,
-              pp.data_url AS portrait_image,
+              (CASE WHEN pp.player_id IS NULL THEN NULL ELSE 1 END) AS portrait_image,
               al.tag AS alliance_tag, al.name AS alliance_name
          FROM players p
          LEFT JOIN bases b ON b.player_id = p.id
@@ -113,7 +117,7 @@ export async function loadProfile(
     portrait: {
       glyph: isPortraitGlyph(row.portrait_glyph) ? row.portrait_glyph : DEFAULT_PORTRAIT.glyph,
       tint: isPortraitTint(row.portrait_tint) ? row.portrait_tint : DEFAULT_PORTRAIT.tint,
-      image: row.portrait_image,
+      hasImage: row.portrait_image !== null,
     },
     motto: row.motto,
     country: row.country,
@@ -279,4 +283,48 @@ export async function savePortrait(
 /** Removes a portrait. The player falls back to their glyph, never to nothing. */
 export async function clearPortrait(db: D1Database, playerId: string): Promise<void> {
   await db.prepare(`DELETE FROM player_portraits WHERE player_id = ?1`).bind(playerId).run();
+}
+
+/* -------------------------------------------------------------------------- */
+/* Serving images                                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Turns a stored data URL back into a real image response.
+ *
+ * Images are served from an endpoint rather than inlined into list payloads.
+ * A hundred-member roster carrying base64 portraits is roughly two megabytes
+ * of JSON that has to arrive before a single name appears; as separate
+ * requests the browser fetches them in parallel, caches them, and the roster
+ * renders immediately.
+ *
+ * The ETag is the update timestamp, so a portrait that has not changed comes
+ * back as a 304 and a portrait that has changed is picked up on the next load
+ * rather than after a cache expiry.
+ */
+export function imageResponse(
+  request: Request,
+  dataUrl: string,
+  mime: string,
+  updatedAt: number,
+): Response {
+  const etag = `"${updatedAt.toString(36)}"`;
+  if (request.headers.get('If-None-Match') === etag) {
+    return new Response(null, {status: 304, headers: {ETag: etag}});
+  }
+
+  const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+
+  return new Response(bytes, {
+    headers: {
+      'Content-Type': mime,
+      ETag: etag,
+      // Private: these are behind a session, and a shared cache holding them
+      // would serve one player's portrait from another player's request.
+      'Cache-Control': 'private, max-age=60',
+    },
+  });
 }
