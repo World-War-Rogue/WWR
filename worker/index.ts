@@ -4,6 +4,7 @@
  * Requests to /api/* are handled here; everything else falls through to the
  * static assets binding, which serves the built React client.
  */
+import {handleAdminRequests} from './admin';
 import {
   SESSION_TTL_MS,
   hashPassword,
@@ -14,6 +15,15 @@ import {
   validateCredentials,
   verifyPassword,
 } from './auth';
+import {
+  type MailerConfig,
+  CALLSIGN_RULE,
+  approvalEmail,
+  decisionEmail,
+  sendMail,
+  validateAccessRequest,
+  validateCallsign,
+} from './signup';
 import {
   assignHomeWorld,
   basesInViewport,
@@ -45,6 +55,12 @@ export interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
   DEBUG_ERRORS?: string;
+  /** Set with: wrangler secret put RESEND_API_KEY */
+  RESEND_API_KEY?: string;
+  MAIL_FROM?: string;
+  OWNER_EMAIL?: string;
+  /** Set with: wrangler secret put ADMIN_KEY */
+  ADMIN_KEY?: string;
 }
 
 const RESOURCES: ResourceKind[] = ['fuel', 'steel', 'munitions', 'alloy'];
@@ -247,30 +263,244 @@ function baseView(state: NonNullable<Awaited<ReturnType<typeof settleAndLoad>>>,
   };
 }
 
-async function handleRegister(request: Request, env: Env): Promise<Response> {
-  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
-  const parsed = validateCredentials(body);
-  if (!parsed.ok) return fail(400, parsed.error);
-  const {username, password} = parsed.value;
-  const skin: SkinId = isSkinId(body?.skin) ? body.skin : SKIN_IDS[0];
+/**
+ * Access request handlers.
+ *
+ * Registering no longer creates an account. It creates a request, which is
+ * approved or declined from a link in an email. An account exists only after
+ * approval.
+ */
+
+/** Nobody may hold more than one pending request, and the queue is capped. */
+const MAX_PENDING = 200;
+
+async function handleCallsignCheck(request: Request, env: Env): Promise<Response> {
+  const name = new URL(request.url).searchParams.get('name') ?? '';
+  const parsed = validateCallsign(name);
+  if (!parsed.ok) return json({available: false, reason: parsed.error});
+
+  const key = parsed.value.toLowerCase();
+  const [player, pending] = await Promise.all([
+    env.DB.prepare(`SELECT 1 AS hit FROM players WHERE username_key = ?1`).bind(key).first(),
+    env.DB.prepare(`SELECT 1 AS hit FROM signups WHERE username_key = ?1 AND status = 'pending'`)
+      .bind(key)
+      .first(),
+  ]);
+
+  return player || pending
+    ? json({available: false, reason: 'That callsign is taken.'})
+    : json({available: true});
+}
+
+async function handleRequestAccess(request: Request, env: Env): Promise<Response> {
   const now = Date.now();
-  const usernameKey = username.toLowerCase();
+  const parsed = validateAccessRequest(await request.json().catch(() => null));
+  if (!parsed.ok) return fail(400, parsed.error);
+  const req = parsed.value;
 
-  const existing = await env.DB.prepare(`SELECT id FROM players WHERE username_key = ?1`)
-    .bind(usernameKey)
-    .first();
-  if (existing) return fail(409, 'That callsign is taken.');
+  const emailKey = req.email.toLowerCase();
+  const usernameKey = req.username.toLowerCase();
 
-  const id = newId();
+  const [callsignTaken, emailKnown, pending] = await Promise.all([
+    env.DB.prepare(
+      `SELECT 1 AS hit FROM players WHERE username_key = ?1
+        UNION SELECT 1 FROM signups WHERE username_key = ?1 AND status = 'pending'`,
+    )
+      .bind(usernameKey)
+      .first(),
+    env.DB.prepare(
+      `SELECT 1 AS hit FROM players WHERE email_key = ?1
+        UNION SELECT 1 FROM signups WHERE email_key = ?1 AND status = 'pending'`,
+    )
+      .bind(emailKey)
+      .first(),
+    env.DB.prepare(`SELECT COUNT(*) AS n FROM signups WHERE status = 'pending'`).first<{n: number}>(),
+  ]);
+
+  // A taken callsign is answered plainly - every callsign is already on show
+  // across the map, so refusing to say costs the applicant a guessing game and
+  // protects nothing.
+  if (callsignTaken) return fail(409, 'That callsign is taken. Choose another.');
+
+  // Whether an address already has an account is not public anywhere, so this
+  // answers exactly as it would for a brand new address.
+  if (emailKnown) {
+    return json({
+      status: 'pending',
+      message: 'Request sent. You will be emailed once it has been reviewed.',
+    });
+  }
+
+  if ((pending?.n ?? 0) >= MAX_PENDING) {
+    return fail(503, 'The request queue is full. Try again later.');
+  }
+
+  const token = newToken();
+
   await env.DB.prepare(
-    `INSERT INTO players (id, username, username_key, password_hash, created_at, last_seen_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
+    `INSERT INTO signups (id, email, email_key, username, username_key, password_hash,
+                          age_confirmed, country, locale, skin, decide_token,
+                          created_at, request_ip)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, ?8, ?9, ?10, ?11, ?12)`,
   )
-    .bind(id, username, usernameKey, await hashPassword(password), now, now)
+    .bind(
+      newId(),
+      req.email,
+      emailKey,
+      req.username,
+      usernameKey,
+      await hashPassword(req.password),
+      req.country,
+      req.locale,
+      req.skin,
+      token,
+      now,
+      request.headers.get('CF-Connecting-IP') ?? null,
+    )
     .run();
-  await seedBase(env, id, username, skin, now);
 
-  return startSession(env, id, username, now);
+  const mailer = mailerFrom(env);
+  if (mailer) {
+    const origin = new URL(request.url).origin;
+    const mail = approvalEmail({
+      username: req.username,
+      email: req.email,
+      country: req.country,
+      origin,
+      token,
+      pendingCount: (pending?.n ?? 0) + 1,
+    });
+    const sent = await sendMail(mailer, mailer.owner, mail.subject, mail.html);
+    // A stored request is not a failure just because the notification did not
+    // go out. It is logged and the request still waits in the queue.
+    if (!sent.ok) console.error('Approval email failed:', sent.error);
+  } else {
+    console.error('RESEND_API_KEY is not configured; approval email not sent.');
+  }
+
+  return json({
+    status: 'pending',
+    message: 'Request sent. You will be emailed once it has been reviewed.',
+  });
+}
+
+/**
+ * Approve or decline, from the link in the notification email.
+ *
+ * Answers HTML rather than JSON: this is opened in a mail client, by a person.
+ */
+async function handleDecision(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const token = url.searchParams.get('token') ?? '';
+  const decision = url.searchParams.get('decision');
+  if (!token || (decision !== 'approve' && decision !== 'decline')) {
+    return page('Bad link', 'That approval link is not valid.');
+  }
+
+  const row = await env.DB.prepare(
+    `SELECT id, email, username, username_key, password_hash, country, locale, skin, status
+       FROM signups WHERE decide_token = ?1`,
+  )
+    .bind(token)
+    .first<{
+      id: string;
+      email: string;
+      username: string;
+      username_key: string;
+      password_hash: string;
+      country: string;
+      locale: string;
+      skin: string;
+      status: string;
+    }>();
+
+  if (!row) return page('Not found', 'That request no longer exists.');
+  if (row.status !== 'pending') {
+    return page('Already decided', `${row.username} was already ${row.status}.`);
+  }
+
+  const now = Date.now();
+  const approved = decision === 'approve';
+
+  if (approved) {
+    const taken = await env.DB.prepare(`SELECT id FROM players WHERE username_key = ?1`)
+      .bind(row.username_key)
+      .first();
+    if (taken) {
+      await env.DB.prepare(
+        `UPDATE signups SET status = 'declined', decided_at = ?2 WHERE id = ?1`,
+      )
+        .bind(row.id, now)
+        .run();
+      return page('Callsign taken', `${row.username} was claimed while this request was waiting.`);
+    }
+
+    const playerId = newId();
+    await env.DB.prepare(
+      `INSERT INTO players (id, username, username_key, password_hash, created_at, last_seen_at,
+                            email, email_key, country, locale, approved_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6, ?7, ?8, ?9, ?5)`,
+    )
+      .bind(
+        playerId,
+        row.username,
+        row.username_key,
+        row.password_hash,
+        now,
+        row.email,
+        row.email.toLowerCase(),
+        row.country,
+        row.locale,
+      )
+      .run();
+    await seedBase(env, playerId, row.username, isSkinId(row.skin) ? row.skin : 'desert_fob', now);
+  }
+
+  // The stored password hash is cleared on decision: an approved request has
+  // handed it to the account, and a declined one has no use for it.
+  await env.DB.prepare(
+    `UPDATE signups SET status = ?2, decided_at = ?3, password_hash = '' WHERE id = ?1`,
+  )
+    .bind(row.id, approved ? 'approved' : 'declined', now)
+    .run();
+
+  const mailer = mailerFrom(env);
+  if (mailer) {
+    const mail = decisionEmail({username: row.username, approved, origin: url.origin});
+    const sent = await sendMail(mailer, row.email, mail.subject, mail.html);
+    if (!sent.ok) console.error('Decision email failed:', sent.error);
+  }
+
+  return page(
+    approved ? 'Approved' : 'Declined',
+    approved
+      ? `${row.username} can now sign in. They have been emailed.`
+      : `${row.username} has been declined and emailed.`,
+  );
+}
+
+function page(title: string, body: string): Response {
+  return new Response(
+    `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+     <title>${title}</title>
+     <div style="font-family:ui-sans-serif,system-ui,sans-serif;background:#0a0c0b;color:#e5e7eb;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px">
+       <div style="max-width:420px">
+         <p style="font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#ea580c;margin:0">World War Rogue</p>
+         <h1 style="font-size:22px;margin:8px 0 10px">${title}</h1>
+         <p style="color:#9ca3af;font-size:14px;margin:0">${body}</p>
+       </div>
+     </div>`,
+    {status: 200, headers: {'Content-Type': 'text/html; charset=utf-8'}},
+  );
+}
+
+function mailerFrom(env: Env): MailerConfig | null {
+  if (!env.RESEND_API_KEY) return null;
+  return {
+    apiKey: env.RESEND_API_KEY,
+    from: env.MAIL_FROM ?? 'World War Rogue <noreply@worldwarrogue.com>',
+    owner: env.OWNER_EMAIL ?? 'support@worldwarrogue.com',
+  };
 }
 
 async function handleLogin(request: Request, env: Env): Promise<Response> {
@@ -460,7 +690,13 @@ async function route(request: Request, env: Env): Promise<Response> {
 
   const endpoint = `${request.method} ${url.pathname}`;
 
-  if (endpoint === 'POST /api/auth/register') return handleRegister(request, env);
+  if (endpoint === 'POST /api/access/request') return handleRequestAccess(request, env);
+
+  if (endpoint === 'GET /api/access/decide') return handleDecision(request, env);
+
+  if (endpoint === 'GET /api/access/callsign') return handleCallsignCheck(request, env);
+
+  if (endpoint === 'GET /api/access/requests') return handleAdminRequests(request, env);
   if (endpoint === 'POST /api/auth/login') return handleLogin(request, env);
 
   if (endpoint === 'POST /api/auth/logout') {

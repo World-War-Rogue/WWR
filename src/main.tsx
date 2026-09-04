@@ -1,21 +1,12 @@
 import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
-import App from './App.tsx';
 import LiveApp from './live/LiveApp.tsx';
 import './index.css';
 
-// The server-backed client lives behind #/live while the foundation is being
-// built out. The existing tactical client is untouched at the root URL, so
-// work on real persistence cannot break what is already deployed.
-const isLive = () => window.location.hash.startsWith('#/live');
-
-const root = createRoot(document.getElementById('root')!);
-
-function render() {
-  root.render(<StrictMode>{isLive() ? <LiveApp /> : <App />}</StrictMode>);
-}
-
-// Changing only the hash does not reload the page, so without this a link to
-// #/live from an already-open tab appears to do nothing at all.
-window.addEventListener('hashchange', render);
-render();
+// The game is closed: the root URL is the front door. Anyone arriving without
+// an account gets sign in or request access, and nothing else.
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <LiveApp />
+  </StrictMode>,
+);

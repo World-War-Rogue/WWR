@@ -107,10 +107,22 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   me: () => call<{player: Player}>('/api/me'),
-  register: (username: string, password: string, skin: string) =>
-    call<{player: Player}>('/api/auth/register', {
+  checkCallsign: (name: string) =>
+    call<{available: boolean; reason?: string}>(
+      `/api/access/callsign?name=${encodeURIComponent(name)}`,
+    ),
+  requestAccess: (body: {
+    email: string;
+    username: string;
+    password: string;
+    country: string;
+    locale: string;
+    skin: string;
+    ageConfirmed: boolean;
+  }) =>
+    call<{status: string; message: string}>('/api/access/request', {
       method: 'POST',
-      body: JSON.stringify({username, password, skin}),
+      body: JSON.stringify(body),
     }),
   login: (username: string, password: string) =>
     call<{player: Player}>('/api/auth/login', {

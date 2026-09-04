@@ -7,8 +7,8 @@
  * gets wired to these same endpoints once the foundation is trusted.
  */
 import {type FormEvent, useCallback, useEffect, useRef, useState} from 'react';
+import Gate from './Gate';
 import WorldMap from './WorldMap';
-import {STARTER_SKINS} from './skins';
 import {
   ApiError,
   type BaseView,
@@ -36,115 +36,6 @@ function useServerClock(base: BaseView | null) {
   }, []);
 
   return () => Date.now() + offsetRef.current;
-}
-
-function AuthPanel({onAuthed}: {onAuthed: (player: Player) => void}) {
-  const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [skin, setSkin] = useState<string>(STARTER_SKINS[0].id);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      const result =
-        mode === 'login' ? await api.login(username, password) : await api.register(username, password, skin);
-      onAuthed(result.player);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not reach the server.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="mx-auto mt-24 w-full max-w-sm px-6">
-      <p className="text-xs uppercase tracking-[0.3em] text-orange-500">World War Rogue</p>
-      <h1 className="mt-2 text-2xl font-semibold text-neutral-100">
-        {mode === 'login' ? 'Report for duty' : 'Establish a callsign'}
-      </h1>
-      <p className="mt-2 text-sm text-neutral-400">
-        Your base runs on the server. It keeps building while you are away.
-      </p>
-
-      <form onSubmit={submit} className="mt-8 space-y-4">
-        <label className="block">
-          <span className="text-xs uppercase tracking-widest text-neutral-500">Callsign</span>
-          <input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            autoComplete="username"
-            className="mt-1 w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 outline-none focus:border-orange-500"
-          />
-        </label>
-        <label className="block">
-          <span className="text-xs uppercase tracking-widest text-neutral-500">Password</span>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-            className="mt-1 w-full rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-neutral-100 outline-none focus:border-orange-500"
-          />
-        </label>
-
-        {mode === 'register' && (
-          <div>
-            <span className="text-xs uppercase tracking-widest text-neutral-500">Base type</span>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              {STARTER_SKINS.map((option) => {
-                const active = option.id === skin;
-                return (
-                  <button
-                    type="button"
-                    key={option.id}
-                    onClick={() => setSkin(option.id)}
-                    className={`rounded border p-2 text-left ${active ? 'border-orange-500 bg-orange-950/30' : 'border-neutral-800 bg-neutral-900/60 hover:border-neutral-600'}`}
-                  >
-                    <span className="flex items-center gap-2">
-                      <span
-                        className="inline-block h-4 w-4 rounded-sm"
-                        style={{
-                          backgroundColor: option.palette.ground,
-                          boxShadow: `inset 0 0 0 2px ${option.palette.accent}`,
-                        }}
-                      />
-                      <span className="text-sm font-medium text-neutral-100">{option.name}</span>
-                    </span>
-                    <span className="mt-1 block text-[11px] leading-snug text-neutral-500">{option.blurb}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {error && <p className="rounded border border-red-900 bg-red-950/60 px-3 py-2 text-sm text-red-300">{error}</p>}
-
-        <button
-          type="submit"
-          disabled={busy}
-          className="w-full rounded bg-orange-600 px-4 py-2 font-semibold text-white disabled:opacity-50"
-        >
-          {busy ? 'Working…' : mode === 'login' ? 'Sign in' : 'Create account'}
-        </button>
-      </form>
-
-      <button
-        onClick={() => {
-          setMode(mode === 'login' ? 'register' : 'login');
-          setError(null);
-        }}
-        className="mt-6 text-sm text-neutral-400 underline underline-offset-4 hover:text-neutral-200"
-      >
-        {mode === 'login' ? 'No callsign yet? Create one.' : 'Already have a callsign? Sign in.'}
-      </button>
-    </div>
-  );
 }
 
 function ResourceBar({base}: {base: BaseView}) {
@@ -237,7 +128,7 @@ export default function LiveApp() {
     return <div className="p-10 text-sm text-neutral-500">Checking your session…</div>;
   }
 
-  if (!player) return <AuthPanel onAuthed={setPlayer} />;
+  if (!player) return <Gate onAuthed={setPlayer} />;
 
   // The map owns the whole viewport - it is a canvas, not a page section.
   if (screen === 'world') {
