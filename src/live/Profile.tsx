@@ -19,7 +19,7 @@ import {
 import {PORTRAIT_ACCEPT, PORTRAIT_MAX_SOURCE_BYTES} from '../../shared/portraits';
 import {ApiError, type Profile as ProfileData, api, formatNumber} from '../net/api';
 import PortraitCrop from './PortraitCrop';
-import {flagFor, nameFor} from './countries';
+import {nameFor} from './countries';
 import {drawGlyph} from './cosmeticsPaint';
 import {skinSpec} from './skins';
 
@@ -206,9 +206,13 @@ export default function Profile({
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-lg font-semibold text-neutral-100">{profile.username}</p>
-              <p className="mt-0.5 text-sm text-neutral-400">
-                {flagFor(profile.country)} {nameFor(profile.country)}
+              <p className="mt-1 flex items-center gap-2 text-sm text-neutral-400">
+                <span className="rounded border border-neutral-700 bg-neutral-900 px-1.5 py-0.5 font-mono text-[10px] tracking-wider text-neutral-300">
+                  {profile.country}
+                </span>
+                {nameFor(profile.country)}
               </p>
+
               {editable ? (
                 <input
                   value={motto}
