@@ -16,7 +16,9 @@ import {
   PORTRAIT_TINTS_BY_ID,
   type PortraitGlyph,
 } from '../../shared/portraits';
+import {PORTRAIT_ACCEPT, PORTRAIT_MAX_SOURCE_BYTES} from '../../shared/portraits';
 import {ApiError, type Profile as ProfileData, api, formatNumber} from '../net/api';
+import PortraitCrop from './PortraitCrop';
 import {flagFor, nameFor} from './countries';
 import {drawGlyph} from './cosmeticsPaint';
 import {skinSpec} from './skins';
@@ -25,14 +27,46 @@ import {skinSpec} from './skins';
 export function Portrait({
   glyph,
   tint,
+  image,
   size = 88,
 }: {
   glyph: string;
   tint: string;
+  image?: string | null;
   size?: number;
 }) {
   const ref = useRef<HTMLCanvasElement | null>(null);
 
+  // An uploaded picture is an <img>, not a canvas draw. The browser decodes and
+  // scales it far better than a hand-rolled draw would, and it keeps working if
+  // the canvas context is ever unavailable.
+  if (image) {
+    return (
+      <img
+        src={image}
+        alt=""
+        width={size}
+        height={size}
+        style={{width: size, height: size, objectFit: 'cover'}}
+        className="shrink-0 rounded-lg border border-neutral-700"
+      />
+    );
+  }
+
+  return <GlyphPortrait glyph={glyph} tint={tint} size={size} canvasRef={ref} />;
+}
+
+function GlyphPortrait({
+  glyph,
+  tint,
+  size,
+  canvasRef: ref,
+}: {
+  glyph: string;
+  tint: string;
+  size: number;
+  canvasRef: {current: HTMLCanvasElement | null};
+}) {
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
@@ -89,6 +123,8 @@ export default function Profile({
   const [motto, setMotto] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<File | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     api
@@ -155,7 +191,19 @@ export default function Profile({
       ) : (
         <>
           <div className="mt-6 flex items-start gap-4">
-            <Portrait glyph={glyph} tint={tint} />
+            <div className="relative shrink-0">
+              <Portrait glyph={glyph} tint={tint} image={profile.portrait.image} />
+              {editable && (
+                <button
+                  type="button"
+                  title={profile.portrait.image ? 'Change your picture' : 'Add a picture'}
+                  onClick={() => fileRef.current?.click()}
+                  className="absolute -bottom-2 -right-2 flex h-7 w-7 items-center justify-center rounded-full border border-neutral-600 bg-neutral-900 text-lg leading-none text-neutral-200 transition hover:border-orange-500 hover:text-orange-300"
+                >
+                  +
+                </button>
+              )}
+            </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-lg font-semibold text-neutral-100">{profile.username}</p>
               <p className="mt-0.5 text-sm text-neutral-400">
@@ -178,6 +226,64 @@ export default function Profile({
               )}
             </div>
           </div>
+
+          <input
+            ref={fileRef}
+            type="file"
+            accept={PORTRAIT_ACCEPT}
+            hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              // Cleared so choosing the same file twice still fires a change.
+              e.target.value = '';
+              if (!file) return;
+              if (file.size > PORTRAIT_MAX_SOURCE_BYTES) {
+                setError('That picture is too large. Try one under 16MB.');
+                return;
+              }
+              setError(null);
+              setPending(file);
+            }}
+          />
+
+          {pending && (
+            <div className="mt-6">
+              <PortraitCrop
+                file={pending}
+                onCancel={() => setPending(null)}
+                onDone={(dataUrl) => {
+                  setPending(null);
+                  setBusy(true);
+                  setError(null);
+                  api
+                    .setPortrait(dataUrl)
+                    .then(({profile: saved}) => setProfile(saved))
+                    .catch((err) =>
+                      setError(
+                        err instanceof ApiError ? err.message : 'Could not save that picture.',
+                      ),
+                    )
+                    .finally(() => setBusy(false));
+                }}
+              />
+            </div>
+          )}
+
+          {editable && profile.portrait.image && !pending && (
+            <button
+              onClick={() => {
+                setBusy(true);
+                api
+                  .setPortrait(null)
+                  .then(({profile: saved}) => setProfile(saved))
+                  .catch(() => setError('Could not remove that picture.'))
+                  .finally(() => setBusy(false));
+              }}
+              className="mt-3 text-xs text-neutral-500 underline underline-offset-4 hover:text-neutral-300"
+            >
+              Remove picture
+            </button>
+          )}
 
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Stat label="Power" value={formatNumber(profile.power)} />

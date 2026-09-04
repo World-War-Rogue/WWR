@@ -32,3 +32,13 @@ Database migrations are applied with `npm run db:migrate`
 - Plot occupancy is enforced by a unique index, not by read-then-write: two
   players moving onto the same square in the same instant must be separated by
   the database, not by a check.
+
+## Type-checking on the device VM
+
+Run tsc as `node --jitless ./node_modules/typescript/lib/tsc.js`.
+
+The VM's node crashes intermittently with a V8 fatal error in the optimizing
+compiler ("unreachable code", turboshaft in the stack). `--no-opt` does not
+prevent it; `--jitless` does. The crash kills the whole shell call, so a script
+that writes files and then type-checks can lose the writes as well - write
+first, check in a separate call.

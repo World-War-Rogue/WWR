@@ -10,7 +10,7 @@ import type {CosmeticItem, CosmeticSlot, Loadout} from '../../shared/cosmetics';
 
 export interface Profile {
   username: string;
-  portrait: {glyph: string; tint: string};
+  portrait: {glyph: string; tint: string; image: string | null};
   motto: string | null;
   country: string;
   homeWorldId: number | null;
@@ -179,6 +179,11 @@ export const api = {
     call<{profile: Profile}>('/api/profile', {
       method: 'POST',
       body: JSON.stringify(edit),
+    }),
+  setPortrait: (image: string | null) =>
+    call<{profile: Profile}>('/api/profile/portrait', {
+      method: 'POST',
+      body: JSON.stringify({image}),
     }),
   upgrade: (kind: string) =>
     call<BaseView>('/api/base/upgrade', {method: 'POST', body: JSON.stringify({kind})}),

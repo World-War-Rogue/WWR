@@ -22,11 +22,15 @@ import {
   isPortraitGlyph,
   isPortraitTint,
   MOTTO_MAX,
+  PORTRAIT_MAX_BYTES,
+  PORTRAIT_MIMES,
+  type PortraitMime,
 } from '../shared/portraits';
 
 export interface PublicProfile {
   username: string;
-  portrait: {glyph: string; tint: string};
+  /** `image` is null unless they have uploaded one; the glyph is the fallback. */
+  portrait: {glyph: string; tint: string; image: string | null};
   motto: string | null;
   /** ISO 3166-1 alpha-2. The client turns it into a flag and a name. */
   country: string;
@@ -55,6 +59,7 @@ interface Row {
   home_world_id: number | null;
   plot_x: number | null;
   plot_y: number | null;
+  portrait_image: string | null;
 }
 
 /**
@@ -73,11 +78,13 @@ export async function loadProfile(
               p.portrait_glyph AS portrait_glyph, p.portrait_tint AS portrait_tint,
               p.motto AS motto, p.approved_at AS approved_at,
               b.name AS base_name, b.skin AS skin, b.home_world_id AS home_world_id,
-              pl.plot_x AS plot_x, pl.plot_y AS plot_y
+              pl.plot_x AS plot_x, pl.plot_y AS plot_y,
+              pp.data_url AS portrait_image
          FROM players p
          LEFT JOIN bases b ON b.player_id = p.id
          LEFT JOIN placements pl
                 ON pl.player_id = p.id AND pl.world_id = b.home_world_id
+         LEFT JOIN player_portraits pp ON pp.player_id = p.id
         WHERE p.username = ?1 COLLATE NOCASE`,
     )
     .bind(username)
@@ -101,6 +108,7 @@ export async function loadProfile(
     portrait: {
       glyph: isPortraitGlyph(row.portrait_glyph) ? row.portrait_glyph : DEFAULT_PORTRAIT.glyph,
       tint: isPortraitTint(row.portrait_tint) ? row.portrait_tint : DEFAULT_PORTRAIT.tint,
+      image: row.portrait_image,
     },
     motto: row.motto,
     country: row.country,
@@ -175,4 +183,92 @@ export function validateEdit(edit: ProfileEdit): EditResult {
     tint: isPortraitTint(edit.tint) ? edit.tint : DEFAULT_PORTRAIT.tint,
     motto,
   };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Uploaded portraits                                                         */
+/* -------------------------------------------------------------------------- */
+
+export type PortraitResult =
+  | {ok: true; mime: PortraitMime; dataUrl: string; bytes: number}
+  | {ok: false; error: string};
+
+/**
+ * Checks an uploaded portrait before it is stored.
+ *
+ * The Workers runtime cannot decode an image, so this cannot confirm the file
+ * is a picture of anything. What it can do is confirm the bytes begin the way
+ * the claimed format begins. Without that check the field accepts any base64 a
+ * client cares to send, and the size cap becomes the only thing between this
+ * table and being general-purpose storage.
+ *
+ * JPEG starts FF D8 FF. WebP is a RIFF container whose fourth word is 'WEBP'.
+ */
+export function validatePortrait(raw: unknown): PortraitResult {
+  if (typeof raw !== 'string') return {ok: false, error: 'No image received.'};
+
+  const comma = raw.indexOf(',');
+  if (!raw.startsWith('data:') || comma < 0) {
+    return {ok: false, error: 'That is not an image.'};
+  }
+
+  const header = raw.slice(5, comma);
+  if (!header.endsWith(';base64')) return {ok: false, error: 'That is not an image.'};
+  const mime = header.slice(0, header.length - 7) as PortraitMime;
+  if (!(PORTRAIT_MIMES as readonly string[]).includes(mime)) {
+    return {ok: false, error: 'Portraits must be WebP or JPEG.'};
+  }
+
+  const body = raw.slice(comma + 1);
+  const padding = body.endsWith('==') ? 2 : body.endsWith('=') ? 1 : 0;
+  const bytes = Math.floor((body.length * 3) / 4) - padding;
+  if (bytes <= 0) return {ok: false, error: 'That image is empty.'};
+  if (bytes > PORTRAIT_MAX_BYTES) {
+    return {ok: false, error: 'That image is too large after cropping.'};
+  }
+
+  let head: string;
+  try {
+    head = atob(body.slice(0, 32));
+  } catch {
+    return {ok: false, error: 'That image could not be read.'};
+  }
+
+  if (mime === 'image/jpeg') {
+    if (
+      head.charCodeAt(0) !== 0xff ||
+      head.charCodeAt(1) !== 0xd8 ||
+      head.charCodeAt(2) !== 0xff
+    ) {
+      return {ok: false, error: 'That file is not really a JPEG.'};
+    }
+  } else if (head.slice(0, 4) !== 'RIFF' || head.slice(8, 12) !== 'WEBP') {
+    return {ok: false, error: 'That file is not really a WebP.'};
+  }
+
+  return {ok: true, mime, dataUrl: raw, bytes};
+}
+
+/** Stores a portrait, replacing whatever was there. */
+export async function savePortrait(
+  db: D1Database,
+  playerId: string,
+  result: Extract<PortraitResult, {ok: true}>,
+  now: number,
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO player_portraits (player_id, mime, data_url, bytes, updated_at)
+       VALUES (?1, ?2, ?3, ?4, ?5)
+       ON CONFLICT(player_id) DO UPDATE SET
+         mime = excluded.mime, data_url = excluded.data_url,
+         bytes = excluded.bytes, updated_at = excluded.updated_at`,
+    )
+    .bind(playerId, result.mime, result.dataUrl, result.bytes, now)
+    .run();
+}
+
+/** Removes a portrait. The player falls back to their glyph, never to nothing. */
+export async function clearPortrait(db: D1Database, playerId: string): Promise<void> {
+  await db.prepare(`DELETE FROM player_portraits WHERE player_id = ?1`).bind(playerId).run();
 }

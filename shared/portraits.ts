@@ -4,15 +4,16 @@
  * A portrait is a glyph and a tint, not an uploaded image. Shared by the
  * Worker and the client so neither can offer something the other cannot draw.
  *
- * Why chosen rather than uploaded. An upload needs somewhere to put the bytes,
- * server-side resizing the Workers runtime cannot do, and - the part that is
- * not a technical problem and does not go away - somebody looking at every
- * image before other players see it. A game with a picture next to every name
- * is a game with a moderation queue. This gets a portrait next to every name
- * today, sharp at any size, with nothing to host and nothing to review.
+ * There are two kinds and every player always has one: an uploaded picture
+ * when they have set one, and otherwise a glyph on a tint. That fallback is
+ * why a new account has a portrait from its first second rather than a grey
+ * circle waiting to be filled, and why deleting a picture is safe.
  *
- * If uploads arrive later they slot in as another portrait kind; the profile
- * does not change shape.
+ * All resizing happens in the browser. The Workers runtime has no image
+ * library, so a server accepting originals would be storing whatever came off
+ * a phone camera - four megabytes to draw at 88 pixels. The client crops to a
+ * square, scales to PORTRAIT_SIZE and encodes; the server's job is to check
+ * that what arrived is the size and format it claims to be.
  */
 
 export const PORTRAIT_GLYPHS = [
@@ -62,3 +63,35 @@ export function isPortraitTint(value: unknown): value is string {
 
 /** The longest a motto may be. One line, not a biography. */
 export const MOTTO_MAX = 80;
+
+
+/* -------------------------------------------------------------------------- */
+/* Uploaded portraits                                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What the file picker accepts.
+ *
+ * HEIC is deliberately absent. iPhones shoot it by default but browsers cannot
+ * decode it, so offering it would mean a picker that accepts a file and then
+ * fails on it. Choosing from the iOS photo library hands over a JPEG, which is
+ * the path that actually works.
+ */
+export const PORTRAIT_ACCEPT = 'image/jpeg,image/png,image/webp';
+
+/** The square the browser scales a crop down to before uploading. */
+export const PORTRAIT_SIZE = 256;
+
+/**
+ * Ceiling on what the server will store, after encoding.
+ *
+ * A 256px WebP at good quality lands near 20KB, so this leaves generous room
+ * for a busy photograph while keeping a profile fetch to one quick response.
+ */
+export const PORTRAIT_MAX_BYTES = 96 * 1024;
+
+/** Ceiling on the original file, checked before the browser tries to decode it. */
+export const PORTRAIT_MAX_SOURCE_BYTES = 16 * 1024 * 1024;
+
+export const PORTRAIT_MIMES = ['image/webp', 'image/jpeg'] as const;
+export type PortraitMime = (typeof PORTRAIT_MIMES)[number];

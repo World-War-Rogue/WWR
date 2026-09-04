@@ -5,7 +5,14 @@
  * static assets binding, which serves the built React client.
  */
 import {handleAdminRequests} from './admin';
-import {type ProfileEdit, loadProfile, validateEdit} from './profile';
+import {
+  type ProfileEdit,
+  clearPortrait,
+  loadProfile,
+  savePortrait,
+  validateEdit,
+  validatePortrait,
+} from './profile';
 import {
   COSMETIC_SLOTS,
   checkLoadout,
@@ -842,6 +849,35 @@ async function handleEditProfile(
   return json({profile});
 }
 
+/**
+ * Sets or removes your own portrait.
+ *
+ * Separate from the profile edit because the payload is tens of kilobytes and
+ * the rest of a profile edit is a few dozen bytes. Sending them together would
+ * mean re-uploading a photograph every time somebody changed their motto.
+ */
+async function handlePortrait(
+  request: Request,
+  env: Env,
+  player: PlayerRow,
+): Promise<Response> {
+  const body = (await request.json().catch(() => null)) as {image?: unknown} | null;
+  if (!body) return fail(400, 'Nothing received.');
+
+  if (body.image === null) {
+    await clearPortrait(env.DB, player.id);
+    const cleared = await loadProfile(env.DB, player.username);
+    return json({profile: cleared});
+  }
+
+  const result = validatePortrait(body.image);
+  if (!result.ok) return fail(400, result.error);
+
+  await savePortrait(env.DB, player.id, result, Date.now());
+  const profile = await loadProfile(env.DB, player.username);
+  return json({profile});
+}
+
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
@@ -880,6 +916,8 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (endpoint === 'GET /api/profile') return handleProfile(request, env);
 
   if (endpoint === 'POST /api/profile') return handleEditProfile(request, env, player);
+
+  if (endpoint === 'POST /api/profile/portrait') return handlePortrait(request, env, player);
 
   if (endpoint === 'GET /api/cosmetics') return handleCosmetics(env, player);
 
