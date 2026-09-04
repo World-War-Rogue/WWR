@@ -46,6 +46,13 @@ export interface SkinArt {
    * footprint or it reads as a rug rather than a building.
    */
   overhang: number;
+  /**
+   * How wide the art draws relative to its plot. Above 1 it spills over the
+   * plot edges and slightly overlaps its neighbours, which is what makes a
+   * base look like a place rather than a tile - a base that stops exactly at
+   * its grid line reads as a counter on a board.
+   */
+  fill?: number;
 }
 
 export interface SkinMotion {
@@ -198,9 +205,21 @@ export function drawSkinArt(
 
   // Drawn taller than the plot and anchored to the bottom of the footprint, so
   // the overhang goes upward: a building grows out of its plot rather than
-  // being centred on it.
-  const drawH = size * (1 + art.overhang);
-  ctx.drawImage(image, sx, sy, art.frameW, art.frameH, px, py + size - drawH, size, drawH);
+  // being centred on it. Extra width spills evenly to both sides.
+  const fill = art.fill ?? 1;
+  const drawW = size * fill;
+  const drawH = size * (1 + art.overhang) * fill;
+  ctx.drawImage(
+    image,
+    sx,
+    sy,
+    art.frameW,
+    art.frameH,
+    px - (drawW - size) / 2,
+    py + size - drawH,
+    drawW,
+    drawH,
+  );
   return true;
 }
 

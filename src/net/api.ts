@@ -53,6 +53,8 @@ export interface PlacedBase {
   username: string;
   level: number;
   worldId: number;
+  /** Home world, not current world - what "same server" means in an event. */
+  homeWorldId: number | null;
   /** The equipped cosmetic layers, sent per base so the map can draw them. */
   banner: string;
   emblem: string;
@@ -64,7 +66,12 @@ export interface WorldView {
   viewport: {x: number; y: number; w: number; h: number};
   world: {id: number; name: string; kind: string; extent: number; closesAt: number | null};
   worlds: Array<{id: number; name: string; kind: string}>;
-  you: {username: string; plot: {x: number; y: number} | null};
+  you: {
+    username: string;
+    plot: {x: number; y: number} | null;
+    homeWorldId: number | null;
+    allianceId: string | null;
+  };
   skins: Record<string, SkinSpec>;
   bases: PlacedBase[];
 }

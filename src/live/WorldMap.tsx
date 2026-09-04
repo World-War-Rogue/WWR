@@ -15,11 +15,24 @@ import {ApiError, type PlacedBase, type WorldView, api} from '../net/api';
 import {EffectLayer, type EffectSource} from './effects';
 import {DEFAULT_SEASON, seasonSpec, terrainAt} from './terrain';
 import {normaliseLoadout} from '../../shared/cosmetics';
+import {ALLEGIANCE, allegianceOf, drawAllegianceMarker} from './allegiance';
 import {artPending, onArtLoaded, skinIsAnimated} from './skinArt';
 import {drawBase as paintBase, skinSpec} from './skins';
 
 const MIN_ZOOM = 14; // pixels per plot when fully zoomed out
-const MAX_ZOOM = 96;
+// Far enough in that a premium skin is worth having drawn at all. A base is
+// what a player paid for; at 96 pixels they could not see what they bought.
+const MAX_ZOOM = 190;
+
+/**
+ * Below this, bases stop being art and become allegiance markers.
+ *
+ * The switch is what makes the map answer two different questions well instead
+ * of one badly. Close in, a base is the thing its owner paid for. Far out, the
+ * only question is who can be attacked and who will retaliate, and forty
+ * distinct silhouettes answer a question nobody asked while burying that one.
+ */
+const IDENTITY_ZOOM = 42;
 const FETCH_MARGIN = 6; // plots of slack around the viewport, so panning is not a stutter of requests
 
 interface Camera {
@@ -320,7 +333,25 @@ export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
     );
     const you = view?.you.username;
 
+    const viewer = {
+      username: view?.you.username ?? '',
+      homeWorldId: view?.you.homeWorldId ?? null,
+      allianceId: view?.you.allianceId ?? null,
+    };
+    const strategic = zoom < IDENTITY_ZOOM;
+
     for (const base of visible) {
+      if (strategic) {
+        drawAllegianceMarker(
+          ctx,
+          toScreenX(base.x),
+          toScreenY(base.y),
+          zoom,
+          allegianceOf(base, viewer),
+          base.level,
+        );
+        continue;
+      }
       paintBase(
         ctx,
         toScreenX(base.x),
@@ -347,7 +378,7 @@ export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
       zoom,
     );
 
-    if (zoom > 26) {
+    if (!strategic) {
       for (const base of visible) {
         drawNameplate(
           ctx,
@@ -368,7 +399,10 @@ export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
     // Three reasons to keep drawing: something is burning, a skin in view
     // moves, or art is still arriving and the frame it lands on has to be
     // redrawn.
-    const running = () => layer.busy || animatedInView || artPending();
+    // Strategic markers do not move, so a zoomed-out map costs nothing to
+    // leave open no matter how many animated skins are on it.
+    const detailed = camera.zoom >= IDENTITY_ZOOM;
+    const running = () => layer.busy || (detailed && (animatedInView || artPending()));
     const step = (time: number) => {
       const delta = lastFrameRef.current ? Math.min(64, time - lastFrameRef.current) : 16;
       lastFrameRef.current = time;
@@ -459,6 +493,20 @@ export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
           My base
         </button>
       </div>
+
+      {camera.zoom < IDENTITY_ZOOM && (
+        <div className="pointer-events-none absolute right-3 top-24 rounded border border-neutral-800 bg-black/70 px-3 py-2 backdrop-blur">
+          {(['you', 'ally', 'server', 'enemy'] as const).map((key) => (
+            <div key={key} className="flex items-center gap-2 py-0.5">
+              <span
+                className="inline-block h-3 w-3 rounded-sm"
+                style={{background: ALLEGIANCE[key].fill, outline: `1px solid ${ALLEGIANCE[key].edge}`}}
+              />
+              <span className="text-[11px] text-neutral-300">{ALLEGIANCE[key].label}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="pointer-events-none absolute bottom-3 left-3 flex gap-2">
         {[

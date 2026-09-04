@@ -180,6 +180,9 @@ export const SKINS: Record<SkinId, SkinSpec> = {
       frameH: 640,
       fps: 12,
       overhang: 0.25,
+      // Wider than her plot, so she crowds her neighbours a little. A base
+      // that stops exactly on its grid line reads as a counter on a board.
+      fill: 1.34,
     },
     motion: {
       bob: {amplitude: 0.022, periodMs: 3600},

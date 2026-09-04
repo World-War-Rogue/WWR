@@ -586,13 +586,16 @@ async function handleWorld(request: Request, env: Env, player: PlayerRow): Promi
   const w = Math.min(80, Math.max(1, num('w', 40)));
   const h = Math.min(80, Math.max(1, num('h', 40)));
 
-  const [bases, self] = await Promise.all([
+  const [bases, self, home] = await Promise.all([
     basesInViewport(env.DB, world.id, x, y, w, h),
     env.DB.prepare(
       `SELECT plot_x AS x, plot_y AS y FROM placements WHERE world_id = ?1 AND player_id = ?2`,
     )
       .bind(world.id, player.id)
       .first<{x: number; y: number}>(),
+    env.DB.prepare(`SELECT home_world_id AS id FROM bases WHERE player_id = ?1`)
+      .bind(player.id)
+      .first<{id: number | null}>(),
   ]);
 
   return json({
@@ -605,7 +608,16 @@ async function handleWorld(request: Request, env: Env, player: PlayerRow): Promi
       closesAt: world.closes_at,
     },
     worlds: worlds.map((entry) => ({id: entry.id, name: entry.name, kind: entry.kind})),
-    you: {username: player.username, plot: self ?? null},
+    you: {
+      username: player.username,
+      plot: self ?? null,
+      // Everything the client needs to colour a base by allegiance. Alliances
+      // do not exist yet, so allianceId is always null and nothing is ever
+      // drawn as an ally - the branch is here so that adding them later is a
+      // query, not a rendering change.
+      homeWorldId: home?.id ?? null,
+      allianceId: null,
+    },
     skins: SKINS,
     bases,
   });
