@@ -197,6 +197,20 @@ export const SKINS: Record<SkinId, SkinSpec> = {
 
 export const STARTER_SKINS = Object.values(SKINS).filter((s) => s.starter);
 
+/**
+ * How far above its plot a skin's art reaches, in pixels.
+ *
+ * Anything drawn above a base - a nameplate, a march arrow, a shield timer -
+ * has to clear this or it lands on the art. A drawn skin returns zero; art
+ * with headroom and spill returns the amount it actually occupies, so the
+ * caller never has to know which kind of skin it is looking at.
+ */
+export function artHeadroom(skin: SkinSpec, size: number): number {
+  if (!skin.art) return 0;
+  const fill = skin.art.fill ?? 1;
+  return Math.max(0, size * (1 + skin.art.overhang) * fill - size);
+}
+
 export function skinSpec(id: string): SkinSpec {
   return SKINS[id as SkinId] ?? SKINS.desert_fob;
 }

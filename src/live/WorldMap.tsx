@@ -17,7 +17,7 @@ import {DEFAULT_SEASON, seasonSpec, terrainAt} from './terrain';
 import {normaliseLoadout} from '../../shared/cosmetics';
 import {ALLEGIANCE, allegianceOf, drawAllegianceMarker} from './allegiance';
 import {artPending, onArtLoaded, skinIsAnimated} from './skinArt';
-import {drawBase as paintBase, skinSpec} from './skins';
+import {artHeadroom, drawBase as paintBase, skinSpec} from './skins';
 
 const MIN_ZOOM = 14; // pixels per plot when fully zoomed out
 // Far enough in that a premium skin is worth having drawn at all. A base is
@@ -380,10 +380,13 @@ export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
 
     if (!strategic) {
       for (const base of visible) {
+        // Lifted clear of whatever the skin draws above its plot. A base with
+        // rendered art stands well over its own footprint, and a plate pinned
+        // to the plot edge lands on the art it is supposed to label.
         drawNameplate(
           ctx,
           toScreenX(base.x) + zoom / 2,
-          toScreenY(base.y),
+          toScreenY(base.y) - artHeadroom(skinSpec(base.skin), zoom),
           base,
           base.username === you,
           zoom,
@@ -482,7 +485,8 @@ export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
             #{view?.world.id} {view?.world.name}
           </p>
           <p className="text-[11px] text-neutral-500">
-            {view?.bases.length ?? 0} bases in view · {view?.you.plot ? `you at ${view.you.plot.x}, ${view.you.plot.y}` : 'unplaced'}
+            {view?.bases.length ?? 0} {view?.bases.length === 1 ? 'base' : 'bases'} in view ·{' '}
+            {view?.you.plot ? `you at ${view.you.plot.x}, ${view.you.plot.y}` : 'unplaced'}
           </p>
         </div>
 
