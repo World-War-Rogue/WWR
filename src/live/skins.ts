@@ -177,7 +177,7 @@ export const SKINS: Record<SkinId, SkinSpec> = {
       // Wider than the Empress, because the art itself only fills about
       // seventy percent of its frame - a tall statue leaves margin either
       // side, and without this it would sit small in the middle of its plot.
-      fill: 1.45,
+      fill: 1.3,
     },
     motion: {
       // Barely moves. It is a stone monument, and a plinth that bobbed like a

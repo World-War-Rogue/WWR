@@ -91,12 +91,23 @@ function drawNameplate(
   const boxX = cx - boxW / 2;
   const boxY = topY - boxH - fontSize * 0.4;
 
-  ctx.fillStyle = isYou ? 'rgba(234,88,12,0.92)' : 'rgba(15,17,16,0.82)';
+  // A drop shadow and a fully opaque plate, because these now sit over
+  // rendered art - fire, gold, white stone - and a translucent label that was
+  // readable against dirt disappears against a flame.
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.75)';
+  ctx.shadowBlur = Math.max(3, fontSize * 0.5);
+  ctx.shadowOffsetY = 1;
+  ctx.fillStyle = isYou ? 'rgb(194,65,12)' : 'rgb(12,13,12)';
   ctx.beginPath();
   ctx.roundRect(boxX, boxY, boxW, boxH, boxH / 2);
   ctx.fill();
-  ctx.strokeStyle = isYou ? '#ffb37a' : 'rgba(255,255,255,0.18)';
+  ctx.restore();
+
+  ctx.strokeStyle = isYou ? '#ffb37a' : 'rgba(255,255,255,0.35)';
   ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(boxX, boxY, boxW, boxH, boxH / 2);
   ctx.stroke();
 
   ctx.fillStyle = isYou ? '#fff7ed' : '#e5e7eb';
@@ -360,9 +371,14 @@ export default function WorldMap({
     }
 
     // Bases, then nameplates on top so plates are never hidden by a neighbour.
-    const visible = (view?.bases ?? []).filter(
-      (b) => b.x >= firstX && b.x <= lastX && b.y >= firstY && b.y <= lastY,
-    );
+    // Painted back to front. Bases arrive in whatever order the database
+    // returned them, and tall art stands well above its own plot - so without
+    // this a base to the north can be drawn over the one in front of it, which
+    // reads as the wrong one being nearer. Sorting by y puts southern bases
+    // last, and last is in front.
+    const visible = (view?.bases ?? [])
+      .filter((b) => b.x >= firstX && b.x <= lastX && b.y >= firstY && b.y <= lastY)
+      .sort((a, b) => a.y - b.y || a.x - b.x);
     const you = view?.you.username;
 
     const viewer = {
