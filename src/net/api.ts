@@ -6,6 +6,8 @@
  * point of moving the rules server-side.
  */
 
+import type {CosmeticItem, CosmeticSlot, Loadout} from '../../shared/cosmetics';
+
 export type ResourceKind = 'fuel' | 'steel' | 'munitions' | 'alloy';
 export type Resources = Record<ResourceKind, number>;
 
@@ -27,6 +29,8 @@ export interface BaseView {
   /** The server's clock when it answered. Offsets are measured against this. */
   serverTime: number;
   name: string;
+  skin: string;
+  loadout: Loadout;
   resources: Resources;
   productionPerHour: Resources;
   storageCap: number;
@@ -49,6 +53,11 @@ export interface PlacedBase {
   username: string;
   level: number;
   worldId: number;
+  /** The equipped cosmetic layers, sent per base so the map can draw them. */
+  banner: string;
+  emblem: string;
+  lights: string;
+  decal: string;
 }
 
 export interface WorldView {
@@ -144,6 +153,18 @@ export const api = {
     }),
   upgrade: (kind: string) =>
     call<BaseView>('/api/base/upgrade', {method: 'POST', body: JSON.stringify({kind})}),
+  cosmetics: () =>
+    call<{
+      slots: CosmeticSlot[];
+      items: CosmeticItem[];
+      owned: string[];
+      loadout: Loadout;
+    }>('/api/cosmetics'),
+  equip: (loadout: Loadout) =>
+    call<{loadout: Loadout}>('/api/cosmetics/equip', {
+      method: 'POST',
+      body: JSON.stringify(loadout),
+    }),
 };
 
 export function formatDuration(ms: number): string {

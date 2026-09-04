@@ -24,6 +24,10 @@ export interface PlacedBase {
   username: string;
   level: number;
   worldId: number;
+  banner: string;
+  emblem: string;
+  lights: string;
+  decal: string;
 }
 
 /** Home world for a new player: the newest one under capacity, else a new one. */
@@ -151,7 +155,8 @@ export async function basesInViewport(
   const rows = await db
     .prepare(
       `SELECT pl.plot_x AS x, pl.plot_y AS y, b.skin AS skin, p.username AS username,
-              COALESCE(bd.level, 1) AS level, pl.world_id AS worldId
+              COALESCE(bd.level, 1) AS level, pl.world_id AS worldId,
+              b.banner AS banner, b.emblem AS emblem, b.lights AS lights, b.decal AS decal
          FROM placements pl
          JOIN players p ON p.id = pl.player_id
          JOIN bases b ON b.player_id = pl.player_id

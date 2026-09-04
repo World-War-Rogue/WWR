@@ -7,6 +7,7 @@
  * gets wired to these same endpoints once the foundation is trusted.
  */
 import {type FormEvent, useCallback, useEffect, useRef, useState} from 'react';
+import Customize from './Customize';
 import Gate from './Gate';
 import WorldMap from './WorldMap';
 import {
@@ -68,7 +69,7 @@ export default function LiveApp() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [checking, setChecking] = useState(true);
-  const [screen, setScreen] = useState<'base' | 'world'>('base');
+  const [screen, setScreen] = useState<'base' | 'world' | 'customize'>('base');
 
   const now = useServerClock(base);
 
@@ -130,6 +131,18 @@ export default function LiveApp() {
 
   if (!player) return <Gate onAuthed={setPlayer} />;
 
+  if (screen === 'customize') {
+    return (
+      <Customize
+        skin={base?.skin ?? 'desert_fob'}
+        onClose={() => {
+          setScreen('base');
+          void refresh();
+        }}
+      />
+    );
+  }
+
   // The map owns the whole viewport - it is a canvas, not a page section.
   if (screen === 'world') {
     return (
@@ -155,6 +168,12 @@ export default function LiveApp() {
               Access requests
             </a>
           )}
+          <button
+            onClick={() => setScreen('customize')}
+            className="rounded border border-neutral-700 px-3 py-2 text-sm font-medium text-neutral-300 hover:border-orange-600"
+          >
+            Customise
+          </button>
           <button
             onClick={() => setScreen('world')}
             className="rounded bg-neutral-800 px-3 py-2 text-sm font-medium text-neutral-100 hover:bg-neutral-700"

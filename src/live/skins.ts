@@ -12,6 +12,18 @@
  * that still costs a draw call per base per frame.
  */
 
+import {DEFAULT_LOADOUT, type Loadout} from '../../shared/cosmetics';
+import {
+  bannerOf,
+  decalOf,
+  drawBanner,
+  drawDecal,
+  drawLights,
+  drawPadEmblem,
+  emblemOf,
+  lightsOf,
+} from './cosmeticsPaint';
+
 export type SkinId =
   | 'desert_fob'
   | 'arctic_station'
@@ -133,6 +145,7 @@ export function drawBase(
   plotY: number,
   level: number,
   isYou: boolean,
+  loadout: Loadout = DEFAULT_LOADOUT,
 ) {
   const p = skin.palette;
   const pad = size * 0.05;
@@ -140,10 +153,18 @@ export function drawBase(
   const x = px + pad;
   const y = py + pad;
 
+  const banner = bannerOf(loadout);
+  const emblem = emblemOf(loadout);
+  const lights = lightsOf(loadout);
+  const decal = decalOf(loadout);
+
   // Compound floor.
   ctx.fillStyle = p.ground;
   roundRect(ctx, x, y, inner, inner, size * 0.09);
   ctx.fill();
+
+  // Ground marking goes on the floor, under everything built on it.
+  if (decal) drawDecal(ctx, x, y, inner, decal);
 
   const detailed = size >= 34;
 
@@ -159,10 +180,17 @@ export function drawBase(
     ctx.fillRect(x + inner * 0.4, y + inner * 0.4, inner * 0.2, inner * 0.2);
   }
 
+  if (emblem) drawPadEmblem(ctx, x, y, inner, emblem);
+
   ctx.strokeStyle = isYou ? '#ffffff' : 'rgba(0,0,0,0.4)';
   ctx.lineWidth = isYou ? Math.max(2, size * 0.045) : 1;
   roundRect(ctx, x, y, inner, inner, size * 0.09);
   ctx.stroke();
+
+  // Lights sit on top of the walls, and the banner on top of everything - it
+  // is the tallest thing in the compound and is allowed to overhang the plot.
+  if (lights) drawLights(ctx, x, y, inner, lights);
+  if (banner) drawBanner(ctx, x, y, inner, banner, emblem);
 }
 
 function drawPerimeter(

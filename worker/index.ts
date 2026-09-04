@@ -6,6 +6,12 @@
  */
 import {handleAdminRequests} from './admin';
 import {
+  COSMETIC_SLOTS,
+  checkLoadout,
+  ownedItemIds,
+} from './cosmetics';
+import {COSMETICS, normaliseLoadout} from '../shared/cosmetics';
+import {
   SESSION_TTL_MS,
   hashPassword,
   newId,
@@ -138,6 +144,10 @@ interface BaseRow {
   resources_at: number;
   skin: string;
   home_world_id: number | null;
+  banner: string;
+  emblem: string;
+  lights: string;
+  decal: string;
 }
 
 interface JobRow {
@@ -230,6 +240,7 @@ function baseView(state: NonNullable<Awaited<ReturnType<typeof settleAndLoad>>>,
     serverTime: now,
     name: state.base.name,
     skin: state.base.skin,
+    loadout: normaliseLoadout(state.base),
     homeWorldId: state.base.home_world_id,
     resources: state.resources,
     productionPerHour: state.rate,
@@ -689,6 +700,62 @@ function serverError(error: unknown, env: Env): Response {
   return json({error: expose ? detail : 'Something went wrong on the server.'}, {status: 500});
 }
 
+/**
+ * The catalogue, what this player owns, and what their base is wearing.
+ *
+ * Everything is sent in one response because the customisation screen needs
+ * all three to draw a single row, and three round trips to render one screen
+ * is three chances to show a half-built page.
+ */
+async function handleCosmetics(env: Env, player: PlayerRow): Promise<Response> {
+  const [owned, base] = await Promise.all([
+    ownedItemIds(env.DB, player.id),
+    env.DB.prepare(`SELECT banner, emblem, lights, decal FROM bases WHERE player_id = ?1`)
+      .bind(player.id)
+      .first<Record<string, string>>(),
+  ]);
+
+  return json({
+    slots: COSMETIC_SLOTS,
+    items: COSMETICS,
+    owned: [...owned],
+    loadout: normaliseLoadout(base ?? {}),
+  });
+}
+
+/**
+ * Equips a loadout.
+ *
+ * Ownership is checked here and only here. The client can preview anything it
+ * likes - that is what makes a store worth browsing - but what the rest of the
+ * map sees is whatever this function was willing to write.
+ */
+async function handleEquip(request: Request, env: Env, player: PlayerRow): Promise<Response> {
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  if (!body) return fail(400, 'Nothing to equip.');
+
+  const owned = await ownedItemIds(env.DB, player.id);
+  const result = checkLoadout(body, owned);
+  if ('rejected' in result) {
+    return fail(
+      result.rejected.reason === 'unknown' ? 400 : 403,
+      result.rejected.reason === 'unknown'
+        ? 'That item does not exist.'
+        : 'You do not own that item yet.',
+    );
+  }
+
+  const {loadout} = result;
+  const changed = await env.DB.prepare(
+    `UPDATE bases SET banner = ?2, emblem = ?3, lights = ?4, decal = ?5 WHERE player_id = ?1`,
+  )
+    .bind(player.id, loadout.banner, loadout.emblem, loadout.lights, loadout.decal)
+    .run();
+
+  if (!changed.success) return fail(500, 'Could not save that loadout.');
+  return json({loadout});
+}
+
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
@@ -723,6 +790,10 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
 
   if (endpoint === 'POST /api/base/upgrade') return handleStartUpgrade(request, env, player);
+
+  if (endpoint === 'GET /api/cosmetics') return handleCosmetics(env, player);
+
+  if (endpoint === 'POST /api/cosmetics/equip') return handleEquip(request, env, player);
 
   if (endpoint === 'GET /api/world') return handleWorld(request, env, player);
 
