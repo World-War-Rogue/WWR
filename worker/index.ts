@@ -372,7 +372,7 @@ async function handleRequestAccess(request: Request, env: Env): Promise<Response
     });
     const sent = await sendMail(mailer, mailer.owner, mail.subject, mail.html);
     // A stored request is not a failure just because the notification did not
-    // go out. It is logged and the request still waits in the queue.
+    // go out: the request still waits in the queue either way.
     if (!sent.ok) console.error('Approval email failed:', sent.error);
   } else {
     console.error('RESEND_API_KEY is not configured; approval email not sent.');
