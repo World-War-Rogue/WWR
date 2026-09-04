@@ -41,7 +41,8 @@ export type SkinId =
   | 'urban_garrison'
   | 'custom_one'
   | 'custom_two'
-  | 'signature_one';
+  | 'signature_one'
+  | 'ember_sentinel';
 
 export interface Palette {
   ground: string;
@@ -150,6 +151,40 @@ export const SKINS: Record<SkinId, SkinSpec> = {
       bob: {amplitude: 0.016, periodMs: 4200},
       glow: {color: '#facc15', radius: 0.7, periodMs: 3100},
       sway: {amount: 0.03, periodMs: 5200},
+    },
+  },
+
+  // Cut from a single rendered still, like the Empress. Tall and narrow where
+  // she is wide and spiky, which is the point: at map zoom the only thing that
+  // survives is outline, so a catalogue needs shapes that differ, not just
+  // themes that do.
+  ember_sentinel: {
+    id: 'ember_sentinel',
+    name: 'Ember Sentinel',
+    blurb: 'A sworn guard, cast in iron. The sword has not gone out since.',
+    palette: {ground: '#2b2622', structure: '#8b8178', accent: '#ff6a1f', roof: '#3a332d', wall: '#5f574e'},
+    perimeter: 'blast',
+    landmark: 'tower',
+    starter: false,
+    art: {
+      src: '/skins/ember_sentinel.webp',
+      frames: 1,
+      cols: 1,
+      frameW: 512,
+      frameH: 640,
+      fps: 12,
+      overhang: 0.25,
+      // Wider than the Empress, because the art itself only fills about
+      // seventy percent of its frame - a tall statue leaves margin either
+      // side, and without this it would sit small in the middle of its plot.
+      fill: 1.45,
+    },
+    motion: {
+      // Barely moves. It is a stone monument, and a plinth that bobbed like a
+      // banner would read as weightless.
+      bob: {amplitude: 0.012, periodMs: 4600},
+      // Faster than the bob, because firelight flickers and stone does not.
+      glow: {color: '#ff6a1f', radius: 0.8, periodMs: 1900},
     },
   },
 

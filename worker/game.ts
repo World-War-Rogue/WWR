@@ -205,7 +205,8 @@ export type SkinId =
   | 'urban_garrison'
   | 'custom_one'
   | 'custom_two'
-  | 'signature_one';
+  | 'signature_one'
+  | 'ember_sentinel';
 
 export interface SkinSpec {
   id: SkinId;
@@ -258,6 +259,12 @@ export const SKINS: Record<SkinId, SkinSpec> = {
     name: 'Custom II',
     blurb: 'Awaiting reference art.',
     palette: {ground: '#6e5b3a', structure: '#d6c08a', accent: '#facc15'},
+  },
+  ember_sentinel: {
+    id: 'ember_sentinel',
+    name: 'Ember Sentinel',
+    blurb: 'A sworn guard, cast in iron. The sword has not gone out since.',
+    palette: {ground: '#2b2622', structure: '#8b8178', accent: '#ff6a1f'},
   },
   // The flagship commission. Sold once, to one player, and never again.
   signature_one: {
