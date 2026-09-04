@@ -10,10 +10,12 @@ import {RALLY_COOLDOWN_MS, maySetRally, rallyCooldownLeft} from '../shared/rally
 import {listBattles, readBattle} from './battles';
 import {REPORT_RETENTION_DAYS} from '../shared/battles';
 import {
+  TRANSLATION_MODEL,
   type Viewer,
   channelsFor,
   readChannel,
   readRecent,
+  readTranslation,
   resolveAccess,
   translateMissing,
 } from './chat';
@@ -834,6 +836,66 @@ async function handleBattle(request: Request, env: Env, player: PlayerRow): Prom
   const report = await readBattle(env.DB, player.id, membership?.alliance.id ?? null, id);
   if (!report) return fail(404, 'No such battle report.');
   return json(report);
+}
+
+/**
+ * Is translation actually working?
+ *
+ * Owner only. This exists because translation fails invisibly: a message that
+ * was never translated looks exactly like a message that did not need
+ * translating, so two separate causes were guessed at from the same symptom.
+ * This turns "it didn't translate" into an answer.
+ *
+ * It reports each link in the chain separately - whether the binding is even
+ * present on this deploy, what the model returned verbatim, and how the parser
+ * read it - because those fail for completely different reasons and only the
+ * first one is fixed by editing code.
+ */
+async function handleAiCheck(request: Request, env: Env, player: PlayerRow): Promise<Response> {
+  if (player.role !== 'owner') return fail(404, 'No such endpoint.');
+
+  const url = new URL(request.url);
+  const text = url.searchParams.get('text') ?? 'Hola, vamos a atacar al amanecer.';
+  const from = url.searchParams.get('from') ?? detectLanguage(text, 'en');
+  const to = url.searchParams.get('to') ?? 'en';
+
+  if (!env.AI) {
+    return json({
+      bound: false,
+      detected: from,
+      problem:
+        'The AI binding is not present on this deploy. Check the "ai" block in ' +
+        'wrangler.jsonc, that Workers AI is enabled on the account, and that ' +
+        'this Worker was deployed after the binding was added.',
+    });
+  }
+
+  const started = Date.now();
+  try {
+    const raw = await env.AI.run(TRANSLATION_MODEL, {
+      text,
+      source_lang: from,
+      target_lang: to,
+    });
+    return json({
+      bound: true,
+      model: TRANSLATION_MODEL,
+      sent: {text, source_lang: from, target_lang: to},
+      detected: from,
+      tookMs: Date.now() - started,
+      // Verbatim, so a changed field name is visible rather than inferred.
+      raw,
+      parsed: readTranslation(raw),
+    });
+  } catch (error) {
+    return json({
+      bound: true,
+      model: TRANSLATION_MODEL,
+      sent: {text, source_lang: from, target_lang: to},
+      tookMs: Date.now() - started,
+      threw: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 async function handleStartUpgrade(request: Request, env: Env, player: PlayerRow): Promise<Response> {
@@ -2045,6 +2107,8 @@ async function route(
   if (endpoint === 'GET /api/me') return json({player});
 
   if (endpoint === 'GET /api/access/requests') return handleAdminRequests(env, player);
+
+  if (endpoint === 'GET /api/admin/ai-check') return handleAiCheck(request, env, player);
 
   if (endpoint === 'GET /api/base') {
     const now = Date.now();

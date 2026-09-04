@@ -213,6 +213,29 @@ interface TranslationEnv {
   AI?: {run: (model: string, input: unknown) => Promise<unknown>};
 }
 
+export const TRANSLATION_MODEL = '@cf/meta/m2m100-1.2b';
+
+/**
+ * Pull the translated string out of whatever the model returned.
+ *
+ * Written defensively on purpose. Workers AI has returned this in more than
+ * one shape across model versions - bare, wrapped in `result`, and as a plain
+ * string - and the failure mode of guessing wrong is silent: a translation
+ * that is present but unreadable looks exactly like a translation that was
+ * never produced.
+ */
+export function readTranslation(result: unknown): string | null {
+  if (typeof result === 'string') return result.trim() || null;
+  if (!result || typeof result !== 'object') return null;
+  const record = result as Record<string, unknown>;
+  const direct = record.translated_text ?? record.translation ?? record.text;
+  if (typeof direct === 'string' && direct.trim()) return direct.trim();
+  if (record.result && typeof record.result === 'object') {
+    return readTranslation(record.result);
+  }
+  return null;
+}
+
 /**
  * Translates whatever the reader has not seen translated yet.
  *
@@ -244,14 +267,22 @@ export async function translateMissing(
   const writes: D1PreparedStatement[] = [];
   for (const row of pending) {
     try {
-      const result = (await env.AI.run('@cf/meta/m2m100-1.2b', {
+      const result = await env.AI.run(TRANSLATION_MODEL, {
         text: row.body,
         source_lang: row.lang,
         target_lang: target,
-      })) as {translated_text?: string} | null;
+      });
 
-      const text = result?.translated_text?.trim();
-      if (!text) continue;
+      const text = readTranslation(result);
+      if (!text) {
+        // Logged rather than swallowed silently. A translation that never
+        // arrives is invisible in the UI - the message simply shows in its
+        // original language, which is also what a working model looks like
+        // when nobody needed translating - so without this line the only
+        // symptom of a broken binding is a feature that quietly does nothing.
+        console.log('translate: no text in result', JSON.stringify(result)?.slice(0, 300));
+        continue;
+      }
 
       writes.push(
         env.DB.prepare(
@@ -259,8 +290,10 @@ export async function translateMissing(
            VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING`,
         ).bind(row.id, target, text),
       );
-    } catch {
-      // One failed translation should not lose the others.
+    } catch (error) {
+      // One failed translation should not lose the others - but it should be
+      // findable with `wrangler tail`, which is the only way to see it.
+      console.log('translate: threw', error instanceof Error ? error.message : String(error));
     }
   }
 
