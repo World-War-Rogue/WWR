@@ -76,11 +76,12 @@ function useCanvasSize(ref: RefObject<HTMLCanvasElement | null>) {
  * The plate that names a base.
  *
  * `footY` is the base's ground line - the bottom edge of its plot. The plate
- * straddles it, sitting over the foot of the art rather than floating above
- * it or hovering below on empty ground. Anchoring to the plot rather than to
- * the art is what keeps names level with each other: skins are different
- * heights, and a name pinned to the top of each one would put every label at a
- * different level and make a screenful of them jitter.
+ * sits just above it, over the foot of the art, so the whole plate lies inside
+ * the square the base occupies and never floats below on empty ground.
+ * Anchoring to the plot rather than to the art is what keeps names level with
+ * each other: skins are different heights, and a name pinned to the top of
+ * each one would put every label at a different level and make a screenful of
+ * them jitter.
  *
  * It is drawn as an actual plate - opaque, shaded, outlined, with a shadow
  * under it - because it has to stay legible over whatever the skin does. A
@@ -95,19 +96,40 @@ function drawNameplate(
   isYou: boolean,
   scale: number,
 ) {
-  const fontSize = Math.max(9, Math.min(13, scale * 0.2));
+  // Tied to the plot, never to the viewport: the plate has to stay inside the
+  // square its base occupies at every zoom, so a screen full of bases reads as
+  // a grid of labelled squares instead of overlapping text.
+  const fontSize = Math.min(13, Math.max(8, scale * 0.2));
   ctx.font = `600 ${fontSize}px ui-sans-serif, system-ui, sans-serif`;
 
-  const label = base.username;
   const levelText = String(base.level);
-  const textWidth = ctx.measureText(label).width;
   const padX = fontSize * 0.55;
   const badgeD = fontSize * 1.3;
-  const boxW = textWidth + padX * 2 + badgeD + fontSize * 0.3;
+  const gap = fontSize * 0.3;
   const boxH = fontSize * 1.7;
+
+  // The width budget. Everything but the name is fixed, so the name is what
+  // gives: a long callsign is cut with an ellipsis rather than allowed to push
+  // the plate out over the neighbouring plots.
+  const maxW = scale * 0.96;
+  const chrome = padX * 2 + badgeD + gap;
+  const textBudget = Math.max(0, maxW - chrome);
+
+  let label = base.username;
+  let textWidth = ctx.measureText(label).width;
+  if (textWidth > textBudget) {
+    while (label.length > 1 && ctx.measureText(`${label}\u2026`).width > textBudget) {
+      label = label.slice(0, -1);
+    }
+    label = `${label}\u2026`;
+    textWidth = ctx.measureText(label).width;
+  }
+
+  const boxW = Math.min(maxW, textWidth + chrome);
   const boxX = cx - boxW / 2;
-  // Most of the plate sits over the foot of the base, the rest below it.
-  const boxY = footY - boxH * 0.62;
+  // Lifted clear of the ground line so the whole plate lies inside the plot,
+  // sitting over the foot of the skin rather than on bare earth below it.
+  const boxY = footY - boxH - scale * 0.05;
   const radius = boxH / 2;
 
   // Shadow first, on its own, so the shadow falls under the whole plate rather
@@ -474,8 +496,8 @@ export default function WorldMap({
 
     if (!strategic) {
       for (const base of visible) {
-        // Anchored to the bottom edge of the plot, which the plate straddles
-        // so it sits on the foot of the skin. Every base's name is then at
+        // Anchored to the bottom edge of the plot; the plate sits just
+        // inside it, over the foot of the skin. Every base's name is then at
         // the same height relative to its plot whatever its skin does, and
         // names painted after taller neighbours stay on top of them.
         drawNameplate(
