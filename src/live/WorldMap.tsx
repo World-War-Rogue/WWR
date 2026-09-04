@@ -18,6 +18,7 @@ import {normaliseLoadout} from '../../shared/cosmetics';
 import {ALLEGIANCE, allegianceOf, drawAllegianceMarker} from './allegiance';
 import {artPending, onArtLoaded, skinIsAnimated} from './skinArt';
 import {drawBase as paintBase, skinSpec} from './skins';
+import {formatCooldown} from '../../shared/rally';
 
 const MIN_ZOOM = 14; // pixels per plot when fully zoomed out
 // Far enough in that a premium skin is worth having drawn at all. A base is
@@ -196,12 +197,91 @@ function drawNameplate(
   ctx.fillText(levelText, badgeX, badgeY + 0.5);
 }
 
+/**
+ * The rendezvous marker.
+ *
+ * Drawn at every zoom, including the strategic one where bases have become
+ * flat colour: the marker exists to be found from across the map, so hiding it
+ * when you zoom out would remove it exactly when it is needed. Cyan because
+ * nothing else on the map is - the five allegiance colours are spoken for, and
+ * a marker that shares a hue with "your alliance" is a marker people misread
+ * in the second when it matters.
+ *
+ * It pulses. A static ring reads as terrain; a moving one reads as a call.
+ */
+function drawRallyMarker(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  scale: number,
+  time: number,
+) {
+  const pulse = 0.5 + 0.5 * Math.sin(time / 520);
+  const base = Math.max(11, scale * 0.42);
+  const radius = base * (0.86 + pulse * 0.16);
+
+  ctx.save();
+
+  // Outer halo, so it carries against pale ground and dark art alike.
+  const halo = ctx.createRadialGradient(cx, cy, radius * 0.3, cx, cy, radius * 2.1);
+  halo.addColorStop(0, `rgba(34,211,238,${0.22 + pulse * 0.16})`);
+  halo.addColorStop(1, 'rgba(34,211,238,0)');
+  ctx.fillStyle = halo;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius * 2.1, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.lineWidth = Math.max(1.5, scale * 0.035);
+  ctx.strokeStyle = '#22d3ee';
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Cross hairs, broken at the ring so the centre stays readable.
+  const gap = radius * 0.42;
+  const arm = radius * 1.45;
+  ctx.beginPath();
+  for (const [dx, dy] of [
+    [0, -1],
+    [0, 1],
+    [-1, 0],
+    [1, 0],
+  ] as Array<[number, number]>) {
+    ctx.moveTo(cx + dx * gap, cy + dy * gap);
+    ctx.lineTo(cx + dx * arm, cy + dy * arm);
+  }
+  ctx.stroke();
+
+  ctx.fillStyle = '#a5f3fc';
+  ctx.beginPath();
+  ctx.arc(cx, cy, Math.max(1.6, radius * 0.16), 0, Math.PI * 2);
+  ctx.fill();
+
+  // The label only once there is room for it; at strategic zoom the shape is
+  // the whole message.
+  if (scale > 26) {
+    const fontSize = Math.max(9, Math.min(12, scale * 0.18));
+    ctx.font = `700 ${fontSize}px ui-sans-serif, system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+    ctx.strokeText('RV', cx, cy - radius * 1.95);
+    ctx.fillStyle = '#a5f3fc';
+    ctx.fillText('RV', cx, cy - radius * 1.95);
+  }
+
+  ctx.restore();
+}
+
 export default function WorldMap({
   onOpenBase,
   onViewProfile,
+  onOpenBattles,
 }: {
   onOpenBase: () => void;
   onViewProfile: (username: string) => void;
+  onOpenBattles: () => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const {w, h} = useCanvasSize(canvasRef);
@@ -211,6 +291,7 @@ export default function WorldMap({
   const [selected, setSelected] = useState<{x: number; y: number} | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [moving, setMoving] = useState(false);
+  const [rallying, setRallying] = useState(false);
   const [centred, setCentred] = useState(false);
 
   const cameraRef = useRef(camera);
@@ -510,6 +591,14 @@ export default function WorldMap({
         );
       }
     }
+
+    // The rendezvous marker, painted last so nothing can cover it, and at every
+    // zoom including strategic - a rally point you can only see once you have
+    // already found it is not a rally point.
+    const marker = view?.rally;
+    if (marker && marker.worldId === view?.world.id) {
+      drawRallyMarker(ctx, toScreenX(marker.x) + zoom / 2, toScreenY(marker.y) + zoom / 2, zoom, time);
+    }
   }, [camera, view, w, h, selected, selectedBase, centred]);
 
   // Drives the animation loop only while something is actually moving. A map
@@ -587,7 +676,46 @@ export default function WorldMap({
     }
   }
 
+  /** Plant the marker on the selected plot. Officers only, enforced server-side. */
+  async function setRallyHere() {
+    if (!selected) return;
+    setRallying(true);
+    setError(null);
+    try {
+      await api.setRally(selected.x, selected.y);
+      await load(camera, w, h);
+      setSelected(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not reach the server.');
+    } finally {
+      setRallying(false);
+    }
+  }
+
+  /**
+   * Answer the marker.
+   *
+   * The destination is not sent - the server picks the nearest free plot and
+   * tells us where we ended up, which is then where the camera goes.
+   */
+  async function answerRally() {
+    setRallying(true);
+    setError(null);
+    try {
+      const result = await api.rally();
+      setCamera({cx: result.plot.x + 0.5, cy: result.plot.y + 0.5, zoom: HOME_ZOOM});
+      await load({cx: result.plot.x + 0.5, cy: result.plot.y + 0.5, zoom: HOME_ZOOM}, w, h);
+      setSelected(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not reach the server.');
+    } finally {
+      setRallying(false);
+    }
+  }
+
   const occupied = selectedBase !== null;
+  const rally = view?.rally ?? null;
+  const rallyWait = view?.you.rallyCooldownMs ?? 0;
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-[#0a0906]">
@@ -629,7 +757,13 @@ export default function WorldMap({
         </div>
       )}
 
-      <div className="pointer-events-none absolute bottom-16 left-3 flex gap-2">
+      {/*
+        Bottom-left cluster. The + and − buttons are temporary: on touch the map
+        pinches and on desktop the wheel already zooms, so they come out once
+        the game ships as an app. RV stays, which is why it sits at the end of
+        the row rather than being wedged between them.
+      */}
+      <div className="pointer-events-none absolute bottom-16 left-3 flex items-center gap-2">
         {[
           {label: '+', delta: 1.3},
           {label: '−', delta: 1 / 1.3},
@@ -647,10 +781,46 @@ export default function WorldMap({
             {btn.label}
           </button>
         ))}
+
+        {rally && (
+          <button
+            onClick={() => void answerRally()}
+            disabled={rallying || rallyWait > 0}
+            title={
+              rallyWait > 0
+                ? `You can rally again in ${formatCooldown(rallyWait)}`
+                : `Rendezvous set by ${rally.setBy} at ${rally.x}, ${rally.y}`
+            }
+            className="pointer-events-auto h-9 rounded border border-cyan-700 bg-cyan-950/70 px-3 text-sm font-semibold text-cyan-200 backdrop-blur transition hover:border-cyan-400 disabled:opacity-40"
+          >
+            {rallying ? '…' : rallyWait > 0 ? `RV ${formatCooldown(rallyWait)}` : 'RV'}
+          </button>
+        )}
       </div>
 
-      {view?.you.plot && (
-        <div className="pointer-events-none absolute bottom-16 right-3">
+      <div className="pointer-events-none absolute bottom-16 right-3 flex flex-col items-end gap-2">
+        <button
+          onClick={onOpenBattles}
+          title="Battle reports"
+          className="pointer-events-auto flex h-11 items-center gap-2 rounded border border-neutral-700 bg-black/70 px-4 text-sm font-semibold text-neutral-100 backdrop-blur transition hover:border-red-600 hover:text-red-200"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            className="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M4 4v16" />
+            <path d="M4 5h11l-1.5 3L15 11H4" />
+          </svg>
+          Reports
+        </button>
+
+        {view?.you.plot && (
           <button
             onClick={() =>
               setCamera({
@@ -677,6 +847,41 @@ export default function WorldMap({
             </svg>
             Home
           </button>
+        )}
+      </div>
+
+      {rally && (
+        <div className="pointer-events-none absolute inset-x-0 top-20 flex justify-center">
+          <div className="pointer-events-auto flex items-center gap-2 rounded border border-cyan-800 bg-cyan-950/70 px-3 py-1.5 text-xs text-cyan-200 backdrop-blur">
+            <span className="font-semibold">RV</span>
+            <span className="font-mono text-cyan-400">
+              {rally.x}, {rally.y}
+            </span>
+            <span className="text-cyan-500/80">· {rally.setBy}</span>
+            <button
+              onClick={() => setCamera((c) => ({...c, cx: rally.x + 0.5, cy: rally.y + 0.5}))}
+              className="rounded border border-cyan-700 px-1.5 py-0.5 hover:border-cyan-400"
+            >
+              Show
+            </button>
+            {view?.you.maySetRally && (
+              <button
+                onClick={() => {
+                  void (async () => {
+                    try {
+                      await api.clearRally();
+                      await load(camera, w, h);
+                    } catch (err) {
+                      setError(err instanceof ApiError ? err.message : 'Could not reach the server.');
+                    }
+                  })();
+                }}
+                className="rounded border border-cyan-900 px-1.5 py-0.5 text-cyan-500 hover:border-red-600 hover:text-red-300"
+              >
+                Clear
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -727,6 +932,21 @@ export default function WorldMap({
               className="mt-3 w-full rounded bg-orange-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
               {moving ? 'Relocating…' : 'Move here'}
+            </button>
+          )}
+
+          {/*
+            Only a General or Lieutenant sees this, and the server checks the
+            rank again on the way in - hiding a button is presentation, not
+            permission.
+          */}
+          {view?.you.maySetRally && (
+            <button
+              onClick={() => void setRallyHere()}
+              disabled={rallying}
+              className="mt-2 w-full rounded border border-cyan-700 bg-cyan-950/40 px-3 py-2 text-sm font-semibold text-cyan-200 hover:border-cyan-400 disabled:opacity-50"
+            >
+              {rallying ? 'Setting…' : 'Set rendezvous here'}
             </button>
           )}
         </div>

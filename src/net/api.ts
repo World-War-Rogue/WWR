@@ -7,6 +7,7 @@
  */
 
 import type {CosmeticItem, CosmeticSlot, Loadout} from '../../shared/cosmetics';
+import type {BattleDetail, BattleSummary} from '../../shared/battles';
 
 export interface ChatMessage {
   id: string;
@@ -156,9 +157,24 @@ export interface WorldView {
     plot: {x: number; y: number} | null;
     homeWorldId: number | null;
     allianceId: string | null;
+    rank: string | null;
+    /** Whether this player may plant the marker. Decided by the server. */
+    maySetRally: boolean;
+    /** Milliseconds until they may answer one; 0 when they may now. */
+    rallyCooldownMs: number;
   };
   skins: Record<string, SkinSpec>;
   bases: PlacedBase[];
+  /** The alliance's marker, when there is one in the world being viewed. */
+  rally: RallyPoint | null;
+}
+
+export interface RallyPoint {
+  x: number;
+  y: number;
+  worldId: number;
+  setBy: string;
+  setAt: number;
 }
 
 export interface Player {
@@ -243,6 +259,29 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(worldId === undefined ? {x, y} : {x, y, worldId}),
     }),
+  setRally: (x: number, y: number, worldId?: number) =>
+    call<{rally: RallyPoint | null}>('/api/rally/set', {
+      method: 'POST',
+      body: JSON.stringify(worldId === undefined ? {x, y} : {x, y, worldId}),
+    }),
+  clearRally: () =>
+    call<{rally: null}>('/api/rally/set', {method: 'POST', body: JSON.stringify({clear: true})}),
+  rally: () =>
+    call<{world: {id: number; name: string}; plot: {x: number; y: number}; cooldownMs: number}>(
+      '/api/rally',
+      {method: 'POST'},
+    ),
+  battles: (scope: 'mine' | 'alliance', before?: number) => {
+    const params = new URLSearchParams({scope});
+    if (before !== undefined) params.set('before', String(before));
+    return call<{scope: string; battles: BattleSummary[]; retentionDays: number}>(
+      `/api/battles?${params.toString()}`,
+    );
+  },
+  battle: (id: string) =>
+    call<{summary: BattleSummary; detail: BattleDetail}>(
+      `/api/battle?id=${encodeURIComponent(id)}`,
+    ),
   chatChannels: () => call<ChatChannels>('/api/chat/channels'),
   chatRead: (channel: string, since?: number) => {
     const params = new URLSearchParams({channel});

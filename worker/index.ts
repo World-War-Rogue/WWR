@@ -5,6 +5,10 @@
  * static assets binding, which serves the built React client.
  */
 import {handleAdminRequests} from './admin';
+import {clearRally, lastRalliedAt, rallyTo, readRally, setRally} from './rally';
+import {RALLY_COOLDOWN_MS, maySetRally, rallyCooldownLeft} from '../shared/rally';
+import {listBattles, readBattle} from './battles';
+import {REPORT_RETENTION_DAYS} from '../shared/battles';
 import {
   type Viewer,
   channelsFor,
@@ -647,10 +651,19 @@ async function handleWorld(request: Request, env: Env, player: PlayerRow): Promi
   ]);
 
   const ownAlliance = await env.DB.prepare(
-    `SELECT alliance_id AS id FROM alliance_members WHERE player_id = ?1`,
+    `SELECT alliance_id AS id, rank AS rank FROM alliance_members WHERE player_id = ?1`,
   )
     .bind(player.id)
-    .first<{id: string}>();
+    .first<{id: string; rank: string}>();
+
+  // The rendezvous point rides along with the map rather than being polled on
+  // its own. It changes when an officer moves it, which is exactly as often as
+  // the map is already being refreshed, so a second endpoint would be a second
+  // request for the same information.
+  const [rallyPoint, ralliedAt] = await Promise.all([
+    readRally(env.DB, ownAlliance?.id ?? null),
+    lastRalliedAt(env.DB, world.id, player.id),
+  ]);
 
   return json({
     viewport: {x, y, w, h},
@@ -665,13 +678,17 @@ async function handleWorld(request: Request, env: Env, player: PlayerRow): Promi
     you: {
       username: player.username,
       plot: self ?? null,
-      // Everything the client needs to colour a base by allegiance. Alliances
-      // do not exist yet, so allianceId is always null and nothing is ever
-      // drawn as an ally - the branch is here so that adding them later is a
-      // query, not a rendering change.
+      // Everything the client needs to colour a base by allegiance.
       homeWorldId: home?.id ?? null,
       allianceId: ownAlliance?.id ?? null,
+      rank: ownAlliance?.rank ?? null,
+      maySetRally: maySetRally(ownAlliance?.rank),
+      rallyCooldownMs: rallyCooldownLeft(ralliedAt, now),
     },
+    // Null when the player has no alliance, or nobody has planted one. Only
+    // shown on the world it was planted in - a marker in your home world is
+    // not a place you can walk to from an event map.
+    rally: rallyPoint && rallyPoint.worldId === world.id ? rallyPoint : null,
     skins: SKINS,
     bases,
   });
@@ -710,6 +727,112 @@ async function handleMove(request: Request, env: Env, player: PlayerRow): Promis
   if (!moved) return fail(409, 'Another base already holds that ground.');
 
   return json({world: {id: world.id, name: world.name}, plot: {x, y}});
+}
+
+/**
+ * Plant, move or clear the alliance's rendezvous point.
+ *
+ * Rank is read from the database on every call, never taken from the request.
+ * A soldier who edits the button back into existence in their own browser
+ * still cannot set a marker, because the browser is not what is asked.
+ */
+async function handleSetRally(request: Request, env: Env, player: PlayerRow): Promise<Response> {
+  const membership = await membershipOf(env.DB, player.id);
+  if (!membership) return fail(409, 'You are not in an alliance.');
+  if (!maySetRally(membership.rank)) {
+    return fail(403, 'Only a General or Lieutenant can set the rendezvous.');
+  }
+
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const now = Date.now();
+
+  if (body?.clear === true) {
+    await clearRally(env.DB, membership.alliance.id);
+    return json({rally: null});
+  }
+
+  const x = Number(body?.x);
+  const y = Number(body?.y);
+  if (!Number.isInteger(x) || !Number.isInteger(y)) return fail(400, 'Pick a plot on the map.');
+
+  const worlds = await reachableWorlds(env.DB, player.id, now);
+  const requested = body?.worldId;
+  const world =
+    requested === undefined
+      ? (worlds.find((entry) => entry.kind === 'home') ?? worlds[0])
+      : worlds.find((entry) => entry.id === Number(requested));
+  if (!world) return fail(403, 'That world is not open to you.');
+  if (Math.abs(x) > world.extent || Math.abs(y) > world.extent) {
+    return fail(400, 'That is beyond the edge of the map.');
+  }
+
+  await setRally(env.DB, membership.alliance.id, player.id, world.id, x, y, now);
+  return json({rally: await readRally(env.DB, membership.alliance.id)});
+}
+
+/**
+ * Answer the rendezvous: move to the nearest free plot beside the marker.
+ *
+ * The destination is chosen here and never sent by the client. Letting the
+ * browser name the plot would turn RV into an unlimited teleport to anywhere
+ * on the map with an alliance marker as its excuse.
+ */
+async function handleRally(env: Env, player: PlayerRow): Promise<Response> {
+  const membership = await membershipOf(env.DB, player.id);
+  if (!membership) return fail(409, 'You are not in an alliance.');
+
+  const point = await readRally(env.DB, membership.alliance.id);
+  if (!point) return fail(404, 'Your alliance has no rendezvous point.');
+
+  const now = Date.now();
+  const worlds = await reachableWorlds(env.DB, player.id, now);
+  const world = worlds.find((entry) => entry.id === point.worldId);
+  if (!world) return fail(403, 'That rendezvous is in a world you cannot reach.');
+
+  const result = await rallyTo(env.DB, world.id, world.extent, player.id, point, now);
+  if (!result.ok) {
+    if (result.reason === 'cooldown') {
+      const minutes = Math.ceil(result.waitMs / 60000);
+      return fail(429, `You can rally again in ${minutes} minute${minutes === 1 ? '' : 's'}.`);
+    }
+    if (result.reason === 'edge') return fail(409, 'That rendezvous sits off the edge of the map.');
+    return fail(409, 'No open ground near the rendezvous.');
+  }
+
+  return json({
+    world: {id: world.id, name: world.name},
+    plot: {x: result.x, y: result.y},
+    cooldownMs: RALLY_COOLDOWN_MS,
+  });
+}
+
+/** Battle reports, newest first. Empty until combat exists and writes some. */
+async function handleBattles(request: Request, env: Env, player: PlayerRow): Promise<Response> {
+  const url = new URL(request.url);
+  const scope = url.searchParams.get('scope') === 'alliance' ? 'alliance' : 'mine';
+  const beforeRaw = Number.parseInt(url.searchParams.get('before') ?? '', 10);
+  const before = Number.isFinite(beforeRaw) ? beforeRaw : null;
+
+  const membership = await membershipOf(env.DB, player.id);
+  const battles = await listBattles(
+    env.DB,
+    player.id,
+    membership?.alliance.id ?? null,
+    scope,
+    before,
+  );
+  return json({scope, battles, retentionDays: REPORT_RETENTION_DAYS});
+}
+
+/** One report in full. Access is decided by the participants table, not by the client. */
+async function handleBattle(request: Request, env: Env, player: PlayerRow): Promise<Response> {
+  const id = new URL(request.url).searchParams.get('id');
+  if (!id) return fail(400, 'Which battle?');
+
+  const membership = await membershipOf(env.DB, player.id);
+  const report = await readBattle(env.DB, player.id, membership?.alliance.id ?? null, id);
+  if (!report) return fail(404, 'No such battle report.');
+  return json(report);
 }
 
 async function handleStartUpgrade(request: Request, env: Env, player: PlayerRow): Promise<Response> {
@@ -1981,6 +2104,14 @@ async function route(
   if (endpoint === 'GET /api/world') return handleWorld(request, env, player);
 
   if (endpoint === 'POST /api/world/move') return handleMove(request, env, player);
+
+  if (endpoint === 'POST /api/rally/set') return handleSetRally(request, env, player);
+
+  if (endpoint === 'POST /api/rally') return handleRally(env, player);
+
+  if (endpoint === 'GET /api/battles') return handleBattles(request, env, player);
+
+  if (endpoint === 'GET /api/battle') return handleBattle(request, env, player);
 
   return fail(404, 'No such endpoint.');
 }

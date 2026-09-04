@@ -90,13 +90,21 @@ same pass, or those bases are left in a state the ownership check rejects.
 
 ## Type-checking on the device VM
 
-Run tsc as `node --jitless ./node_modules/typescript/lib/tsc.js`.
+Run tsc as `node --no-opt --no-turbofan ./node_modules/typescript/lib/tsc.js`,
+and **retry on a non-zero exit that is not 1 or 2** - it is a crash, not a
+finding.
 
 The VM's node crashes intermittently with a V8 fatal error in the optimizing
-compiler ("unreachable code", turboshaft in the stack). `--no-opt` does not
-prevent it; `--jitless` does. The crash kills the whole shell call, so a script
-that writes files and then type-checks can lose the writes as well - write
-first, check in a separate call.
+compiler ("unreachable code", turboshaft in the stack). `--jitless` was the
+earlier workaround and is no longer reliable: turboshaft still appears in the
+crash trace under it, so it was never actually disabling the optimizer here.
+`--no-opt --no-turbofan` is what holds, and even that crashes occasionally, so
+loop the run until it exits 0 (clean), 1 or 2 (real errors).
+
+The crash kills the whole shell call, so a script that writes files and then
+type-checks can lose the writes as well - write first, check in a separate
+call. Exit 139 is a segfault, 133 a V8 trap, 255 a fatal error; none of them
+mean the code is wrong.
 
 Do not put raw control characters in a heredoc - a regex literal written with
 actual control bytes has broken the transport twice. Use codepoint checks.

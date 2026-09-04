@@ -8,6 +8,7 @@
  */
 import {type FormEvent, useCallback, useEffect, useRef, useState} from 'react';
 import Alliance from './Alliance';
+import Battles from './Battles';
 import Chat from './Chat';
 import Customize from './Customize';
 import Profile from './Profile';
@@ -72,7 +73,9 @@ export default function LiveApp() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [checking, setChecking] = useState(true);
-  const [screen, setScreen] = useState<'base' | 'world' | 'customize' | 'profile' | 'alliance'>('base');
+  const [screen, setScreen] = useState<
+    'base' | 'world' | 'customize' | 'profile' | 'alliance' | 'battles'
+  >('base');
   // Whose profile is open. Your own from the base header; somebody else's from
   // their base on the map.
   const [viewing, setViewing] = useState<string | null>(null);
@@ -213,7 +216,21 @@ export default function LiveApp() {
               setViewing(name);
               setScreen('profile');
             }}
+            onOpenBattles={() => setScreen('battles')}
           />
+        </div>
+        {chat}
+      </>
+    );
+  }
+
+  // Reports take the whole viewport too: a battle report is a page you read,
+  // not a panel you glance at over the map.
+  if (screen === 'battles') {
+    return (
+      <>
+        <div className="fixed inset-0 bg-[#0a0906] text-neutral-200">
+          <Battles onClose={() => setScreen('world')} />
         </div>
         {chat}
       </>
