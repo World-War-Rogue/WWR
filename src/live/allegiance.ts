@@ -27,10 +27,11 @@ export interface AllegianceColours {
 /**
  * The four states, and nothing else.
  *
- * Chosen far apart in brightness as well as hue. Red and green at equal value
- * is the commonest pair to be indistinguishable to a colour-blind player, so
- * the green here is lighter than the red rather than merely a different hue -
+ * Chosen far apart in brightness as well as hue, because hue alone does not
+ * survive a dim screen, a phone in sunlight, or a colour-blind player - and
  * this is the one place in the game where misreading a colour loses a battle.
+ * Read as greyscale the four still separate: gold near white, green and blue
+ * in the middle at different weights, red darkest.
  *
  * There is no colour for yourself. Four meanings is already the most a player
  * can hold in their head at a glance, and your own base is the one you can
@@ -40,9 +41,16 @@ export interface AllegianceColours {
  */
 export const ALLEGIANCE: Record<Allegiance, AllegianceColours> = {
   ally: {fill: '#16a34a', top: '#4ade80', label: 'Your alliance'},
-  server: {fill: '#ea580c', top: '#fb923c', label: 'Your server'},
+  // Gold rather than orange. Orange sits 25 degrees from red on the colour
+  // wheel - the tightest pair in the set, and the two were being confused at
+  // plot size. Gold moves it to 50 and, more usefully, separates it by
+  // brightness: gold is the lightest colour here and red one of the darkest,
+  // so they stay apart on a dim screen and for a colour-blind player, neither
+  // of which hue alone survives.
+  server: {fill: '#facc15', top: '#fef08a', label: 'Your server'},
   neutral: {fill: '#2563eb', top: '#60a5fa', label: 'Another server'},
-  hostile: {fill: '#dc2626', top: '#f87171', label: 'At war'},
+  // Deepened a little to widen the gap from gold at the bottom end.
+  hostile: {fill: '#c81e1e', top: '#f87171', label: 'At war'},
 };
 
 export interface Viewer {
