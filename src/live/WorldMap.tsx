@@ -15,6 +15,7 @@ import {ApiError, type PlacedBase, type WorldView, api} from '../net/api';
 import {EffectLayer, type EffectSource} from './effects';
 import {DEFAULT_SEASON, seasonSpec, terrainAt} from './terrain';
 import {normaliseLoadout} from '../../shared/cosmetics';
+import {artPending, onArtLoaded, skinIsAnimated} from './skinArt';
 import {drawBase as paintBase, skinSpec} from './skins';
 
 const MIN_ZOOM = 14; // pixels per plot when fully zoomed out
@@ -108,6 +109,18 @@ export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
   const frameRef = useRef<number | null>(null);
   const lastFrameRef = useRef(0);
   const [, forceDraw] = useState(0);
+
+  // Whether anything currently loaded needs a frame clock. A map of still
+  // bases costs nothing; one animated skin in view starts the loop, and only
+  // for as long as it is in view.
+  const animatedInView = useMemo(
+    () =>
+      (view?.bases ?? []).some((base) => {
+        const spec = skinSpec(base.skin);
+        return skinIsAnimated(spec.art, spec.motion);
+      }),
+    [view],
+  );
 
   const basesByPlot = useMemo(() => {
     const map = new Map<string, PlacedBase>();
@@ -221,6 +234,10 @@ export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+    // One clock for the whole map. Bases wearing the same skin move in step,
+    // which reads as deliberate; a per-base phase reads as fidgeting.
+    const time = performance.now();
+
     const {cx, cy, zoom} = camera;
     const toScreenX = (plotX: number) => (plotX - cx) * zoom + w / 2;
     const toScreenY = (plotY: number) => (plotY - cy) * zoom + h / 2;
@@ -315,6 +332,7 @@ export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
         base.level,
         base.username === you,
         normaliseLoadout(base),
+        time,
       );
     }
 
@@ -347,14 +365,18 @@ export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
   // of static bases costs nothing; a burning one runs at frame rate.
   useEffect(() => {
     const layer = effectsRef.current;
+    // Three reasons to keep drawing: something is burning, a skin in view
+    // moves, or art is still arriving and the frame it lands on has to be
+    // redrawn.
+    const running = () => layer.busy || animatedInView || artPending();
     const step = (time: number) => {
       const delta = lastFrameRef.current ? Math.min(64, time - lastFrameRef.current) : 16;
       lastFrameRef.current = time;
       layer.update(delta);
       forceDraw((n) => (n + 1) % 1_000_000);
-      frameRef.current = layer.busy ? window.requestAnimationFrame(step) : null;
+      frameRef.current = running() ? window.requestAnimationFrame(step) : null;
     };
-    if (layer.busy && frameRef.current === null) {
+    if (running() && frameRef.current === null) {
       lastFrameRef.current = 0;
       frameRef.current = window.requestAnimationFrame(step);
     }
@@ -365,6 +387,10 @@ export default function WorldMap({onOpenBase}: {onOpenBase: () => void}) {
       }
     };
   });
+
+  // A skin with a single still and no motion never starts the loop, so the
+  // frame its art lands on has to be asked for explicitly.
+  useEffect(() => onArtLoaded(() => forceDraw((n) => (n + 1) % 1_000_000)), []);
 
   // Until combat exists, effects can be exercised from the console:
   //   wwrBurn(x, y)  - set a plot alight

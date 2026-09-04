@@ -14,6 +14,13 @@
 
 import {DEFAULT_LOADOUT, type Loadout} from '../../shared/cosmetics';
 import {
+  type SkinArt,
+  type SkinMotion,
+  drawMotionGlow,
+  drawSkinArt,
+  motionOffset,
+} from './skinArt';
+import {
   bannerOf,
   decalOf,
   drawBanner,
@@ -30,7 +37,8 @@ export type SkinId =
   | 'jungle_outpost'
   | 'urban_garrison'
   | 'custom_one'
-  | 'custom_two';
+  | 'custom_two'
+  | 'signature_one';
 
 export interface Palette {
   ground: string;
@@ -50,6 +58,24 @@ export interface SkinSpec {
   /** A signature structure that makes the skin recognisable at a glance. */
   landmark: 'tower' | 'dome' | 'canopy' | 'block';
   starter: boolean;
+  /**
+   * A one-of-one commission. At most one account may ever own it, enforced by
+   * a unique index in the database rather than by remembering not to sell it
+   * twice - see migrations/0006_exclusive.sql.
+   */
+  exclusive?: boolean;
+  /**
+   * Rendered art, when it exists. A skin with art ignores the drawn recipe
+   * above entirely; the recipe stays as the fallback for as long as the art
+   * has not loaded, and forever for skins that never get any.
+   */
+  art?: SkinArt;
+  /**
+   * Movement applied to whatever is drawn - art or recipe. This is what makes
+   * a single still render read as alive, and it is deliberately applied to the
+   * placeholder skins too so the motion can be judged before art is bought.
+   */
+  motion?: SkinMotion;
 }
 
 export const SKINS: Record<SkinId, SkinSpec> = {
@@ -92,23 +118,66 @@ export const SKINS: Record<SkinId, SkinSpec> = {
 
   // Reserved for the two custom skins. Palettes are placeholders until the
   // reference images land; the renderer already handles them.
+  // The two premium slots. No art yet, so they draw with the recipe - but they
+  // carry motion, which means the rise-and-fall and the pulsing halo a bought
+  // skin will have can be seen and tuned now, on placeholder geometry, before
+  // anybody is paid to model anything.
   custom_one: {
     id: 'custom_one',
     name: 'Custom I',
-    blurb: 'Awaiting reference art.',
+    blurb: 'Awaiting reference art. Motion is live.',
     palette: {ground: '#5b4b6e', structure: '#b9a7d0', accent: '#c084fc', roof: '#413352', wall: '#8f7cab'},
     perimeter: 'blast',
     landmark: 'tower',
     starter: false,
+    motion: {
+      bob: {amplitude: 0.022, periodMs: 3400},
+      glow: {color: '#a855f7', radius: 0.85, periodMs: 2600},
+    },
   },
   custom_two: {
     id: 'custom_two',
     name: 'Custom II',
-    blurb: 'Awaiting reference art.',
+    blurb: 'Awaiting reference art. Motion is live.',
     palette: {ground: '#6e5b3a', structure: '#d6c08a', accent: '#facc15', roof: '#4d3f27', wall: '#a89066'},
     perimeter: 'bastion',
     landmark: 'dome',
     starter: false,
+    motion: {
+      bob: {amplitude: 0.016, periodMs: 4200},
+      glow: {color: '#facc15', radius: 0.7, periodMs: 3100},
+      sway: {amount: 0.03, periodMs: 5200},
+    },
+  },
+
+  // The flagship commission: modelled, rigged and animated to order, sold once.
+  //
+  // The art slot below is where the finished atlas goes. It is commented out
+  // rather than pointing at a missing file, because a declared atlas that 404s
+  // logs a warning on every player's console for as long as it is wrong.
+  //
+  //   art: {
+  //     src: '/skins/signature_one.webp',
+  //     frames: 24, cols: 6, frameW: 512, frameH: 640, fps: 12, overhang: 0.35,
+  //   },
+  //
+  // Until it lands, the motion below runs on placeholder geometry - which is
+  // deliberate. The movement can be judged and tuned before anyone is paid to
+  // model anything.
+  signature_one: {
+    id: 'signature_one',
+    name: 'Signature Commission',
+    blurb: 'Modelled, rigged and animated to order. One of one.',
+    palette: {ground: '#241f2e', structure: '#c9b4e8', accent: '#e879f9', roof: '#3a2f4d', wall: '#7c6a99'},
+    perimeter: 'blast',
+    landmark: 'dome',
+    starter: false,
+    exclusive: true,
+    motion: {
+      bob: {amplitude: 0.03, periodMs: 2800},
+      glow: {color: '#e879f9', radius: 1.0, periodMs: 2200},
+      sway: {amount: 0.02, periodMs: 6400},
+    },
   },
 };
 
@@ -146,6 +215,7 @@ export function drawBase(
   level: number,
   isYou: boolean,
   loadout: Loadout = DEFAULT_LOADOUT,
+  time = 0,
 ) {
   const p = skin.palette;
   const pad = size * 0.05;
@@ -158,29 +228,55 @@ export function drawBase(
   const lights = lightsOf(loadout);
   const decal = decalOf(loadout);
 
+  // The halo sits behind everything, so it reads as light cast on the ground
+  // rather than as a filter over the base.
+  drawMotionGlow(ctx, x, y, inner, skin.motion, time);
+
   // Compound floor.
   ctx.fillStyle = p.ground;
   roundRect(ctx, x, y, inner, inner, size * 0.09);
   ctx.fill();
 
-  // Ground marking goes on the floor, under everything built on it.
+  // Ground marking goes on the floor, under everything built on it - and it
+  // stays put while the base above it moves, because paint does not bob.
   if (decal) drawDecal(ctx, x, y, inner, decal);
 
-  const detailed = size >= 34;
+  const {dy, shear} = motionOffset(skin.motion, inner, time);
+  const moving = dy !== 0 || shear !== 0;
 
-  if (detailed) {
-    drawPerimeter(ctx, x, y, inner, skin);
-    drawInterior(ctx, x, y, inner, skin, plotX, plotY, level);
-  } else {
-    // Far-out silhouette: footprint plus a roof mass, enough to tell skins
-    // apart by colour without spending draw calls on detail nobody can see.
-    ctx.fillStyle = p.roof;
-    ctx.fillRect(x + inner * 0.22, y + inner * 0.22, inner * 0.56, inner * 0.56);
-    ctx.fillStyle = p.accent;
-    ctx.fillRect(x + inner * 0.4, y + inner * 0.4, inner * 0.2, inner * 0.2);
+  if (moving) {
+    ctx.save();
+    // Sheared about the foot of the base so the footprint stays anchored and
+    // only the top leans, the way something standing on ground would.
+    const anchorY = y + inner;
+    ctx.translate(0, anchorY + dy);
+    ctx.transform(1, 0, shear, 1, 0, 0);
+    ctx.translate(0, -anchorY);
   }
 
-  if (emblem) drawPadEmblem(ctx, x, y, inner, emblem);
+  // Rendered art wins when it has loaded. Everything below it is the fallback
+  // that keeps the map complete while art is still being commissioned.
+  const painted = skin.art ? drawSkinArt(ctx, x, y, inner, skin.art, time) : false;
+
+  if (!painted) {
+    const detailed = size >= 34;
+    if (detailed) {
+      drawPerimeter(ctx, x, y, inner, skin);
+      drawInterior(ctx, x, y, inner, skin, plotX, plotY, level);
+    } else {
+      // Far-out silhouette: footprint plus a roof mass, enough to tell skins
+      // apart by colour without spending draw calls on detail nobody can see.
+      ctx.fillStyle = p.roof;
+      ctx.fillRect(x + inner * 0.22, y + inner * 0.22, inner * 0.56, inner * 0.56);
+      ctx.fillStyle = p.accent;
+      ctx.fillRect(x + inner * 0.4, y + inner * 0.4, inner * 0.2, inner * 0.2);
+    }
+    // The pad emblem is painted on the compound floor. Rendered art brings its
+    // own ground, so it is skipped there rather than stamped over the model.
+    if (emblem) drawPadEmblem(ctx, x, y, inner, emblem);
+  }
+
+  if (moving) ctx.restore();
 
   ctx.strokeStyle = isYou ? '#ffffff' : 'rgba(0,0,0,0.4)';
   ctx.lineWidth = isYou ? Math.max(2, size * 0.045) : 1;

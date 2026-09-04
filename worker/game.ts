@@ -165,7 +165,8 @@ export type SkinId =
   | 'jungle_outpost'
   | 'urban_garrison'
   | 'custom_one'
-  | 'custom_two';
+  | 'custom_two'
+  | 'signature_one';
 
 export interface SkinSpec {
   id: SkinId;
@@ -173,6 +174,12 @@ export interface SkinSpec {
   blurb: string;
   /** Ground, structure and accent colours the map renderer draws with. */
   palette: {ground: string; structure: string; accent: string};
+  /**
+   * A one-of-one commission. At most one account in the game may ever hold it,
+   * and that is enforced by a unique index rather than by remembering not to
+   * sell it twice - see migrations/0006_exclusive.sql.
+   */
+  exclusive?: boolean;
 }
 
 export const SKINS: Record<SkinId, SkinSpec> = {
@@ -212,6 +219,14 @@ export const SKINS: Record<SkinId, SkinSpec> = {
     name: 'Custom II',
     blurb: 'Awaiting reference art.',
     palette: {ground: '#6e5b3a', structure: '#d6c08a', accent: '#facc15'},
+  },
+  // The flagship commission. Sold once, to one player, and never again.
+  signature_one: {
+    id: 'signature_one',
+    name: 'Signature Commission',
+    blurb: 'Modelled, rigged and animated to order. One of one.',
+    palette: {ground: '#241f2e', structure: '#c9b4e8', accent: '#e879f9'},
+    exclusive: true,
   },
 };
 

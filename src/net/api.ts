@@ -159,11 +159,14 @@ export const api = {
       items: CosmeticItem[];
       owned: string[];
       loadout: Loadout;
+      skinIds: string[];
+      skinsOwned: string[];
+      skin: string;
     }>('/api/cosmetics'),
-  equip: (loadout: Loadout) =>
-    call<{loadout: Loadout}>('/api/cosmetics/equip', {
+  equip: (loadout: Loadout, skin: string) =>
+    call<{loadout: Loadout; skin: string}>('/api/cosmetics/equip', {
       method: 'POST',
-      body: JSON.stringify(loadout),
+      body: JSON.stringify({...loadout, skin}),
     }),
 };
 

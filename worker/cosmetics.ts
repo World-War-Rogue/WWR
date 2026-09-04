@@ -14,6 +14,7 @@ import {
   type Loadout,
   isItemInSlot,
 } from '../shared/cosmetics';
+import {SKINS, isSkinId} from './game';
 
 export {COSMETIC_SLOTS, DEFAULT_LOADOUT};
 export type {Loadout};
@@ -76,23 +77,48 @@ export function checkLoadout(
   return {loadout};
 }
 
-/** Grants an item outright. Used by admin tooling and, later, by a purchase. */
+/**
+ * What a grantable id is, whether it names an accessory or a premium base
+ * skin. Both are recorded in player_cosmetics so there is exactly one place to
+ * look to answer "may this player wear this".
+ */
+function resolveGrantable(itemId: string): {slot: string; exclusive: boolean} | null {
+  const item = COSMETICS_BY_ID[itemId];
+  if (item) return {slot: item.slot, exclusive: item.exclusive === true};
+  if (isSkinId(itemId)) return {slot: 'skin', exclusive: SKINS[itemId].exclusive === true};
+  return null;
+}
+
+/**
+ * Grants an item outright. Used by admin tooling and, later, by a purchase.
+ *
+ * Returns 'taken' when the item is a one-of-one that somebody already holds.
+ * That answer comes from the unique index rejecting the write, not from a
+ * check performed first - two purchases landing in the same instant would both
+ * pass a check, and only one can win the insert.
+ */
 export async function grantItem(
   db: D1Database,
   playerId: string,
   itemId: string,
   source: 'purchase' | 'grant' | 'reward',
   now: number,
-): Promise<boolean> {
-  const item = COSMETICS_BY_ID[itemId];
-  if (!item) return false;
-  await db
-    .prepare(
-      `INSERT INTO player_cosmetics (player_id, item_id, slot, source, acquired_at)
-       VALUES (?1, ?2, ?3, ?4, ?5)
-       ON CONFLICT(player_id, item_id) DO NOTHING`,
-    )
-    .bind(playerId, itemId, item.slot, source, now)
-    .run();
-  return true;
+): Promise<'granted' | 'taken' | 'unknown'> {
+  const grantable = resolveGrantable(itemId);
+  if (!grantable) return 'unknown';
+  try {
+    await db
+      .prepare(
+        `INSERT INTO player_cosmetics (player_id, item_id, slot, source, acquired_at, exclusive)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT(player_id, item_id) DO NOTHING`,
+      )
+      .bind(playerId, itemId, grantable.slot, source, now, grantable.exclusive ? 1 : 0)
+      .run();
+    return 'granted';
+  } catch {
+    // The partial unique index on exclusive items refused it: somebody owns
+    // this one already, and that refusal is the promise being kept.
+    return 'taken';
+  }
 }

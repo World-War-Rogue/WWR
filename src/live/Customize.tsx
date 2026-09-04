@@ -1,13 +1,14 @@
 /**
  * The customisation screen.
  *
- * Four slots, each with its own row of options, over a live preview of the
- * player's own base. The preview is drawn with the same function the world map
- * uses, so what a player sees here is exactly what their neighbours will see -
- * there is no separate "preview renderer" to fall out of step.
+ * A base skin plus four accessory slots, over a live preview of the player's
+ * own base. The preview is drawn with the same function the world map uses, so
+ * what a player sees here is exactly what their neighbours will see - there is
+ * no separate "preview renderer" to fall out of step with the real one.
  *
- * Locked items are shown, not hidden. A catalogue that only lists what you
- * already own gives a player no reason to come back to it.
+ * Locked items are shown rather than hidden, and they preview on your own
+ * base. A catalogue that only lists what you already own gives nobody a reason
+ * to open it twice.
  */
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
@@ -21,62 +22,134 @@ import {
 } from '../../shared/cosmetics';
 import {ApiError, api} from '../net/api';
 import {drawSwatch} from './cosmeticsPaint';
+import {skinIsAnimated} from './skinArt';
 import {drawBase, skinSpec} from './skins';
 
-/** One catalogue item, drawn rather than described. */
-function Swatch({
-  item,
-  selected,
-  locked,
-  onPick,
-}: {
-  item: CosmeticItem;
-  selected: boolean;
-  locked: boolean;
-  onPick: () => void;
-}) {
-  const ref = useRef<HTMLCanvasElement | null>(null);
+const SWATCH = 56;
 
+function useSwatchCanvas(paint: (ctx: CanvasRenderingContext2D, size: number) => void) {
+  const ref = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const size = 56;
-    canvas.width = size * dpr;
-    canvas.height = size * dpr;
+    canvas.width = SWATCH * dpr;
+    canvas.height = SWATCH * dpr;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    drawSwatch(ctx, item, size);
-  }, [item]);
+    paint(ctx, SWATCH);
+  }, [paint]);
+  return ref;
+}
 
+function Tile({
+  ref,
+  label,
+  caption,
+  selected,
+  locked,
+  onPick,
+}: {
+  ref: (node: HTMLCanvasElement | null) => void;
+  label: string;
+  caption: string | null;
+  selected: boolean;
+  locked: boolean;
+  onPick: () => void;
+}) {
   return (
     <button
       type="button"
       onClick={onPick}
-      title={locked ? `${item.name} — locked` : item.name}
-      className={`group relative shrink-0 rounded border p-1 transition ${
+      title={locked ? `${label} — locked` : label}
+      className={`group relative rounded border p-1 transition ${
         selected
           ? 'border-orange-500 bg-orange-950/40'
           : 'border-neutral-800 bg-neutral-900/60 hover:border-neutral-600'
       }`}
     >
-      <canvas ref={ref} style={{width: 56, height: 56}} className="block rounded-sm" />
+      <canvas ref={ref} style={{width: SWATCH, height: SWATCH}} className="block rounded-sm" />
       {locked && (
-        <span className="absolute inset-0 flex items-center justify-center rounded-sm bg-black/55 text-[10px] font-semibold uppercase tracking-wider text-neutral-300">
-          {item.price}
+        <span className="absolute left-1 top-1 flex h-[56px] w-[56px] items-center justify-center rounded-sm bg-black/55 text-[10px] font-semibold uppercase tracking-wider text-neutral-300">
+          {caption}
         </span>
       )}
       <span className="mt-1 block w-[56px] truncate text-center text-[10px] text-neutral-500 group-hover:text-neutral-300">
-        {item.name}
+        {label}
       </span>
     </button>
   );
 }
 
-/** The player's own base, drawn large, with the loadout currently being edited. */
+function ItemTile(props: {
+  item: CosmeticItem;
+  selected: boolean;
+  locked: boolean;
+  onPick: () => void;
+}) {
+  const {item} = props;
+  const paint = useCallback(
+    (ctx: CanvasRenderingContext2D, size: number) => drawSwatch(ctx, item, size),
+    [item],
+  );
+  const ref = useSwatchCanvas(paint);
+  return (
+    <Tile
+      ref={(node) => {
+        ref.current = node;
+      }}
+      label={item.name}
+      caption={String(item.price)}
+      selected={props.selected}
+      locked={props.locked}
+      onPick={props.onPick}
+    />
+  );
+}
+
+function SkinTile(props: {
+  skin: string;
+  loadout: Loadout;
+  selected: boolean;
+  locked: boolean;
+  onPick: () => void;
+}) {
+  const {skin, loadout} = props;
+  const paint = useCallback(
+    (ctx: CanvasRenderingContext2D, size: number) => {
+      ctx.fillStyle = '#12100c';
+      ctx.fillRect(0, 0, size, size);
+      // Drawn a little inside the tile so a banner's overhang is not clipped.
+      drawBase(ctx, size * 0.06, size * 0.14, size * 0.88, skinSpec(skin), 3, 5, 10, false, loadout, 0);
+    },
+    [skin, loadout],
+  );
+  const ref = useSwatchCanvas(paint);
+  return (
+    <Tile
+      ref={(node) => {
+        ref.current = node;
+      }}
+      label={skinSpec(skin).name}
+      caption="Locked"
+      selected={props.selected}
+      locked={props.locked}
+      onPick={props.onPick}
+    />
+  );
+}
+
+/**
+ * The player's own base, drawn large.
+ *
+ * Animated when the skin moves, and only then. A still skin paints once and
+ * the screen costs nothing to leave open.
+ */
 function Preview({skin, loadout}: {skin: string; loadout: Loadout}) {
   const ref = useRef<HTMLCanvasElement | null>(null);
+  const spec = skinSpec(skin);
+  const animated = skinIsAnimated(spec.art, spec.motion);
 
   useEffect(() => {
     const canvas = ref.current;
@@ -87,19 +160,28 @@ function Preview({skin, loadout}: {skin: string; loadout: Loadout}) {
     canvas.height = box * dpr;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    ctx.fillStyle = '#0f0d09';
-    ctx.fillRect(0, 0, box, box);
-    // A patch of ground under the base, so the compound is not floating.
-    ctx.fillStyle = '#7d6647';
-    ctx.fillRect(0, box * 0.12, box, box * 0.88);
+    let frame: number | null = null;
+    const paint = (time: number) => {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = '#0f0d09';
+      ctx.fillRect(0, 0, box, box);
+      // A patch of ground, so the compound is not floating in the void.
+      ctx.fillStyle = '#7d6647';
+      ctx.fillRect(0, box * 0.14, box, box * 0.86);
 
-    // The banner overhangs the top of the plot, so the base is inset to leave
-    // it room rather than being clipped by the edge of the canvas.
-    const size = box * 0.74;
-    drawBase(ctx, (box - size) / 2, box * 0.22, size, skinSpec(skin), 7, 11, 12, true, loadout);
-  }, [skin, loadout]);
+      // Inset from the top: the banner and any art overhang stand above the
+      // plot, and would otherwise be cut off by the edge of the canvas.
+      const size = box * 0.72;
+      drawBase(ctx, (box - size) / 2, box * 0.24, size, spec, 7, 11, 12, true, loadout, time);
+      if (animated) frame = window.requestAnimationFrame(paint);
+    };
+
+    paint(performance.now());
+    return () => {
+      if (frame !== null) window.cancelAnimationFrame(frame);
+    };
+  }, [spec, loadout, animated]);
 
   return (
     <canvas
@@ -110,11 +192,19 @@ function Preview({skin, loadout}: {skin: string; loadout: Loadout}) {
   );
 }
 
-export default function Customize({skin, onClose}: {skin: string; onClose: () => void}) {
+export default function Customize({onClose}: {onClose: () => void}) {
   const [items, setItems] = useState<CosmeticItem[] | null>(null);
   const [owned, setOwned] = useState<Set<string>>(new Set());
-  const [saved, setSaved] = useState<Loadout>(DEFAULT_LOADOUT);
-  const [draft, setDraft] = useState<Loadout>(DEFAULT_LOADOUT);
+  const [skinIds, setSkinIds] = useState<string[]>([]);
+  const [skinsOwned, setSkinsOwned] = useState<Set<string>>(new Set());
+  const [saved, setSaved] = useState<{loadout: Loadout; skin: string}>({
+    loadout: DEFAULT_LOADOUT,
+    skin: 'desert_fob',
+  });
+  const [draft, setDraft] = useState<{loadout: Loadout; skin: string}>({
+    loadout: DEFAULT_LOADOUT,
+    skin: 'desert_fob',
+  });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -124,8 +214,10 @@ export default function Customize({skin, onClose}: {skin: string; onClose: () =>
       .then((data) => {
         setItems(data.items);
         setOwned(new Set(data.owned));
-        setSaved(data.loadout);
-        setDraft(data.loadout);
+        setSkinIds(data.skinIds);
+        setSkinsOwned(new Set(data.skinsOwned));
+        setSaved({loadout: data.loadout, skin: data.skin});
+        setDraft({loadout: data.loadout, skin: data.skin});
       })
       .catch((err) =>
         setError(err instanceof ApiError ? err.message : 'Could not load the catalogue.'),
@@ -139,15 +231,17 @@ export default function Customize({skin, onClose}: {skin: string; onClose: () =>
     return map;
   }, [items]);
 
-  const dirty = COSMETIC_SLOTS.some((slot) => draft[slot] !== saved[slot]);
+  const dirty =
+    draft.skin !== saved.skin ||
+    COSMETIC_SLOTS.some((slot) => draft.loadout[slot] !== saved.loadout[slot]);
 
   const save = useCallback(async () => {
     setBusy(true);
     setError(null);
     try {
-      const result = await api.equip(draft);
-      setSaved(result.loadout);
-      setDraft(result.loadout);
+      const result = await api.equip(draft.loadout, draft.skin);
+      setSaved({loadout: result.loadout, skin: result.skin});
+      setDraft({loadout: result.loadout, skin: result.skin});
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not save that loadout.');
     } finally {
@@ -162,7 +256,7 @@ export default function Customize({skin, onClose}: {skin: string; onClose: () =>
           <p className="text-xs uppercase tracking-[0.3em] text-orange-500">Customisation</p>
           <h1 className="text-xl font-semibold text-neutral-100">Your colours</h1>
           <p className="mt-1 max-w-md text-sm text-neutral-500">
-            Nothing here changes what your base can do. It changes what everyone else sees when
+            None of this changes what your base can do. It changes what everyone else sees when
             they find you on the map.
           </p>
         </div>
@@ -181,18 +275,16 @@ export default function Customize({skin, onClose}: {skin: string; onClose: () =>
       )}
 
       <div className="mt-6 flex flex-col items-center gap-6 sm:flex-row sm:items-start">
-        <Preview skin={skin} loadout={draft} />
+        <Preview skin={draft.skin} loadout={draft.loadout} />
         <div className="flex-1">
-          <p className="text-sm text-neutral-400">
-            {skinSpec(skin).name}
-          </p>
-          <p className="mt-1 text-xs text-neutral-600">{skinSpec(skin).blurb}</p>
+          <p className="text-sm font-semibold text-neutral-200">{skinSpec(draft.skin).name}</p>
+          <p className="mt-1 text-xs text-neutral-500">{skinSpec(draft.skin).blurb}</p>
           <button
             onClick={() => void save()}
             disabled={!dirty || busy}
             className="mt-4 w-full rounded bg-orange-600 px-4 py-2 text-sm font-semibold text-white disabled:bg-neutral-800 disabled:text-neutral-500 sm:w-auto sm:px-6"
           >
-            {busy ? 'Saving…' : dirty ? 'Save loadout' : 'Saved'}
+            {busy ? 'Saving…' : dirty ? 'Save look' : 'Saved'}
           </button>
           {dirty && (
             <button
@@ -209,6 +301,28 @@ export default function Customize({skin, onClose}: {skin: string; onClose: () =>
         <p className="mt-8 text-sm text-neutral-600">Loading the catalogue…</p>
       ) : (
         <div className="mt-8 space-y-6">
+          <section>
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="text-sm font-semibold text-neutral-200">Base</h2>
+              <p className="truncate text-xs text-neutral-600">
+                The compound itself. Rendered art drops in here when it lands.
+              </p>
+            </div>
+            <div className="mt-2 flex gap-2 overflow-x-auto pb-2">
+              {skinIds.map((id) => (
+                <div key={id} className="shrink-0">
+                  <SkinTile
+                    skin={id}
+                    loadout={draft.loadout}
+                    selected={draft.skin === id}
+                    locked={!skinsOwned.has(id)}
+                    onPick={() => setDraft((d) => ({...d, skin: id}))}
+                  />
+                </div>
+              ))}
+            </div>
+          </section>
+
           {COSMETIC_SLOTS.map((slot) => (
             <section key={slot}>
               <div className="flex items-baseline justify-between gap-3">
@@ -216,28 +330,24 @@ export default function Customize({skin, onClose}: {skin: string; onClose: () =>
                 <p className="truncate text-xs text-neutral-600">{SLOT_BLURB[slot]}</p>
               </div>
               <div className="mt-2 flex gap-2 overflow-x-auto pb-2">
-                {(bySlot.get(slot) ?? []).map((item) => {
-                  const locked = !owned.has(item.id);
-                  return (
-                    // The key sits on a wrapper because this project carries no
-                    // @types/react, so JSX's special handling of `key` on a
-                    // custom component is not available here.
-                    <div key={item.id} className="shrink-0">
-                    <Swatch
+                {(bySlot.get(slot) ?? []).map((item) => (
+                  // The key sits on a wrapper because this project carries no
+                  // @types/react, so JSX's special handling of `key` on a
+                  // custom component is not available here.
+                  <div key={item.id} className="shrink-0">
+                    <ItemTile
                       item={item}
-                      selected={draft[slot] === item.id}
-                      locked={locked}
-                      onPick={() => {
-                        // Locked items still preview. Seeing it on your own
+                      selected={draft.loadout[slot] === item.id}
+                      locked={!owned.has(item.id)}
+                      onPick={() =>
+                        // Locked items still preview. Seeing one on your own
                         // base is the whole argument for buying it; the server
-                        // refuses to equip it either way.
-                        setDraft((d) => ({...d, [slot]: item.id}));
-                        if (locked) setError(null);
-                      }}
+                        // refuses to save it either way.
+                        setDraft((d) => ({...d, loadout: {...d.loadout, [slot]: item.id}}))
+                      }
                     />
-                    </div>
-                  );
-                })}
+                  </div>
+                ))}
               </div>
             </section>
           ))}
@@ -245,9 +355,9 @@ export default function Customize({skin, onClose}: {skin: string; onClose: () =>
       )}
 
       <p className="mt-8 text-xs text-neutral-600">
-        Locked items show their price and can be previewed on your own base, but cannot be saved
-        yet — there is nothing to buy them with. Four slots, {items?.length ?? 0} items, 2,058
-        combinations.
+        Locked items preview on your own base but cannot be saved yet — there is nothing to buy
+        them with. Four slots, {items?.length ?? 0} items, 2,058 combinations before the base skin
+        is counted.
       </p>
     </div>
   );

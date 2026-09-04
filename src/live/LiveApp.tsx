@@ -134,7 +134,6 @@ export default function LiveApp() {
   if (screen === 'customize') {
     return (
       <Customize
-        skin={base?.skin ?? 'desert_fob'}
         onClose={() => {
           setScreen('base');
           void refresh();

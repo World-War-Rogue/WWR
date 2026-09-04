@@ -43,6 +43,7 @@ import {
   BUILDING_KINDS,
   SKINS,
   SKIN_IDS,
+  STARTER_SKIN_IDS,
   type SkinId,
   WORLD_EXTENT,
   candidatePlots,
@@ -710,16 +711,28 @@ function serverError(error: unknown, env: Env): Response {
 async function handleCosmetics(env: Env, player: PlayerRow): Promise<Response> {
   const [owned, base] = await Promise.all([
     ownedItemIds(env.DB, player.id),
-    env.DB.prepare(`SELECT banner, emblem, lights, decal FROM bases WHERE player_id = ?1`)
+    env.DB.prepare(`SELECT skin, banner, emblem, lights, decal FROM bases WHERE player_id = ?1`)
       .bind(player.id)
       .first<Record<string, string>>(),
   ]);
+
+  // The base skin is not a cosmetic item, but ownership of a premium one is
+  // recorded in the same table keyed by the skin id. That way there is exactly
+  // one place to look to answer "may this player wear this", and granting a
+  // skin and granting a banner are the same operation.
+  const skinsOwned = SKIN_IDS.filter(
+    (id) => STARTER_SKIN_IDS.includes(id) || owned.has(id),
+  );
 
   return json({
     slots: COSMETIC_SLOTS,
     items: COSMETICS,
     owned: [...owned],
     loadout: normaliseLoadout(base ?? {}),
+    skins: SKINS,
+    skinIds: SKIN_IDS,
+    skinsOwned,
+    skin: base?.skin ?? 'desert_fob',
   });
 }
 
@@ -745,15 +758,32 @@ async function handleEquip(request: Request, env: Env, player: PlayerRow): Promi
     );
   }
 
+  // The base skin travels with the loadout because a player changes both on
+  // the same screen, and saving them separately would let a half-applied look
+  // exist if the second request failed.
+  const current = await env.DB.prepare(`SELECT skin FROM bases WHERE player_id = ?1`)
+    .bind(player.id)
+    .first<{skin: string}>();
+  let skin = current?.skin ?? 'desert_fob';
+
+  if (body.skin !== undefined && body.skin !== null) {
+    if (!isSkinId(body.skin)) return fail(400, 'That base skin does not exist.');
+    if (!STARTER_SKIN_IDS.includes(body.skin) && !owned.has(body.skin)) {
+      return fail(403, 'You do not own that base skin yet.');
+    }
+    skin = body.skin;
+  }
+
   const {loadout} = result;
   const changed = await env.DB.prepare(
-    `UPDATE bases SET banner = ?2, emblem = ?3, lights = ?4, decal = ?5 WHERE player_id = ?1`,
+    `UPDATE bases SET skin = ?2, banner = ?3, emblem = ?4, lights = ?5, decal = ?6
+      WHERE player_id = ?1`,
   )
-    .bind(player.id, loadout.banner, loadout.emblem, loadout.lights, loadout.decal)
+    .bind(player.id, skin, loadout.banner, loadout.emblem, loadout.lights, loadout.decal)
     .run();
 
   if (!changed.success) return fail(500, 'Could not save that loadout.');
-  return json({loadout});
+  return json({loadout, skin});
 }
 
 async function route(request: Request, env: Env): Promise<Response> {

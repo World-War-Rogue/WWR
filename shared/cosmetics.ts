@@ -86,6 +86,12 @@ export interface CosmeticItem {
    */
   price: number;
   config: CosmeticConfig;
+  /**
+   * A one-of-one. At most one account may ever own it, enforced by a unique
+   * index rather than by remembering not to sell it twice. Nothing in the
+   * catalogue is exclusive yet; the first one will be a commissioned base.
+   */
+  exclusive?: boolean;
 }
 
 function banner(
