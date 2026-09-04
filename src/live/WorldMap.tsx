@@ -75,65 +75,103 @@ function useCanvasSize(ref: RefObject<HTMLCanvasElement | null>) {
 /**
  * The plate that names a base.
  *
- * `plateTop` is where the top of the plate goes, and the caller anchors it to
- * the plot rather than to the art. Anchoring to the art meant a tall skin put
- * its name a long way up and a short one kept it low, so names sat at a
- * different height for every base and a screenful of them jittered. Against
- * the plot they line up in rows, which is what makes a map of names scannable.
+ * `footY` is the base's ground line - the bottom edge of its plot. The plate
+ * straddles it, sitting over the foot of the art rather than floating above
+ * it or hovering below on empty ground. Anchoring to the plot rather than to
+ * the art is what keeps names level with each other: skins are different
+ * heights, and a name pinned to the top of each one would put every label at a
+ * different level and make a screenful of them jitter.
+ *
+ * It is drawn as an actual plate - opaque, shaded, outlined, with a shadow
+ * under it - because it has to stay legible over whatever the skin does. A
+ * translucent label is readable on dirt and disappears on flame or gold, and
+ * this is the one thing on the map that must never be unreadable.
  */
 function drawNameplate(
   ctx: CanvasRenderingContext2D,
   cx: number,
-  plateTop: number,
+  footY: number,
   base: PlacedBase,
   isYou: boolean,
   scale: number,
 ) {
   const fontSize = Math.max(9, Math.min(13, scale * 0.2));
   ctx.font = `600 ${fontSize}px ui-sans-serif, system-ui, sans-serif`;
+
   const label = base.username;
   const levelText = String(base.level);
   const textWidth = ctx.measureText(label).width;
-  const padX = fontSize * 0.5;
-  const boxW = textWidth + padX * 2 + fontSize * 1.6;
-  const boxH = fontSize * 1.5;
+  const padX = fontSize * 0.55;
+  const badgeD = fontSize * 1.3;
+  const boxW = textWidth + padX * 2 + badgeD + fontSize * 0.3;
+  const boxH = fontSize * 1.7;
   const boxX = cx - boxW / 2;
-  const boxY = plateTop;
+  // Most of the plate sits over the foot of the base, the rest below it.
+  const boxY = footY - boxH * 0.62;
+  const radius = boxH / 2;
 
-  // A drop shadow and a fully opaque plate, because these now sit over
-  // rendered art - fire, gold, white stone - and a translucent label that was
-  // readable against dirt disappears against a flame.
+  // Shadow first, on its own, so the shadow falls under the whole plate rather
+  // than under each thing drawn on it.
   ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.75)';
-  ctx.shadowBlur = Math.max(3, fontSize * 0.5);
-  ctx.shadowOffsetY = 1;
-  ctx.fillStyle = isYou ? 'rgb(194,65,12)' : 'rgb(12,13,12)';
+  ctx.shadowColor = 'rgba(0,0,0,0.85)';
+  ctx.shadowBlur = Math.max(4, fontSize * 0.7);
+  ctx.shadowOffsetY = Math.max(1, fontSize * 0.12);
+  ctx.fillStyle = '#000';
   ctx.beginPath();
-  ctx.roundRect(boxX, boxY, boxW, boxH, boxH / 2);
+  ctx.roundRect(boxX, boxY, boxW, boxH, radius);
   ctx.fill();
   ctx.restore();
 
-  ctx.strokeStyle = isYou ? '#ffb37a' : 'rgba(255,255,255,0.35)';
+  // A vertical gradient rather than a flat fill: it reads as a physical plate
+  // catching light from above instead of a rectangle of colour.
+  const face = ctx.createLinearGradient(0, boxY, 0, boxY + boxH);
+  if (isYou) {
+    face.addColorStop(0, '#f97316');
+    face.addColorStop(1, '#9a3412');
+  } else {
+    face.addColorStop(0, '#2c2e2c');
+    face.addColorStop(1, '#111311');
+  }
+  ctx.fillStyle = face;
+  ctx.beginPath();
+  ctx.roundRect(boxX, boxY, boxW, boxH, radius);
+  ctx.fill();
+
+  ctx.strokeStyle = isYou ? '#ffd0a8' : 'rgba(255,255,255,0.45)';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.roundRect(boxX, boxY, boxW, boxH, boxH / 2);
+  ctx.roundRect(boxX + 0.5, boxY + 0.5, boxW - 1, boxH - 1, radius);
   ctx.stroke();
 
-  ctx.fillStyle = isYou ? '#fff7ed' : '#e5e7eb';
+  // A highlight along the top edge, which is what separates a plate from a
+  // pill and is most of why it reads as an object.
+  ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+  ctx.beginPath();
+  ctx.moveTo(boxX + radius, boxY + 1);
+  ctx.lineTo(boxX + boxW - radius, boxY + 1);
+  ctx.stroke();
+
+  ctx.fillStyle = isYou ? '#fff7ed' : '#e9eae8';
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
   ctx.fillText(label, boxX + padX, boxY + boxH / 2);
 
-  // Level badge on the right of the plate.
-  const badgeX = boxX + boxW - fontSize * 1.1;
-  ctx.fillStyle = isYou ? '#7c2d12' : 'rgba(255,255,255,0.14)';
+  // Level badge, hard against the right end.
+  const badgeX = boxX + boxW - padX * 0.6 - badgeD / 2;
+  const badgeY = boxY + boxH / 2;
+  ctx.fillStyle = isYou ? '#7c2d12' : '#000';
   ctx.beginPath();
-  ctx.arc(badgeX, boxY + boxH / 2, fontSize * 0.62, 0, Math.PI * 2);
+  ctx.arc(badgeX, badgeY, badgeD / 2, 0, Math.PI * 2);
   ctx.fill();
+  ctx.strokeStyle = isYou ? '#ffb37a' : 'rgba(255,255,255,0.28)';
+  ctx.beginPath();
+  ctx.arc(badgeX, badgeY, badgeD / 2, 0, Math.PI * 2);
+  ctx.stroke();
+
   ctx.fillStyle = '#f5f5f4';
   ctx.textAlign = 'center';
-  ctx.font = `700 ${fontSize * 0.78}px ui-sans-serif, system-ui, sans-serif`;
-  ctx.fillText(levelText, badgeX, boxY + boxH / 2 + 0.5);
+  ctx.font = `700 ${fontSize * 0.8}px ui-sans-serif, system-ui, sans-serif`;
+  ctx.fillText(levelText, badgeX, badgeY + 0.5);
 }
 
 export default function WorldMap({
@@ -436,13 +474,14 @@ export default function WorldMap({
 
     if (!strategic) {
       for (const base of visible) {
-        // Sat on the ground just below the footprint, not above the art.
-        // Every base's name is then at the same height relative to its plot
-        // whatever its skin does, and no plate covers the thing it names.
+        // Anchored to the bottom edge of the plot, which the plate straddles
+        // so it sits on the foot of the skin. Every base's name is then at
+        // the same height relative to its plot whatever its skin does, and
+        // names painted after taller neighbours stay on top of them.
         drawNameplate(
           ctx,
           toScreenX(base.x) + zoom / 2,
-          toScreenY(base.y) + zoom + zoom * 0.03,
+          toScreenY(base.y) + zoom,
           base,
           base.username === you,
           zoom,
