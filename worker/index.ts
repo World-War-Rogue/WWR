@@ -20,6 +20,7 @@ import {
 import {
   MESSAGE_MAX,
   RETENTION_DAYS,
+  detectLanguage,
   dmChannel,
   dmOther,
   flattenMessage,
@@ -1735,7 +1736,12 @@ async function handleChatSend(
     env.DB.prepare(
       `INSERT INTO messages (id, channel, author_id, body, created_at, lang)
        VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
-    ).bind(newId(), channelRaw, player.id, text, now, viewer.language),
+      // Detected from the body, NOT taken from the author's preference. The
+      // preference says what they want to read; this has to say what they
+      // actually wrote, or a player typing in someone else's language - the
+      // exact case translation exists for - produces a message that claims to
+      // already be in the reader's language and is never translated.
+    ).bind(newId(), channelRaw, player.id, text, now, detectLanguage(text, viewer.language)),
   ];
 
   const other = dmOther(channelRaw, player.id);

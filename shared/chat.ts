@@ -131,3 +131,92 @@ export function isLanguage(code: unknown): code is string {
 export function languageName(code: string): string {
   return LANGUAGES.find((l) => l.code === code)?.name ?? code;
 }
+
+/**
+ * What language a message is actually written in.
+ *
+ * The author's stored preference is not the answer. It says what language they
+ * want to READ in, and translation exists precisely for the case where somebody
+ * types in something else - an English-speaking player typing Korean at a
+ * Korean ally is the whole feature working. Recording the preference as the
+ * message's language made that exact case untranslatable, because the message
+ * claimed to already be in the reader's language.
+ *
+ * So the body decides. For every non-Latin script this is not a guess at all:
+ * Hangul is Korean, Kana is Japanese, Thai is Thai. Those are the cases where
+ * translation matters most and where the answer is certain.
+ *
+ * Latin script cannot be settled by characters alone, so it falls back to a
+ * small set of very common function words. Those are chosen to be words that
+ * are frequent, short, and rare in the other Latin languages listed here. When
+ * nothing matches - a two-word message, a callsign, "gg" - the author's
+ * preference is the best remaining evidence and is used.
+ */
+
+/** Scripts that identify their language outright. Order matters: Kana before Han. */
+const SCRIPTS: Array<{code: string; re: RegExp}> = [
+  {code: 'ko', re: /[가-힯ᄀ-ᇿ㄰-㆏]/},
+  // Kana is checked before Han because Japanese text mixes both, and a
+  // sentence containing kana is Japanese no matter how many kanji it holds.
+  {code: 'ja', re: /[぀-ゟ゠-ヿ]/},
+  {code: 'zh', re: /[一-鿿㐀-䶿]/},
+  {code: 'th', re: /[฀-๿]/},
+  {code: 'he', re: /[֐-׿]/},
+  {code: 'ar', re: /[؀-ۿݐ-ݿ]/},
+  {code: 'hi', re: /[ऀ-ॿ]/},
+  // Ukrainian first: its four distinctive letters do not appear in Russian, so
+  // a match is decisive, and Russian is the safe default for the rest.
+  {code: 'uk', re: /[ЄІЇҐєіїґ]/},
+  {code: 'ru', re: /[Ѐ-ӿ]/},
+];
+
+/** Frequent function words, weighted equally. Lowercase, matched whole. */
+const LATIN_HINTS: Array<{code: string; words: string[]}> = [
+  {code: 'es', words: ['que', 'los', 'las', 'una', 'por', 'para', 'pero', 'esta', 'con', 'muy']},
+  {code: 'pt', words: ['nao', 'não', 'uma', 'para', 'com', 'mais', 'você', 'voce', 'isso', 'está']},
+  {code: 'fr', words: ['les', 'des', 'une', 'est', 'pas', 'pour', 'que', 'avec', 'vous', 'nous']},
+  {code: 'de', words: ['und', 'ich', 'nicht', 'das', 'ist', 'wir', 'auch', 'aber', 'wird', 'sind']},
+  {code: 'it', words: ['che', 'non', 'per', 'una', 'sono', 'con', 'della', 'anche', 'come', 'più']},
+  {code: 'nl', words: ['het', 'een', 'niet', 'van', 'zijn', 'maar', 'ook', 'wij', 'heeft', 'naar']},
+  {code: 'pl', words: ['nie', 'jest', 'sie', 'się', 'jak', 'tak', 'przez', 'tylko', 'juz', 'już']},
+  {code: 'tr', words: ['bir', 'için', 'icin', 'ile', 'daha', 'ama', 'çok', 'cok', 'var', 'bu']},
+  {code: 'vi', words: ['không', 'khong', 'được', 'duoc', 'các', 'cac', 'này', 'nay', 'trong', 'và']},
+  {code: 'id', words: ['yang', 'tidak', 'dengan', 'untuk', 'ini', 'itu', 'dari', 'akan', 'ada', 'saya']},
+  {code: 'en', words: ['the', 'and', 'you', 'for', 'are', 'with', 'this', 'that', 'have', 'not']},
+];
+
+export function detectLanguage(body: string, fallback: string): string {
+  const text = body.trim();
+  if (text.length === 0) return fallback;
+
+  for (const script of SCRIPTS) {
+    if (script.re.test(text)) return script.code;
+  }
+
+  // Nothing here is written in the fallback's script, so the fallback is
+  // wrong however little else we know. Korean cannot be typed in ASCII, and
+  // labelling "hey server 1001" as Korean is worse than labelling it nothing:
+  // the translator would be handed English, told it was Korean, and would
+  // return something confidently meaningless.
+  const latinFallback = SCRIPTS.some((script) => script.code === fallback) ? 'en' : fallback;
+
+  const words = text.toLowerCase().split(/[^\p{L}\p{M}]+/u).filter(Boolean);
+  if (words.length === 0) return latinFallback;
+
+  let best = latinFallback;
+  let bestScore = 0;
+  for (const hint of LATIN_HINTS) {
+    let score = 0;
+    for (const word of words) if (hint.words.includes(word)) score += 1;
+    if (score > bestScore) {
+      bestScore = score;
+      best = hint.code;
+    }
+  }
+
+  // One matching word out of a long message is noise, not evidence. Short
+  // messages are the common case in chat, so the bar is one hit for a handful
+  // of words and two once there is enough text to have found them by accident.
+  const needed = words.length > 8 ? 2 : 1;
+  return bestScore >= needed ? best : latinFallback;
+}

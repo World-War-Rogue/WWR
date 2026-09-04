@@ -11,6 +11,7 @@
  */
 import {
   allianceChannel,
+  detectLanguage,
   dmOther,
   leadershipChannel,
   serverChannel,
@@ -149,7 +150,24 @@ export async function readChannel(
     )
     .bind(channel, since, limit, language)
     .all<MessageRow>();
-  return rows.results ?? [];
+  return correctLang(rows.results ?? []);
+}
+
+/**
+ * Re-derive each message's language from its body.
+ *
+ * Messages written before language was detected at send time carry their
+ * author's preference in `lang`, which is what made an English speaker's
+ * Korean message claim to be English and go untranslated. Correcting it here
+ * rather than migrating the column means old messages start translating
+ * immediately and the tag under them names the language they are actually in.
+ * It is a regex over a screenful of text, not a model call.
+ */
+function correctLang(rows: MessageRow[]): MessageRow[] {
+  return rows.map((row) => {
+    const lang = detectLanguage(row.body, row.lang);
+    return lang === row.lang ? row : {...row, lang};
+  });
 }
 
 /**
@@ -183,7 +201,7 @@ export async function readRecent(
     )
     .bind(channel, limit, language)
     .all<MessageRow>();
-  return (rows.results ?? []).reverse();
+  return correctLang((rows.results ?? []).reverse());
 }
 
 /* -------------------------------------------------------------------------- */
@@ -214,6 +232,9 @@ export async function translateMissing(
   if (!env.AI) return;
 
   const pending = rows
+    // `lang` was already corrected against the body by the read that produced
+    // these rows, so a message mislabelled with its author's preference is not
+    // skipped here for claiming to already be in the reader's language.
     .filter((r) => r.translated === null && r.lang !== target && r.body.length > 0)
     // A cap per request, because a player scrolling into a long history should
     // not trigger eighty model calls at once.
