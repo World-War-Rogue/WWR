@@ -19,6 +19,7 @@ import {ALLEGIANCE, allegianceOf, drawAllegianceMarker} from './allegiance';
 import {artPending, onArtLoaded, skinIsAnimated} from './skinArt';
 import {drawBase as paintBase, skinSpec} from './skins';
 import {formatCooldown} from '../../shared/rally';
+import {t} from '../i18n';
 
 const MIN_ZOOM = 14; // pixels per plot when fully zoomed out
 // Far enough in that a premium skin is worth having drawn at all. A base is
@@ -362,10 +363,12 @@ export default function WorldMap({
   onOpenBase,
   onViewProfile,
   onOpenBattles,
+  onOpenSquads,
 }: {
   onOpenBase: () => void;
   onViewProfile: (username: string) => void;
   onOpenBattles: () => void;
+  onOpenSquads: () => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const {w, h} = useCanvasSize(canvasRef);
@@ -840,27 +843,63 @@ export default function WorldMap({
         one control that matters.
       */}
       <div className="pointer-events-none absolute inset-x-0 top-0 grid grid-cols-[1fr_auto_1fr] items-start gap-3 p-3">
-        <div className="pointer-events-auto justify-self-start rounded border border-neutral-800 bg-black/70 px-3 py-2 backdrop-blur">
-          <p className="text-[10px] uppercase tracking-[0.25em] text-orange-500">
-            {view?.world.kind === 'event' ? 'Battle theatre' : 'Home world'}
-          </p>
-          <p className="text-sm font-semibold text-neutral-100">
-            #{view?.world.id} {view?.world.name}
-          </p>
-          <p className="text-[11px] text-neutral-500">
-            {view?.bases.length ?? 0} {view?.bases.length === 1 ? 'base' : 'bases'} in view ·{' '}
-            {view?.you.plot ? `you at ${view.you.plot.x}, ${view.you.plot.y}` : 'unplaced'}
-          </p>
-        </div>
+        {/*
+          Squads sits where it sits on the base screen, and My base sits where
+          World map sits there. The two screens are now the same three targets
+          in the same three places, so moving between them never asks a thumb
+          to go looking.
+        */}
+        <button
+          onClick={onOpenSquads}
+          className="pointer-events-auto flex items-center gap-2 justify-self-start rounded border border-neutral-700 bg-black/70 px-3 py-2 text-sm font-medium text-neutral-200 backdrop-blur transition hover:border-orange-500 hover:text-orange-200"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            className="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x="3" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+            <rect x="14" y="14" width="7" height="7" rx="1" />
+          </svg>
+          {t('nav.squads')}
+        </button>
 
         <button
           onClick={onOpenBase}
           className="pointer-events-auto justify-self-center rounded bg-neutral-800 px-3 py-2 text-sm font-medium text-neutral-100 backdrop-blur transition hover:bg-neutral-700"
         >
-          My base
+          {t('nav.myBase')}
         </button>
 
-        <span aria-hidden="true" />
+        {/*
+          Where you are, on the right. It is a readout rather than a control -
+          nothing here is pressed - so it belongs out of the way of the two
+          things that are, and the right is where the eye goes last.
+        */}
+        <div className="pointer-events-auto justify-self-end rounded border border-neutral-800 bg-black/70 px-3 py-2 text-right backdrop-blur">
+          <p className="text-[10px] uppercase tracking-[0.25em] text-orange-500">
+            {view?.world.kind === 'event' ? t('map.battleTheatre') : t('map.homeWorld')}
+          </p>
+          <p className="text-sm font-semibold text-neutral-100">
+            #{view?.world.id} {view?.world.name}
+          </p>
+          <p className="text-[11px] text-neutral-500">
+            {view?.bases.length === 1
+              ? t('map.oneBaseInView')
+              : t('map.basesInView', {count: view?.bases.length ?? 0})}{' '}
+            ·{' '}
+            {view?.you.plot
+              ? t('map.youAt', {x: view.you.plot.x, y: view.you.plot.y})
+              : t('map.unplaced')}
+          </p>
+        </div>
       </div>
 
       {camera.zoom < IDENTITY_ZOOM && (
@@ -871,7 +910,7 @@ export default function WorldMap({
                 className="inline-block h-3 w-3 rounded-sm"
                 style={{background: ALLEGIANCE[key].fill}}
               />
-              <span className="text-[11px] text-neutral-300">{ALLEGIANCE[key].label}</span>
+              <span className="text-[11px] text-neutral-300">{t(`allegiance.${key}` as never)}</span>
             </div>
           ))}
         </div>
@@ -937,7 +976,7 @@ export default function WorldMap({
             <path d="M4 4v16" />
             <path d="M4 5h11l-1.5 3L15 11H4" />
           </svg>
-          Reports
+          {t('map.reports')}
         </button>
 
         {view?.you.plot && (
@@ -965,7 +1004,7 @@ export default function WorldMap({
               <path d="M3 10.5 12 3l9 7.5" />
               <path d="M5 9.5V20h14V9.5" />
             </svg>
-            Home
+            {t('map.home')}
           </button>
         )}
       </div>
@@ -973,7 +1012,7 @@ export default function WorldMap({
       {error && (
         <div className="absolute inset-x-3 bottom-32 rounded border border-red-900 bg-red-950/80 px-3 py-2 text-sm text-red-200 backdrop-blur">
           {error}
-          <span className="ml-2 text-red-400/70">Retrying…</span>
+          <span className="ml-2 text-red-400/70">{t('map.retrying')}</span>
         </div>
       )}
 
@@ -993,7 +1032,7 @@ export default function WorldMap({
                   </p>
                 </>
               ) : (
-                <p className="font-semibold text-emerald-400">Open ground</p>
+                <p className="font-semibold text-emerald-400">{t('map.openGround')}</p>
               )}
             </div>
             <button
@@ -1009,7 +1048,7 @@ export default function WorldMap({
               onClick={() => onViewProfile(selectedBase.username)}
               className="mt-3 w-full rounded border border-fuchsia-700 bg-fuchsia-950/40 px-3 py-2 text-sm font-semibold text-fuchsia-200 hover:border-fuchsia-500"
             >
-              View profile
+              {t('map.viewProfile')}
             </button>
           ) : (
             <button
@@ -1017,7 +1056,7 @@ export default function WorldMap({
               disabled={moving}
               className="mt-3 w-full rounded bg-orange-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
-              {moving ? 'Relocating…' : 'Move here'}
+              {moving ? t('map.relocating') : t('map.moveHere')}
             </button>
           )}
 
@@ -1032,7 +1071,7 @@ export default function WorldMap({
               disabled={rallying}
               className="mt-2 w-full rounded border border-cyan-700 bg-cyan-950/40 px-3 py-2 text-sm font-semibold text-cyan-200 hover:border-cyan-400 disabled:opacity-50"
             >
-              {rallying ? 'Setting…' : 'Set rendezvous here'}
+              {rallying ? t('map.settingRendezvous') : t('map.setRendezvous')}
             </button>
           )}
         </div>

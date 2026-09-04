@@ -88,14 +88,14 @@ function PlayerMenu({
   onOpenProfile,
   onOpenCustomize,
   onOpenAssets,
-  onOpenSquads,
+  onOpenAlliance,
   onSignOut,
 }: {
   player: Player;
   onOpenProfile: () => void;
   onOpenCustomize: () => void;
   onOpenAssets: () => void;
-  onOpenSquads: () => void;
+  onOpenAlliance: () => void;
   onSignOut: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
@@ -208,11 +208,11 @@ function PlayerMenu({
           <button
             onClick={() => {
               setOpen(false);
-              onOpenSquads();
+              onOpenAlliance();
             }}
             className="block w-full px-3 py-2.5 text-left text-sm text-neutral-200 hover:bg-neutral-900"
           >
-            {t('menu.squads')}
+            {t('nav.alliance')}
           </button>
           <button
             onClick={() => {
@@ -407,6 +407,7 @@ export default function LiveApp() {
               setScreen('profile');
             }}
             onOpenBattles={() => setScreen('battles')}
+            onOpenSquads={() => setScreen('squads')}
           />
         </div>
         {chat}
@@ -463,8 +464,8 @@ export default function LiveApp() {
       */}
       <header className="flex items-center justify-between gap-3">
         <button
-          onClick={() => setScreen('alliance')}
-          className="flex items-center gap-2 rounded border border-neutral-700 px-3 py-2 text-sm font-medium text-neutral-300 transition hover:border-emerald-500 hover:text-emerald-200"
+          onClick={() => setScreen('squads')}
+          className="flex items-center gap-2 rounded border border-neutral-700 px-3 py-2 text-sm font-medium text-neutral-300 transition hover:border-orange-500 hover:text-orange-200"
         >
           <svg
             viewBox="0 0 24 24"
@@ -476,9 +477,12 @@ export default function LiveApp() {
             strokeLinecap="round"
             strokeLinejoin="round"
           >
-            <path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z" />
+            <rect x="3" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+            <rect x="14" y="14" width="7" height="7" rx="1" />
           </svg>
-          {t('nav.alliance')}
+          {t('nav.squads')}
         </button>
 
         <button
@@ -496,7 +500,7 @@ export default function LiveApp() {
           }}
           onOpenCustomize={() => setScreen('customize')}
           onOpenAssets={() => setScreen('assets')}
-          onOpenSquads={() => setScreen('squads')}
+          onOpenAlliance={() => setScreen('alliance')}
           onSignOut={async () => {
             await api.logout();
             setPlayer(null);

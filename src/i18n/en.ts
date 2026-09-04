@@ -14,6 +14,7 @@ export const EN = {
   'nav.alliance': 'Alliance',
   'nav.worldMap': 'World map',
   'nav.myBase': 'My base',
+  'nav.squads': 'Squads',
   'nav.back': 'Back',
   'nav.close': 'Close',
 
