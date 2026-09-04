@@ -11,13 +11,14 @@ import Alliance from './Alliance';
 import Battles from './Battles';
 import Chat from './Chat';
 import Customize from './Customize';
-import Profile from './Profile';
+import Profile, {Portrait} from './Profile';
 import Gate from './Gate';
 import WorldMap from './WorldMap';
 import {
   ApiError,
   type BaseView,
   type Player,
+  type Profile as ProfileData,
   RESOURCE_LABEL,
   RESOURCE_ORDER,
   api,
@@ -63,6 +64,161 @@ function ResourceBar({base}: {base: BaseView}) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * The player tab, top right.
+ *
+ * A menu rather than a screen, because everything in it is either a fact you
+ * glance at or a door you walk through, and neither is worth losing the base
+ * you were looking at. The portrait is the button: it is the one thing on this
+ * bar that is unmistakably yours, and it is already how a player is identified
+ * everywhere else in the game.
+ *
+ * Sign out lives at the bottom behind its own divider, away from the two
+ * things above it that people press constantly.
+ */
+function PlayerMenu({
+  player,
+  base,
+  onOpenProfile,
+  onOpenCustomize,
+  onSignOut,
+}: {
+  player: Player;
+  base: BaseView | null;
+  onOpenProfile: () => void;
+  onOpenCustomize: () => void;
+  onSignOut: () => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const box = useRef<HTMLDivElement | null>(null);
+
+  // Loaded when the menu is first opened, not on every render of the page.
+  // Nothing in here changes while it is shut, and the header should not cost a
+  // request on a screen that has not been asked for.
+  useEffect(() => {
+    if (!open || profile) return;
+    let live = true;
+    api
+      .profile(player.username)
+      .then((r) => {
+        if (live) setProfile(r.profile);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [open, profile, player.username]);
+
+  // Close on a click anywhere else, and on Escape. A menu that only closes by
+  // pressing the thing that opened it is a menu people leave open.
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => {
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', away);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('mousedown', away);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [open]);
+
+  return (
+    <div ref={box} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`flex items-center gap-2 rounded border px-2 py-1.5 text-sm font-medium transition ${
+          open
+            ? 'border-fuchsia-500 text-fuchsia-200'
+            : 'border-neutral-700 text-neutral-300 hover:border-fuchsia-500'
+        }`}
+      >
+        <Portrait
+          glyph={profile?.portrait.glyph ?? 'star'}
+          tint={profile?.portrait.tint ?? 'ash'}
+          src={`/api/portrait?name=${encodeURIComponent(player.username)}`}
+          size={26}
+        />
+        <span className="hidden max-w-[10rem] truncate sm:block">{player.username}</span>
+        <span aria-hidden="true" className="text-[10px] text-neutral-500">
+          ▾
+        </span>
+      </button>
+
+      {open && (
+        <div className="absolute right-0 z-50 mt-2 w-64 overflow-hidden rounded border border-neutral-700 bg-neutral-950 shadow-xl">
+          <div className="flex items-center gap-3 border-b border-neutral-800 px-3 py-3">
+            <Portrait
+              glyph={profile?.portrait.glyph ?? 'star'}
+              tint={profile?.portrait.tint ?? 'ash'}
+              src={`/api/portrait?name=${encodeURIComponent(player.username)}`}
+              size={40}
+            />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-neutral-100">{player.username}</p>
+              <p className="truncate text-[11px] text-neutral-500">
+                {profile?.alliance ? `[${profile.alliance.tag}] ${profile.alliance.name}` : 'No alliance'}
+              </p>
+            </div>
+          </div>
+
+          <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 border-b border-neutral-800 px-3 py-3 text-[11px]">
+            <dt className="text-neutral-500">Power</dt>
+            <dd className="text-right font-mono text-neutral-200">
+              {profile ? profile.power.toLocaleString() : '—'}
+            </dd>
+            <dt className="text-neutral-500">Command Post</dt>
+            <dd className="text-right font-mono text-neutral-200">{profile?.commandPost ?? '—'}</dd>
+            <dt className="text-neutral-500">Server</dt>
+            <dd className="text-right font-mono text-neutral-200">{profile?.homeWorldId ?? '—'}</dd>
+            <dt className="text-neutral-500">Base</dt>
+            <dd className="truncate text-right text-neutral-200">{base?.name ?? '—'}</dd>
+          </dl>
+
+          <button
+            onClick={() => {
+              setOpen(false);
+              onOpenProfile();
+            }}
+            className="block w-full px-3 py-2.5 text-left text-sm text-neutral-200 hover:bg-neutral-900"
+          >
+            View full profile
+          </button>
+          <button
+            onClick={() => {
+              setOpen(false);
+              onOpenCustomize();
+            }}
+            className="block w-full px-3 py-2.5 text-left text-sm text-neutral-200 hover:bg-neutral-900"
+          >
+            Customise base
+          </button>
+          {player.role === 'owner' && (
+            <a
+              href="/api/access/requests"
+              className="block w-full px-3 py-2.5 text-left text-sm text-orange-400 hover:bg-neutral-900"
+            >
+              Access requests
+            </a>
+          )}
+
+          <button
+            onClick={() => void onSignOut()}
+            className="block w-full border-t border-neutral-800 px-3 py-2.5 text-left text-sm text-neutral-500 hover:bg-neutral-900 hover:text-red-300"
+          >
+            Sign out
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -240,58 +396,54 @@ export default function LiveApp() {
   return (
     <>
     <div className="mx-auto max-w-3xl px-5 pb-24 pt-8">
-      <header className="flex items-center justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-orange-500">Forward Operating Base</p>
-          <h1 className="text-xl font-semibold text-neutral-100">{base?.name ?? '…'}</h1>
-        </div>
-        <div className="flex items-center gap-4">
-          {player.role === 'owner' && (
-            <a
-              href="/api/access/requests"
-              className="rounded border border-orange-700 px-3 py-2 text-sm font-medium text-orange-400 hover:bg-orange-950/40"
-            >
-              Access requests
-            </a>
-          )}
-          <button
-            onClick={() => setScreen('alliance')}
-            className="rounded border border-neutral-700 px-3 py-2 text-sm font-medium text-neutral-300 hover:border-emerald-500"
+      {/*
+        Three things, in the three places a thumb reaches: alliance left, map
+        centre, you on the right. The base's own name came out because the
+        screen it sits on is already the base - a title that repeats where you
+        are is a line of furniture, and everything it said is inside the
+        profile panel where it can be read on purpose.
+      */}
+      <header className="flex items-center justify-between gap-3">
+        <button
+          onClick={() => setScreen('alliance')}
+          className="flex items-center gap-2 rounded border border-neutral-700 px-3 py-2 text-sm font-medium text-neutral-300 transition hover:border-emerald-500 hover:text-emerald-200"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            className="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
           >
-            Alliance
-          </button>
-          <button
-            onClick={() => {
-              setViewing(null);
-              setScreen('profile');
-            }}
-            className="rounded border border-neutral-700 px-3 py-2 text-sm font-medium text-neutral-300 hover:border-fuchsia-500"
-          >
-            Profile
-          </button>
-          <button
-            onClick={() => setScreen('customize')}
-            className="rounded border border-neutral-700 px-3 py-2 text-sm font-medium text-neutral-300 hover:border-orange-600"
-          >
-            Customise
-          </button>
-          <button
-            onClick={() => setScreen('world')}
-            className="rounded bg-neutral-800 px-3 py-2 text-sm font-medium text-neutral-100 hover:bg-neutral-700"
-          >
-            World map
-          </button>
-          <button
-            onClick={async () => {
-              await api.logout();
-              setPlayer(null);
-              setBase(null);
-            }}
-            className="text-sm text-neutral-500 underline underline-offset-4 hover:text-neutral-300"
-          >
-            Sign out
-          </button>
-        </div>
+            <path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z" />
+          </svg>
+          Alliance
+        </button>
+
+        <button
+          onClick={() => setScreen('world')}
+          className="rounded bg-neutral-800 px-3 py-2 text-sm font-medium text-neutral-100 transition hover:bg-neutral-700"
+        >
+          World map
+        </button>
+
+        <PlayerMenu
+          player={player}
+          base={base}
+          onOpenProfile={() => {
+            setViewing(null);
+            setScreen('profile');
+          }}
+          onOpenCustomize={() => setScreen('customize')}
+          onSignOut={async () => {
+            await api.logout();
+            setPlayer(null);
+            setBase(null);
+          }}
+        />
       </header>
 
       {error && (
