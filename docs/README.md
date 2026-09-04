@@ -1,5 +1,18 @@
 # WORLD WAR ROGUE: MASTER GAME ARCHIVE & INTELLIGENCE DOSSIER
 
+> **These are the original design documents, written before the game was built.**
+>
+> They describe an architecture that was never used - Google Cloud Run, an
+> Express server, a 36-sector theatre map, an Admiral/Colonel/Lieutenant
+> hierarchy - and features that do not exist, and the in-game Intel Dossier
+> panel they refer to belongs to the earlier offline prototype in
+> `src/components/`. Read them for intent and tone; read `README.md`,
+> `CLAUDE.md` and `WORLD_WAR_ROGUE_DESIGN.md` for how the game actually works.
+>
+> What is really running: a Cloudflare Worker over D1, one world per server,
+> alliances led by a General with up to 10 Lieutenants and the rest Soldiers,
+> and no combat system yet.
+
 **Classification:** CLASSIFIED // NATO UNCLASSIFIED EQUIVALENT // TOP SECRET MILITARY TACTICAL SPEC  
 **Project Codename:** Operation Sandstorm Perimeter / World War Rogue  
 **Version:** 1.2.0 Active Development  

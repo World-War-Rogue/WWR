@@ -1,5 +1,10 @@
 # WORLD WAR ROGUE: MASTER DESIGN DOCUMENTATION & FIELD MANUAL
 
+> **Original design document, written before the game was built.** It describes
+> an Express private server, ballistic combat, a 100+ unit roster and an
+> Admiral/Colonel hierarchy, none of which exist. For how the game actually
+> works, read [`HOW-IT-WORKS.md`](./HOW-IT-WORKS.md).
+
 **Project Codename:** World War Rogue  
 **Version:** 1.0.0 Tactical Preview  
 **Genre:** Mobile Tactical Strategy & Survival with Base Building, PvP Ballistics, and Cross-Server Warfare  
