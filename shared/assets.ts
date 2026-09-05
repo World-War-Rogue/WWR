@@ -150,15 +150,13 @@ export const ROLE_BLURB: Record<AssetRole, string> = {
   lift: 'Carries, repairs, and keeps a squad in the field.',
 };
 
-/** What each category is beaten by, and what it beats. The web, as data. */
-export const COUNTERS: Record<AssetCategory, {beats: AssetCategory[]; losesTo: AssetCategory[]}> = {
-  armour: {beats: ['drone', 'artillery'], losesTo: ['rotary']},
-  rotary: {beats: ['armour'], losesTo: ['fixed_wing']},
-  fixed_wing: {beats: ['rotary'], losesTo: ['drone']},
-  artillery: {beats: ['armour'], losesTo: ['drone', 'rotary']},
-  drone: {beats: ['artillery', 'fixed_wing'], losesTo: ['armour']},
-  naval: {beats: ['artillery'], losesTo: ['fixed_wing']},
-};
+/*
+ * The counter web used to be duplicated here as a second hand-written table,
+ * and it disagreed with the resolver in six of twelve entries - the roster card
+ * told players that artillery beat armour and that fixed wing lost to drones,
+ * and the game implemented neither. It now lives in one place: `counterWeb` in
+ * `shared/combat.ts` derives it from the same table the resolver reads.
+ */
 
 /* -------------------------------------------------------------------------- */
 /* Squads                                                                     */
@@ -172,8 +170,20 @@ export const DRAFT_SIZE = SQUAD_COUNT * SQUAD_SLOTS;
 export const SQUAD_NAMES = ['Alpha', 'Bravo', 'Charlie', 'Delta'] as const;
 export type SquadName = (typeof SQUAD_NAMES)[number];
 
-/** Levels every asset shares. Same curve for all of them, deliberately. */
-export const ASSET_MAX_LEVEL = 30;
+/**
+ * Service Rank. Every asset shares the same ladder, deliberately.
+ *
+ * Fifty ranks across the first five seasons, ten per season: 1-10 in Season 1,
+ * 11-20 in Season 2, and so on to 41-50 in Season 5. Seasons 6-10 add no
+ * further ranks - they grow sideways instead.
+ */
+export const ASSET_MAX_LEVEL = 50;
+export const RANKS_PER_SEASON = 10;
+
+/** The highest rank a given season permits anyone to own. */
+export function maxRankForSeason(season: number): number {
+  return Math.min(ASSET_MAX_LEVEL, Math.max(0, season) * RANKS_PER_SEASON);
+}
 
 /**
  * The catalogue.
@@ -998,6 +1008,14 @@ export const ASSET_BY_ID: Record<string, Asset> = Object.fromEntries(
 /** What a new player may pick from. Naval is held back until it has a sea. */
 export const DRAFTABLE = ASSETS.filter((a) => a.draftable !== false);
 
+/**
+ * The categories actually in play. The counter ring is built from this, so
+ * turning naval on in Season 3 closes the ring back up on its own.
+ */
+export const DRAFTABLE_CATEGORIES: AssetCategory[] = [
+  ...new Set(DRAFTABLE.map((a) => a.category)),
+];
+
 export function assetById(id: string): Asset | null {
   return ASSET_BY_ID[id] ?? null;
 }
@@ -1080,15 +1098,41 @@ export function isSquadName(value: unknown): value is SquadName {
 }
 
 /**
- * What a level does to an attribute.
+ * What a Service Rank does to an attribute.
  *
- * The same curve for every asset, deliberately. Levelling raises what an asset
+ * The same curve for every asset, deliberately. Ranking up raises what an asset
  * already is rather than closing the gap to something else, so an Abrams at 30
- * is a better Abrams and never becomes a drone. Superlinear, so the choice of
- * WHICH eight to carry matters more than owning many at level one.
+ * is a better Abrams and never becomes a drone.
+ *
+ * ── Geometric, so every season is worth the same ──────────────────────────
+ *
+ * One constant: a season of ranks multiplies an attribute by SEASON_GAIN. The
+ * old curve was `1 + 0.06 * (rank - 1) ** 1.15`, which was tuned when a season
+ * meant thirty ranks. Stretched over five seasons of ten it paid out unevenly -
+ * Season 1 was worth 1.75x and Season 5 only 1.21x, so the further a player got
+ * the less a rank was worth. Geometric fixes that with no cliff anywhere: every
+ * rank is the same proportional step, and every season is the same multiple.
+ *
+ * SEASON_GAIN is 1.75 because that is exactly what Season 1 was worth under the
+ * old curve. Season 1 is unchanged; the four seasons after it stop shrinking.
+ *
+ * A consequence worth stating, because it looks alarming and is not: rank 50 is
+ * about 15x rank 1. Competitive combat never sees that, because the Season
+ * Readiness Band clamps effective rank to at most 10 in Season 1, 20 in Season
+ * 2 and so on - a rank-50 asset fights at the band like everyone else. The
+ * ceiling only shows up where real rank is allowed, which is personal content,
+ * and every reward there is flat per completion so it cannot feed back.
+ *
+ * And an honest limit: fifty ranks reaching any sane ceiling means each single
+ * rank is a small step - 5.8% here, 6.0% under the old curve. That is
+ * arithmetic, not tuning. Forty-nine steps of 10% would be 106x. If one upgrade
+ * is meant to feel like an event, the answer is what else a player can spend on
+ * and how the gain is presented, not a steeper curve.
  */
+export const SEASON_GAIN = 1.75;
+
 export function attributeAtLevel(base: number, level: number): number {
-  return Math.round(base * (1 + 0.06 * (level - 1) ** 1.15));
+  return Math.round(base * SEASON_GAIN ** ((level - 1) / RANKS_PER_SEASON));
 }
 
 /** Power contributed by one asset at one level. What a squad is compared on. */

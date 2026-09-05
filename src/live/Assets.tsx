@@ -21,12 +21,12 @@ import {
   type Asset,
   type AssetCategory,
   CATEGORY_LABEL,
-  COUNTERS,
   ROLE_BLURB,
   ROLE_LABEL,
   SQUAD_NAMES,
   pointBudget,
 } from '../../shared/assets';
+import {counterWeb} from '../../shared/combat';
 
 const CATEGORIES: AssetCategory[] = [
   'armour',
@@ -81,7 +81,7 @@ function Bars({asset}: {asset: Asset}) {
 }
 
 function Card({asset, squad}: {asset: Asset; squad: string | null}) {
-  const counters = COUNTERS[asset.category];
+  const counters = counterWeb(asset.category);
   return (
     <article
       className={`rounded border p-3 ${

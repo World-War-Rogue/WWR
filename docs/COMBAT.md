@@ -332,21 +332,53 @@ rest of the battle and repairs afterwards. It is never destroyed.
 
 ## 6. The counter multipliers
 
-Applied per attacking category against defending category. Grounded in reality,
-so a player who knows the hardware already knows the rules.
+Applied as a **bonus to whoever is shooting**, never as a penalty to whoever is
+being shot at — so a matchup can only ever be an edge, and power stays the thing
+that decides most fights. The whole spread between the best and worst matchup is
+twenty per cent.
 
-| Attacker | Beats (×1.5) | Struggles against (×0.6) |
+| Tier | Multiplier |
+| :--- | ---: |
+| Perfect counter | ×1.2 |
+| Medium counter | ×1.1 |
+| Anything else | ×1.0 |
+
+An earlier draft ran ×1.5 against ×0.6, an eighty per cent spread, and made
+rotary beat armour 96% of the time. That is the counters-decide-everything
+design that was explicitly not chosen.
+
+### The ring is derived, not written down
+
+The counters are one closed ring. Each category perfectly counters the next
+along and mediumly counters the one two along, so every category has exactly one
+perfect prey, one perfect predator, one medium prey and one medium predator, and
+nothing sits outside the web.
+
+The canonical order is:
+
+    rotary → armour → drone → artillery → naval → fixed wing → rotary
+
+**But the ring is built from whichever categories are draftable, not from that
+list.** Season 1 has no naval, and removing one link from a ring does not
+shorten the ring — it opens it. With naval gone, artillery lost the only thing
+it perfectly countered and fixed wing lost the only thing that perfectly
+countered it, which is exactly the fault recorded in §11. So `counterRing()`
+closes the remaining five back into a cycle:
+
+| Attacker | Perfect (×1.2) | Medium (×1.1) |
 | :--- | :--- | :--- |
-| Rotary | Armour | Fixed Wing |
-| Fixed Wing | Rotary | Drones |
-| Drone | Artillery, Fixed Wing | Armour |
-| Armour | Drones, Artillery | Rotary |
-| Artillery | Armour | Drones, Rotary |
-| Naval | Artillery | Fixed Wing |
+| Rotary | Armour | Drone |
+| Armour | Drone | Artillery |
+| Drone | Artillery | Fixed Wing |
+| Artillery | Fixed Wing | Rotary |
+| Fixed Wing | Rotary | Armour |
 
-The multipliers are the same both ways: what beats you also takes less from
-you. A squad of six tanks meeting a squad with helicopters is not "slightly
-behind" — it is the wrong squad, and it will read that way in the report.
+Turning naval on in Season 3 restores the six-cycle with no second table to
+forget. `npm run sim` asserts the ring is closed over the draftable set, so it
+cannot silently open again.
+
+The roster card reads this same table through `counterWeb()`. It used to have
+its own copy, which disagreed with the resolver in six of twelve entries.
 
 ---
 
@@ -485,14 +517,119 @@ With it, a combined-arms squad beats every pure squad:
 | pure artillery | 100% |
 | pure drone | 100% |
 
-### Still wrong, and worth knowing before this ships
+### All three of these are now closed
 
-- **Fixed wing beats rotary 100% of the time.** The counter is doing exactly
-  what it should and there is no upset left in it. Rotary needs something back
-  — probably that helicopters are harder to spot, via the detection contest.
-- **A pure drone squad cannot win anything.** That is partly correct — six
-  drones spend 17 of a 26 lift budget, so it is a cheap squad and should lose
-  to an expensive one. But it means the six-slot cap, not lift, is what binds
-  for light assets, and the lift budget curve may be growing too fast.
-- **The upset band has not been re-measured** since these changes. The
-  0.88–1.15 composition band in §3 is still a target, not a verified number.
+They were open for months because the script that measured them was never
+committed. It is now `scripts/simulate.mjs`, run with `npm run sim`.
+
+- **Fixed wing beat everything and artillery lost to everything.** Not a tuning
+  fault. The counter ring was hardcoded for six categories and Season 1 plays
+  five, so the ring was open — see §6. Closing it over the draftable set fixed
+  the shape; the remaining imbalance was band coverage, below.
+- **A pure drone squad could not win anything.** Same cause, plus the exposure
+  penalty. Both are addressed.
+- **The composition band has been re-measured.** See §12.
+
+---
+
+## 12. What Stage 0 measured, and what it changed
+
+Run `npm run sim` to reproduce any number here. Three of the checks are standing
+assertions and fail the build: the ring is closed, a clamped rank fights as that
+rank, and two assets on one point budget are worth the same.
+
+### The promise, as a number
+
+"No asset is worth more than another at equal investment" is measured by
+building sixty random mixed squads at the same lift, playing a full round robin,
+and asking whether carrying a given category predicts winning.
+
+| Category | Before | After |
+| :--- | ---: | ---: |
+| Armour | +11.2pp | +4.8pp |
+| Artillery | −2.9pp | +6.3pp |
+| Rotary | −0.3pp | −1.8pp |
+| Fixed Wing | −3.8pp | −0.9pp |
+| Drone | +0.3pp | −1.0pp |
+
+Single-category squads are **not** the way to measure this, and the first
+attempt to do so was measuring the wrong thing. A mono squad is by definition
+missing bands, so that comparison reports band coverage rather than what an
+asset is worth.
+
+### Three faults found by inspection, confirmed by measurement
+
+**The exposure penalty ignored the deep band.** It charged a squad for missing
+close and air and never for missing deep. Artillery is the only draftable
+category in the deep band, so an artillery squad paid twice over while nothing
+ever paid for leaving artillery out. Counting all three bands is what moved
+artillery from −2.9pp to +6.3pp. The penalty dropped from ×1.5 to ×1.2 because
+three penalties compound where two used to.
+
+**Armour was counted twice.** `auditAssets` charges one point for every
+attribute, but armour fed hit points through the points sum *and* again through
+`HP_PER_ARMOUR`. Measured with two synthetic assets differing only in swapping
+points between armour and range — identical lift, identical displayed power of
+156 — the armour-heavy one won **100%** of the time. `HP_PER_ARMOUR` is now 0.1,
+where they price equally.
+
+**Range did nothing at all.** It is documented as "which band it fights in", but
+the band comes from the category and always did, so range was read once into hit
+points and never again. Every other attribute does a second job. It now buys
+reach past a screen, contested against the screen's armour — `reachOf()`. Armour
+builds the wall, range gets past it.
+
+### The draw band was hiding a whole counter tier
+
+`0.05` sat inline in `resolve` with no name. A medium counter is a ten per cent
+damage edge, which lands as roughly a four per cent difference in surviving
+strength — inside that band. So **every medium counter in the game resolved as a
+draw**: measured, 7% wins and 93% draws. Named `DRAW_BAND` and set to 0.02:
+
+| Matchup | Wins | Draws | Losses |
+| :--- | ---: | ---: | ---: |
+| Perfect counter, all else identical | 100% | 0% | 0% |
+| Medium counter, all else identical | 71% | 29% | 0% |
+
+Measured with synthetic assets identical but for their category, all in the air
+band, because otherwise band coverage swamps a multiplier whose whole spread is
+twenty per cent.
+
+### Combat is close to deterministic, and that is a design decision
+
+Every matchup returned 0% or 100% before any of this, and largely still does
+outside the draw band. `CHANCE` is rolled once per volley now rather than once
+per shooter — six independent rolls averaged out to under two per cent — but
+**raising it does not buy uncertainty**: at 0.35 a mirror match still drew 88% of
+the time, because the roll happens fifteen times a battle and averages out
+again.
+
+The brief asks for "a small amount of controlled uncertainty". There is
+currently almost none, and the rank-gap sweep shows a weaker squad never wins:
+
+| Power gap | Upsets |
+| ---: | ---: |
+| 0% | 2.1% |
+| 6% | 0% |
+| 22% | 0% |
+| 31% | 0% |
+| 69% | 0% |
+
+Making combat less deterministic is a change to how variance enters — per-unit
+target selection, or an initiative roll — not a change to a constant. **It needs
+a design decision and is deliberately not made here.**
+
+### The rank curve
+
+`attributeAtLevel` was `1 + 0.06 * (rank - 1) ** 1.15`, tuned when a season meant
+thirty ranks. Stretched over five seasons of ten it paid unevenly — Season 1 was
+worth 1.75× and Season 5 only 1.21×, so the further a player got the less a rank
+was worth. It is now geometric: one constant, `SEASON_GAIN` 1.75, so every
+season is the same multiple and every rank the same proportional step.
+
+Rank 50 is about 15× rank 1, which only shows up where real rank is allowed —
+competitive combat clamps to the Season Readiness Band. And an honest limit:
+fifty ranks reaching any sane ceiling means one rank is a small step, 5.8% here
+against 6.0% before. Forty-nine steps of 10% would be 106×. If a single upgrade
+is meant to feel like an event, the answer is what else there is to spend on,
+not a steeper curve.

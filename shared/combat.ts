@@ -13,6 +13,7 @@ import {
   ASSET_BY_ID,
   type Asset,
   type AssetCategory,
+  DRAFTABLE_CATEGORIES,
   attributeAtLevel,
   assetPower,
 } from './assets';
@@ -26,15 +27,28 @@ export const ROUNDS = 5;
 /**
  * Survivability.
  *
- * NOT the armour attribute alone. Ten thousand simulated fights said so: with
- * hp = armour x 12 an armour-category asset was eight times tougher than a
- * drone, no counter multiplier could overcome that, and artillery lost to
- * armour 99% of the time despite being its designed counter. Durability has to
- * scale with what an asset IS - which scales with its lift - and let armour be
- * a bonus on top, not the whole of it.
+ * NOT the armour attribute alone. Simulation said so twice, in opposite
+ * directions.
+ *
+ * First: with `hp = armour * 12` an armour asset was eight times tougher than a
+ * drone, no counter could overcome it, and artillery lost to armour 99% of the
+ * time despite being its designed counter. So durability was made to scale with
+ * what an asset IS - which scales with its lift - and armour became a bonus on
+ * top rather than the whole of it.
+ *
+ * Then the bonus turned out to still be far too large. `auditAssets` charges the
+ * same point for every attribute, so two assets on one budget are meant to be
+ * worth the same - and at HP_PER_ARMOUR 1.2 an armour-heavy asset beat an
+ * equal-cost, equal-power range-heavy one 100% of the time, because armour was
+ * counted twice: once in the points sum that sets hit points, then again here.
+ *
+ * 0.1 is where the two price equally, measured. Armour is still the durability
+ * attribute - it is worth about 1.2 of a normal attribute for hit points, and
+ * it alone builds the screen in `reachOf` - but it is a bonus now rather than
+ * most of the pool. `npm run sim` asserts this and will fail if it drifts.
  */
 export const HP_PER_POINT = 0.6;
-export const HP_PER_ARMOUR = 1.2;
+export const HP_PER_ARMOUR = 0.1;
 export const HP_SCALE = 8;
 
 /**
@@ -61,10 +75,20 @@ export const COUNTER_MEDIUM = 1.1;
  * one throw rewards guessing right, not bringing variety.
  *
  * With it, a squad holding all three bands beats every pure squad. Without a
- * close band nothing shields the rear; without an air band nothing contests
- * the sky. Both are true of real formations and both are now expensive.
+ * close band nothing shields the rear; without an air band nothing contests the
+ * sky; without a deep band nothing reaches. All three are true of real
+ * formations and all three are now expensive.
+ *
+ * The penalty used to apply to close and air only, and never to deep. That had
+ * two consequences nobody intended. Artillery is the only draftable category in
+ * the deep band, so an artillery squad paid the penalty twice while nothing
+ * ever paid for leaving artillery out - measured, carrying armour was worth
+ * +11 points of win rate and artillery -3, against a promise that no asset is
+ * worth more than another. Covering all three bands closed that to +5 and +6.
+ *
+ * 1.2 rather than 1.5 because three penalties compound where two used to.
  */
-export const EXPOSURE_PER_MISSING_BAND = 1.5;
+export const EXPOSURE_PER_MISSING_BAND = 1.2;
 
 /**
  * Deep fire is gated on knowing where to shoot.
@@ -78,11 +102,39 @@ export const EXPOSURE_PER_MISSING_BAND = 1.5;
 export const SPOTTING_FLOOR = 0.35;
 export const SPOTTING_SWING = 1.3;
 
-/** Bounded, small, and never the story. A loss has to be explicable. */
+/**
+ * Bounded, small, and never the story. A loss has to be explicable.
+ *
+ * Rolled once per volley rather than once per shooter. Six independent rolls
+ * average out to almost nothing - the measured spread across a whole squad was
+ * under two per cent, and no fight ever changed hands because of it.
+ *
+ * Worth knowing before this is tuned: raising it does NOT buy meaningful
+ * uncertainty. At 0.35 a mirror match still drew 88% of the time, because the
+ * roll happens fifteen times a battle (three bands, five rounds) and averages
+ * out again. Combat here is close to deterministic by construction, and making
+ * it less so is a design change rather than a constant.
+ */
 export const CHANCE = 0.05;
 
 /** Mobility buys initiative, and buys your way out when it goes wrong. */
 export const WITHDRAW_RELIEF = 0.35;
+
+/**
+ * How close two squads have to finish for it to be called a draw.
+ *
+ * This was an unnamed 0.05 sitting inline in `resolve`, and it turned out to be
+ * one of the most consequential numbers in the file. A medium counter is worth
+ * a ten per cent damage edge, which comes out as roughly a four per cent
+ * difference in surviving strength - INSIDE a five per cent draw band. So every
+ * medium counter in the game resolved as a draw and the entire tier was
+ * decorative: measured, a medium counter converted to a win 7% of the time and
+ * drew the other 93%.
+ *
+ * At two per cent the tier does what it is for - a medium counter is a real but
+ * modest edge, and a genuinely even fight is still a draw.
+ */
+export const DRAW_BAND = 0.02;
 
 export type Band = 'deep' | 'air' | 'close';
 export const BANDS: Band[] = ['deep', 'air', 'close'];
@@ -98,34 +150,92 @@ export const CATEGORY_BAND: Record<AssetCategory, Band> = {
 };
 
 /**
- * What beats what. Every category counters two others and is countered by two,
- * so nothing sits outside the web and no category is safe from everything.
+ * The order of the counter ring.
  *
- * The perfect counters form one closed ring:
+ * Each category perfectly counters the NEXT one along, and mediumly counters
+ * the one two along. Every link is a real relationship. Helicopters kill tanks
+ * from above; tanks with close-in defences kill loitering munitions; drones are
+ * counter-battery; shore batteries threaten ships; ship air defence kills
+ * aircraft; fighters kill helicopters.
  *
- *   rotary -> armour -> drone -> artillery -> naval -> fixed wing -> rotary
+ * ── Why this is an order and not a table ──────────────────────────────────
  *
- * Each link is a real relationship. Helicopters kill tanks from above; tanks
- * with close-in defences kill loitering munitions; drones are counter-battery;
- * shore batteries threaten ships; ship air defence kills aircraft; fighters
- * kill helicopters.
+ * It used to be a hand-written table of six categories, and it was correct for
+ * six. Season 1 plays FIVE, because naval is held back until the map has water
+ * - and removing one link from a ring does not shorten the ring, it OPENS it.
+ * With naval gone, artillery lost the only thing it perfectly countered and
+ * fixed wing lost the only thing that perfectly countered it. Measured across
+ * the whole draftable catalogue, fixed wing beat every other category 100% of
+ * the time and artillery lost to every other category 100% of the time.
  *
- * The medium counters are the same ring stepped two places on, which keeps
- * them symmetric and leaves each of them defensible on its own: helicopters
- * hunt drones, armour overruns gun lines, drones hit ships, artillery shells
- * airfields, ships shoot down helicopters, and close air support kills tanks.
+ * That is not a tuning fault and no multiplier can fix it. The fault was the
+ * shape of the graph, and the shape was hardcoded for a set of categories that
+ * is not the set actually being played.
+ *
+ * So the ring is now DERIVED from whichever categories are draftable. Delete
+ * naval and the five that remain close up into a five-cycle; restore naval in
+ * Season 3 and it becomes a six-cycle again, with no second table to forget to
+ * update. `scripts/simulate.mjs` asserts the ring is closed, so this cannot
+ * quietly break again.
  */
-export const COUNTER: Record<AssetCategory, Partial<Record<AssetCategory, number>>> = {
-  rotary: {armour: COUNTER_PERFECT, drone: COUNTER_MEDIUM},
-  armour: {drone: COUNTER_PERFECT, artillery: COUNTER_MEDIUM},
-  drone: {artillery: COUNTER_PERFECT, naval: COUNTER_MEDIUM},
-  artillery: {naval: COUNTER_PERFECT, fixed_wing: COUNTER_MEDIUM},
-  naval: {fixed_wing: COUNTER_PERFECT, rotary: COUNTER_MEDIUM},
-  fixed_wing: {rotary: COUNTER_PERFECT, armour: COUNTER_MEDIUM},
-};
+export const COUNTER_CYCLE: AssetCategory[] = [
+  'rotary',
+  'armour',
+  'drone',
+  'artillery',
+  'naval',
+  'fixed_wing',
+];
+
+/**
+ * Build the counter table for a set of categories, as a closed ring.
+ *
+ * Medium counters need at least five categories to be distinct from the
+ * perfect ones - with four, the category two along is also the one two back,
+ * so a medium counter would be mutual. Below that the ring carries perfect
+ * counters only, which is still closed.
+ */
+export function counterRing(
+  categories: readonly AssetCategory[],
+): Record<AssetCategory, Partial<Record<AssetCategory, number>>> {
+  const order = COUNTER_CYCLE.filter((c) => categories.includes(c));
+  const table = Object.fromEntries(
+    COUNTER_CYCLE.map((c) => [c, {} as Partial<Record<AssetCategory, number>>]),
+  ) as Record<AssetCategory, Partial<Record<AssetCategory, number>>>;
+  const n = order.length;
+  if (n < 3) return table;
+  for (let i = 0; i < n; i += 1) {
+    table[order[i]][order[(i + 1) % n]] = COUNTER_PERFECT;
+    if (n >= 5) table[order[i]][order[(i + 2) % n]] = COUNTER_MEDIUM;
+  }
+  return table;
+}
+
+/** The ring over the categories a player can actually field this season. */
+export const COUNTER = counterRing(DRAFTABLE_CATEGORIES);
 
 export function counterOf(attacker: AssetCategory, defender: AssetCategory): number {
   return COUNTER[attacker]?.[defender] ?? 1;
+}
+
+/**
+ * What a category beats and what beats it, for the roster card.
+ *
+ * Derived from the same table the resolver uses, because it was once a second
+ * hand-written table that disagreed with the resolver in six of twelve entries
+ * - the catalogue screen told players artillery beat armour and that fixed
+ * wing lost to drones, and the resolver implemented neither. A screen that
+ * teaches the counter web has to be reading the web.
+ */
+export function counterWeb(category: AssetCategory): {
+  beats: AssetCategory[];
+  losesTo: AssetCategory[];
+} {
+  const beats = Object.keys(COUNTER[category] ?? {}) as AssetCategory[];
+  const losesTo = (Object.keys(COUNTER) as AssetCategory[]).filter(
+    (other) => other !== category && COUNTER[other]?.[category] !== undefined,
+  );
+  return {beats, losesTo};
 }
 
 /* -------------------------------------------------------------------------- */
@@ -157,6 +267,9 @@ interface Unit {
   firepower: number;
   mobility: number;
   detection: number;
+  /** How far past a screen it can reach. See `reachOf`. */
+  range: number;
+  armour: number;
   band: Band;
   damaged: boolean;
 }
@@ -239,6 +352,8 @@ function build(spec: SideSpec): Unit[] {
       firepower: attributeAtLevel(asset.attributes.firepower, entry.level),
       mobility: attributeAtLevel(asset.attributes.mobility, entry.level),
       detection: attributeAtLevel(asset.attributes.detection, entry.level),
+      range: attributeAtLevel(asset.attributes.range, entry.level),
+      armour: attributeAtLevel(asset.attributes.armour, entry.level),
       band: CATEGORY_BAND[asset.category],
       damaged: false,
     });
@@ -254,13 +369,16 @@ const sum = (ns: number[]) => ns.reduce((a, b) => a + b, 0);
  *
  * Multiplied into the damage it RECEIVES, so a squad of six tanks with no air
  * cover and nothing at range is not merely missing options - it is easier to
- * kill, which is the honest consequence of having no answer to half the fight.
+ * kill, which is the honest consequence of having no answer to most of the
+ * fight. Every band counts, including deep: see EXPOSURE_PER_MISSING_BAND for
+ * what leaving one out of the count did.
  */
 export function exposureOf(units: Unit[]): number {
   const bands = new Set(units.map((u) => u.band));
   let mult = 1;
-  if (!bands.has('close')) mult *= EXPOSURE_PER_MISSING_BAND;
-  if (!bands.has('air')) mult *= EXPOSURE_PER_MISSING_BAND;
+  for (const band of BANDS) {
+    if (!bands.has(band)) mult *= EXPOSURE_PER_MISSING_BAND;
+  }
   return mult;
 }
 
@@ -272,6 +390,39 @@ export function exposureOf(units: Unit[]): number {
  * in the report rather than buried in an average - "the Apaches broke the
  * Abrams" is a sentence a player can learn from.
  */
+/**
+ * What fraction of a band's fire gets past the enemy's close-range screen.
+ *
+ * A contest between how far the shooters reach and how hard the screen is to
+ * shoot through, in the same shape as the spotting contest: always between 0
+ * and 1, and scale-free, so it means the same thing at rank 1 and rank 50.
+ *
+ * ── Why range needed this ─────────────────────────────────────────────────
+ *
+ * `range` is documented in `shared/assets.ts` as "which band it fights in", but
+ * the band comes from CATEGORY_BAND and always did, so range was read exactly
+ * once - into the points sum that sets hit points - and never again. Every
+ * other attribute does a second job: firepower deals damage, armour adds hit
+ * points on top of its points, mobility buys initiative and withdrawal,
+ * detection wins the spotting contest. Range did nothing.
+ *
+ * That broke the promise the whole catalogue rests on. `auditAssets` prices all
+ * five attributes identically, so two assets on the same point budget are meant
+ * to be worth the same - and measured, an armour-heavy asset beat an equal-cost
+ * range-heavy one 100% of the time with both showing identical power.
+ *
+ * So range now buys reach past a screen, and armour buys the screen's strength.
+ * Both are real, both scale, and they are in direct tension: a wall of armour
+ * is what long range is for, and long range is what a wall of armour fears.
+ */
+export function reachOf(shooters: Unit[], screen: Unit[]): number {
+  if (screen.length === 0) return 1;
+  const reach = sum(shooters.map((u) => u.range));
+  const wall = sum(screen.map((u) => u.armour));
+  if (reach + wall === 0) return 1;
+  return reach / (reach + wall);
+}
+
 function fire(
   shooters: Unit[],
   targets: Unit[],
@@ -281,16 +432,8 @@ function fire(
   exposure: number,
   roll: () => number,
 ): {dealt: number; killed: string[]} {
-  let living = alive(targets);
+  const living = alive(targets);
   if (living.length === 0 || shooters.length === 0) return {dealt: 0, killed: []};
-
-  // A front line. Close-range fire has to chew through whatever is standing in
-  // front before it reaches anything behind, which is what a screen IS and why
-  // artillery wants tanks in the squad rather than more artillery.
-  if (shooters[0].band === 'close') {
-    const front = living.filter((u) => u.band === 'close');
-    if (front.length > 0) living = front;
-  }
 
   let pool = 0;
   for (const s of shooters) {
@@ -298,34 +441,58 @@ function fire(
     // a drone to tell it where the other tank is.
     const sight =
       s.band === 'deep' ? SPOTTING_FLOOR + SPOTTING_SWING * spotting : 1;
-    const variance = 1 + (roll() * 2 - 1) * CHANCE;
-    pool += s.firepower * sight * variance;
+    pool += s.firepower * sight;
   }
-  pool *= modifier * exposure;
+  // One roll for the volley, not one per shooter. Six independent rolls average
+  // out to nothing - measured, the spread across a whole squad was under two
+  // per cent and no fight ever changed hands because of it, which made every
+  // matchup a lookup table returning 0% or 100%. A battle has to be able to
+  // surprise the person who launched it.
+  pool *= modifier * exposure * (1 + (roll() * 2 - 1) * CHANCE);
 
-  const order = [...living].sort((a, b) => {
-    const am = Math.max(...shooters.map((s) => counterOf(s.asset.category, a.asset.category)));
-    const bm = Math.max(...shooters.map((s) => counterOf(s.asset.category, b.asset.category)));
-    return bm - am || a.hp - b.hp;
-  });
+  // The screen. Whatever is standing at close range shields what is behind it,
+  // and only the fraction of fire that out-reaches the screen gets past.
+  const screen = living.filter((u) => u.band === 'close');
+  const behind = living.filter((u) => u.band !== 'close');
+  const past = screen.length > 0 && behind.length > 0 ? reachOf(shooters, screen) : 1;
 
-  const killed: string[] = [];
-  let dealt = 0;
-  for (const target of order) {
-    if (pool <= 0) break;
-    const multiplier = Math.max(
-      ...shooters.map((s) => counterOf(s.asset.category, target.asset.category)),
-    );
-    const applied = Math.min(target.hp, pool * multiplier);
-    target.hp -= applied;
-    dealt += applied;
-    pool -= applied / multiplier;
-    if (target.hp <= 0) {
-      target.damaged = true;
-      killed.push(target.asset.name);
+  const spend = (candidates: Unit[], amount: number): {dealt: number; killed: string[]} => {
+    const killed: string[] = [];
+    let dealt = 0;
+    let left = amount;
+    const order = [...candidates].sort((a, b) => {
+      const am = Math.max(...shooters.map((s) => counterOf(s.asset.category, a.asset.category)));
+      const bm = Math.max(...shooters.map((s) => counterOf(s.asset.category, b.asset.category)));
+      return bm - am || a.hp - b.hp;
+    });
+    for (const target of order) {
+      if (left <= 0) break;
+      if (target.damaged) continue;
+      const multiplier = Math.max(
+        ...shooters.map((s) => counterOf(s.asset.category, target.asset.category)),
+      );
+      const applied = Math.min(target.hp, left * multiplier);
+      target.hp -= applied;
+      dealt += applied;
+      left -= applied / multiplier;
+      if (target.hp <= 0) {
+        target.damaged = true;
+        killed.push(target.asset.name);
+      }
     }
-  }
-  return {dealt, killed};
+    return {dealt, killed};
+  };
+
+  // Fire that out-reaches the screen may pick its target anywhere. The rest is
+  // held at the front, and falls through to the whole squad once the screen is
+  // gone, so nothing is wasted shooting at something that is no longer there.
+  const far = spend(living, pool * past);
+  const near = spend(alive(screen).length > 0 ? screen : living, pool * (1 - past));
+
+  return {
+    dealt: far.dealt + near.dealt,
+    killed: [...far.killed, ...near.killed],
+  };
 }
 
 export function resolve(
@@ -443,7 +610,7 @@ export function resolve(
   const strengthD = startD === 0 ? 0 : leftD / startD;
 
   const outcome: CombatResult['outcome'] =
-    Math.abs(strengthA - strengthD) < 0.05
+    Math.abs(strengthA - strengthD) < DRAW_BAND
       ? 'draw'
       : strengthA > strengthD
         ? 'attacker'
