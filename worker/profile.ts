@@ -27,6 +27,7 @@ import {
   type PortraitMime,
 } from '../shared/portraits';
 import {isLanguage} from '../shared/chat';
+import {STARTER_SKIN_IDS} from '../shared/skins';
 
 export interface PublicProfile {
   username: string;
@@ -130,7 +131,7 @@ export async function loadProfile(
     power: totalPower(levels),
     commandPost: levels.command_post,
     baseName: row.base_name ?? `${row.username}'s Forward Base`,
-    skin: row.skin ?? 'desert_fob',
+    skin: row.skin ?? STARTER_SKIN_IDS[0],
     alliance:
       row.alliance_tag && row.alliance_name
         ? {tag: row.alliance_tag, name: row.alliance_name}

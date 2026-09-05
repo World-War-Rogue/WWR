@@ -4,6 +4,7 @@
  * The game is closed: registering creates a request, and an account exists
  * only once somebody has approved it.
  */
+import {STARTER_SKIN_IDS} from '../shared/skins';
 
 export type Validation<T> = {ok: true; value: T} | {ok: false; error: string};
 
@@ -70,7 +71,7 @@ export function validateAccessRequest(body: unknown): Validation<AccessRequest> 
   if (!isCountryCode(country)) return {ok: false, error: 'Choose your country.'};
 
   const locale = typeof b.locale === 'string' && /^[a-z]{2}$/.test(b.locale) ? b.locale : 'en';
-  const skin = typeof b.skin === 'string' ? b.skin : 'desert_fob';
+  const skin = typeof b.skin === 'string' ? b.skin : STARTER_SKIN_IDS[0];
 
   return {ok: true, value: {email, username, password, country, locale, skin}};
 }

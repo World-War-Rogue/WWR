@@ -40,7 +40,7 @@ import {
  * only how one is DRAWN - the perimeter recipe, the landmark, the art atlas
  * and the motion - none of which the server has any opinion about.
  */
-import {SKIN_IDENTITY, type SkinId, type SkinIdentity} from '../../shared/skins';
+import {SKIN_IDENTITY, STARTER_SKIN_IDS, type SkinId, type SkinIdentity} from '../../shared/skins';
 
 export type {Palette, SkinId} from '../../shared/skins';
 export {SKIN_IDS, STARTER_SKIN_IDS, isSkinId} from '../../shared/skins';
@@ -319,7 +319,11 @@ export function artHeadroom(skin: SkinSpec, size: number): number {
 }
 
 export function skinSpec(id: string): SkinSpec {
-  return SKINS[id as SkinId] ?? SKINS.desert_fob;
+  // Derived, never a named skin. This line said SKINS.desert_fob and became
+  // undefined the moment that skin left the catalogue - which is every base
+  // on the map drawing nothing, from a fallback whose whole job is to stop
+  // exactly that. A retired skin must degrade to a real one, not to a hole.
+  return SKINS[id as SkinId] ?? SKINS[STARTER_SKIN_IDS[0]];
 }
 
 /** Deterministic pseudo-random from a plot, so a base looks the same to everyone, forever. */

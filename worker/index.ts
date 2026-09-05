@@ -540,7 +540,7 @@ async function handleDecision(request: Request, env: Env): Promise<Response> {
         row.locale,
       )
       .run();
-    await seedBase(env, playerId, row.username, isSkinId(row.skin) ? row.skin : 'desert_fob', now);
+    await seedBase(env, playerId, row.username, isSkinId(row.skin) ? row.skin : STARTER_SKIN_IDS[0], now);
   }
 
   // The stored password hash is cleared on decision: an approved request has
@@ -1295,7 +1295,7 @@ async function handleCosmetics(env: Env, player: PlayerRow): Promise<Response> {
     skins: SKINS,
     skinIds: SKIN_IDS,
     skinsOwned,
-    skin: base?.skin ?? 'desert_fob',
+    skin: base?.skin ?? STARTER_SKIN_IDS[0],
   });
 }
 
@@ -1327,7 +1327,7 @@ async function handleEquip(request: Request, env: Env, player: PlayerRow): Promi
   const current = await env.DB.prepare(`SELECT skin FROM bases WHERE player_id = ?1`)
     .bind(player.id)
     .first<{skin: string}>();
-  let skin = current?.skin ?? 'desert_fob';
+  let skin = current?.skin ?? STARTER_SKIN_IDS[0];
 
   if (body.skin !== undefined && body.skin !== null) {
     if (!isSkinId(body.skin)) return fail(400, 'That base skin does not exist.');
