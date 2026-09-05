@@ -46,6 +46,10 @@ export const CHAT = {
   // What went wrong
   'chat.didNotSend': 'That did not send.',
   'chat.unreachable': 'Chat is unreachable.',
+  // Shown under a message in a language the reader does not read, while its
+  // translation has not arrived. Silence here is what let a broken translation
+  // look like a message someone chose to type in Korean.
+  'chat.translating': 'Translating\u2026',
   'chat.couldNotOpen': 'Could not open that conversation.',
   'chat.couldNotStartGroup': 'Could not start that group.',
   'chat.couldNotAdd': 'Could not add them.',

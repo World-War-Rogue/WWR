@@ -30,7 +30,7 @@ import {
   type PendingMention,
   api,
 } from '../net/api';
-import {type MessageKey, t} from '../i18n';
+import {type MessageKey, language, t} from '../i18n';
 import {Portrait} from './Profile';
 
 /**
@@ -84,6 +84,44 @@ function withMentions(body: string, me: string): Array<{text: string; mention: b
 const OPEN_POLL_MS = 4000;
 /** While closed, only to keep the unread badge honest. */
 const IDLE_POLL_MS = 25000;
+
+/**
+ * Fold a poll's messages into the ones already held, keyed by id.
+ *
+ * The read overlaps the last minute on every poll, so a message arrives more
+ * than once by design - that is how a translation written after delivery ever
+ * reaches the client. Appending would duplicate it; this replaces it in place.
+ *
+ * Returns the array it was given when nothing actually changed. That identity
+ * check is load-bearing: the auto-scroll effect keys off `messages`, and a new
+ * array every four seconds would drag the view to the bottom while someone is
+ * reading back through history.
+ */
+function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
+  if (incoming.length === 0) return current;
+
+  const byId = new Map(current.map((m) => [m.id, m]));
+  let changed = false;
+
+  for (const next of incoming) {
+    const prev = byId.get(next.id);
+    if (!prev) {
+      byId.set(next.id, next);
+      changed = true;
+    } else if (
+      prev.translated !== next.translated ||
+      prev.body !== next.body ||
+      prev.lang !== next.lang ||
+      prev.replyBody !== next.replyBody
+    ) {
+      byId.set(next.id, {...prev, ...next});
+      changed = true;
+    }
+  }
+
+  if (!changed) return current;
+  return [...byId.values()].sort((a, b) => a.createdAt - b.createdAt).slice(-300);
+}
 
 function timeOf(ms: number): string {
   return new Date(ms).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
@@ -182,7 +220,7 @@ export default function Chat({
         sinceRef.current = result.serverTime;
         if (result.messages.length > 0) {
           setMessages((current) =>
-            since === null ? result.messages : [...current, ...result.messages].slice(-300),
+            since === null ? result.messages : mergeMessages(current, result.messages),
           );
         }
         setError(null);
@@ -316,7 +354,7 @@ export default function Chat({
       const result = await api.chatRead(channel, sinceRef.current ?? undefined);
       sinceRef.current = result.serverTime;
       if (result.messages.length > 0) {
-        setMessages((current) => [...current, ...result.messages].slice(-300));
+        setMessages((current) => mergeMessages(current, result.messages));
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t('chat.didNotSend'));
@@ -782,6 +820,20 @@ export default function Chat({
                         {m.lang}
                       </span>
                       {m.translated}
+                    </p>
+                  )}
+                  {!m.translated && m.lang !== language() && (
+                    // Say the translation is missing rather than letting the
+                    // original stand as if it were what the reader was meant to
+                    // get. Some message always falls outside the overlap
+                    // window, and this is what makes that visible instead of
+                    // silent - the absence of this line is why the bug report
+                    // about it went unread for a day.
+                    <p className="mt-0.5 flex gap-1.5 text-sm italic text-neutral-500">
+                      <span className="shrink-0 select-none text-[10px] uppercase not-italic tracking-wider text-neutral-600">
+                        {m.lang}
+                      </span>
+                      {t('chat.translating')}
                     </p>
                   )}
 

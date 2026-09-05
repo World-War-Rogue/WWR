@@ -125,11 +125,32 @@ export interface MessageRow {
 }
 
 /**
- * Messages in a channel after an instant.
+ * How far back a poll reaches regardless of the cursor.
+ *
+ * A translation is written after the message row it belongs to. If the poll
+ * carrying a message ran before its translation landed, a cursor-only query
+ * never sends that message again and the reader keeps the untranslated copy
+ * forever - the bug GrandpaWhale reported, in Korean, through the channel that
+ * was breaking it. Re-reading the last minute on every poll gives the losing
+ * side of that race a second chance.
+ *
+ * 60s is a guess at the translation tail, not a measurement. If translations
+ * routinely take longer the window silently stops helping, so log the gap
+ * between messages.created_at and the translation write before trusting it.
+ */
+export const REDELIVERY_WINDOW_MS = 60_000;
+
+/**
+ * Messages in a channel after an instant, plus anything from the last minute.
  *
  * `since` is a timestamp rather than an offset, so a client that has been
  * away for a minute asks for exactly what it missed instead of re-reading a
  * page and working out the overlap.
+ *
+ * The window is a floor on what comes back, not a change to the cursor: the
+ * caller still advances `since` to the newest instant it has seen. Callers
+ * must upsert by id, because a message inside the window arrives more than
+ * once by design.
  */
 export async function readChannel(
   db: D1Database,
@@ -137,7 +158,11 @@ export async function readChannel(
   since: number,
   limit: number,
   language: string,
+  now: number = Date.now(),
 ): Promise<MessageRow[]> {
+  // min, not max: a client that has been away longer than the window still
+  // gets everything it missed.
+  const floor = Math.min(since, now - REDELIVERY_WINDOW_MS);
   const rows = await db
     .prepare(
       `SELECT m.id AS id, p.username AS author, m.body AS body,
@@ -157,7 +182,7 @@ export async function readChannel(
         ORDER BY m.created_at ASC
         LIMIT ?3`,
     )
-    .bind(channel, since, limit, language)
+    .bind(channel, floor, limit, language)
     .all<MessageRow>();
   return correctLang(rows.results ?? []);
 }
