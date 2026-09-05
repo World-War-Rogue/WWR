@@ -11,7 +11,15 @@
  * pixels appear only at the moment of drawing.
  */
 import {type RefObject, useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {ApiError, type PlacedBase, type SquadView, type WorldView, api} from '../net/api';
+import {
+  ApiError,
+  formatDuration,
+  type MarchView,
+  type PlacedBase,
+  type SquadView,
+  type WorldView,
+  api,
+} from '../net/api';
 import {EffectLayer, type EffectSource} from './effects';
 import {DEFAULT_SEASON, seasonSpec, terrainAt} from './terrain';
 import {normaliseLoadout} from '../../shared/cosmetics';
@@ -20,6 +28,7 @@ import {artPending, onArtLoaded, skinIsAnimated} from './skinArt';
 import {drawBase as paintBase, skinSpec} from './skins';
 import {formatCooldown} from '../../shared/rally';
 import {marchProgress} from '../../shared/march';
+import type {MarchKind} from '../../shared/march';
 import {SQUAD_NAMES} from '../../shared/assets';
 import {t} from '../i18n';
 
@@ -372,6 +381,12 @@ function drawRallyEdge(
  * Yours is orange, one aimed at you is red, and everybody else's is dim. That
  * ordering is deliberate: the only two marches that require a decision from
  * you are the ones you are in.
+ *
+ * Purpose overrides that. A reinforcement is green whoever it belongs to,
+ * because a friendly column crossing your plot should never read as a threat
+ * for the half-second it takes to find the name; and a return leg is drawn
+ * faintly whoever it belongs to, because a squad going home is the one march
+ * on the map that nobody has to answer.
  */
 function drawMarch(
   ctx: CanvasRenderingContext2D,
@@ -381,15 +396,31 @@ function drawMarch(
   toY: number,
   progress: number,
   kind: 'mine' | 'incoming' | 'other',
+  purpose: MarchKind,
   scale: number,
   time: number,
 ) {
   const colour =
-    kind === 'incoming' ? '#f87171' : kind === 'mine' ? '#f97316' : 'rgba(180,180,180,0.5)';
+    purpose === 'return'
+      ? kind === 'other'
+        ? 'rgba(150,150,150,0.4)'
+        : 'rgba(148,163,184,0.75)'
+      : purpose === 'reinforce'
+        ? kind === 'other'
+          ? 'rgba(52,211,153,0.5)'
+          : '#34d399'
+        : kind === 'incoming'
+          ? '#f87171'
+          : kind === 'mine'
+            ? '#f97316'
+            : 'rgba(180,180,180,0.5)';
+  // A return leg is information, not a decision, so it never gets the halo and
+  // never draws at full strength.
+  const loud = kind !== 'other' && purpose !== 'return';
 
   ctx.save();
   ctx.strokeStyle = colour;
-  ctx.globalAlpha = kind === 'other' ? 0.35 : 0.55;
+  ctx.globalAlpha = loud ? 0.55 : 0.35;
   ctx.lineWidth = Math.max(1, scale * 0.03);
   ctx.setLineDash([scale * 0.25, scale * 0.2]);
   // The dashes crawl toward the target, so the direction of travel is readable
@@ -406,9 +437,16 @@ function drawMarch(
   const r = Math.max(4, scale * 0.16);
 
   ctx.save();
-  if (kind !== 'other') {
+  if (loud) {
     const halo = ctx.createRadialGradient(px, py, r * 0.3, px, py, r * 2.4);
-    halo.addColorStop(0, kind === 'incoming' ? 'rgba(248,113,113,0.5)' : 'rgba(249,115,22,0.45)');
+    halo.addColorStop(
+      0,
+      purpose === 'reinforce'
+        ? 'rgba(52,211,153,0.45)'
+        : kind === 'incoming'
+          ? 'rgba(248,113,113,0.5)'
+          : 'rgba(249,115,22,0.45)',
+    );
     halo.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = halo;
     ctx.beginPath();
@@ -432,6 +470,25 @@ function drawMarch(
   ctx.fill();
   ctx.stroke();
   ctx.restore();
+}
+
+/**
+ * One line of text for a column in the air. Kept out of the component because
+ * it is a pure translation of a march into words, and because the four cases
+ * read better side by side than nested in JSX.
+ */
+function marchLine(m: MarchView, left: string): string {
+  // Mine first. A return leg is addressed to its own owner, so testing
+  // `incoming` first would announce your own squad as an inbound attack.
+  if (!m.mine && m.incoming) {
+    return m.kind === 'reinforce'
+      ? t('map.incomingHelp', {attacker: m.attacker, time: left})
+      : t('map.incoming', {attacker: m.attacker, time: left});
+  }
+  if (m.kind === 'return') return t('map.outReturn', {squad: m.squad, time: left});
+  if (m.kind === 'reinforce')
+    return t('map.outReinforce', {squad: m.squad, defender: m.defender, time: left});
+  return t('map.outAttack', {squad: m.squad, x: m.to.x, y: m.to.y, time: left});
 }
 
 export default function WorldMap({
@@ -785,7 +842,10 @@ export default function WorldMap({
         toScreenX(m.to.x) + zoom / 2,
         toScreenY(m.to.y) + zoom / 2,
         p,
-        m.incoming ? 'incoming' : m.mine ? 'mine' : 'other',
+        // Mine wins over incoming: a return leg has the owner on both ends,
+        // and a squad coming home is not an attack on its owner.
+        m.mine ? 'mine' : m.incoming ? 'incoming' : 'other',
+        m.kind,
         zoom,
         time,
       );
@@ -932,10 +992,28 @@ export default function WorldMap({
    * request: a squad is marching exactly when there is a march of yours in the
    * world, and that is on screen anyway.
    */
-  const awaySquads = useMemo(
-    () => new Set((view?.marches ?? []).filter((m) => m.mine).map((m) => m.squad)),
-    [view],
-  );
+  const awaySquads = useMemo(() => {
+    const out = new Map<string, MarchKind>();
+    for (const m of view?.marches ?? []) if (m.mine) out.set(m.squad, m.kind);
+    return out;
+  }, [view]);
+
+  /**
+   * A base cannot be picked up while any of its squads is off it. The server
+   * refuses either way; saying so here means the button never has to be
+   * pressed to find out.
+   */
+  const squadsOut = awaySquads.size > 0;
+
+  /**
+   * Whether the selected base flies the same colours. It decides the label
+   * only - the server reads both alliances itself and picks the kind, so a
+   * client that lied about this would still send a reinforcement.
+   */
+  const allied =
+    !!selectedBase &&
+    !!view?.you.allianceId &&
+    selectedBase.allianceId === view.you.allianceId;
 
   async function sendAttack(squad: string) {
     if (!attacking) return;
@@ -952,6 +1030,31 @@ export default function WorldMap({
       setSending(false);
     }
   }
+
+  /**
+   * Columns worth a line of text: anything aimed at you, and anything of
+   * yours. Everybody else's is on the map and nowhere else - the strip is for
+   * the marches you have to answer, and a list of forty is a list of none.
+   */
+  const notable = useMemo(
+    () => (view?.marches ?? []).filter((m) => m.incoming || m.mine),
+    [view],
+  );
+
+  /**
+   * A clock that only runs while something is in the air. The canvas has its
+   * own animation loop; this exists solely so the countdowns in the strip
+   * below tick, and stopping it when the map is quiet keeps an idle tab from
+   * re-rendering once a second forever.
+   */
+  const [clock, setClock] = useState(() => Date.now());
+  const anyMarch = notable.length > 0;
+  useEffect(() => {
+    if (!anyMarch) return;
+    setClock(Date.now());
+    const id = window.setInterval(() => setClock(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [anyMarch]);
 
   const occupied = selectedBase !== null;
   const rally = view?.rally ?? null;
@@ -1028,6 +1131,38 @@ export default function WorldMap({
           </p>
         </div>
       </div>
+
+      {/*
+        What is in the air, in words. The map already shows every column, but a
+        countdown you can read is the difference between knowing an attack is
+        coming and knowing whether you have time to do anything about it - and
+        a defender who has to squint at a moving dot to work out how long they
+        have is a defender who does nothing.
+      */}
+      {notable.length > 0 && (
+        <div className="pointer-events-none absolute inset-x-0 top-[4.75rem] flex flex-col items-center gap-1 px-3">
+          {notable.slice(0, 4).map((m) => {
+            const left = formatDuration(Math.max(0, m.arrivesAt - clock));
+            const line = marchLine(m, left);
+            return (
+              <div
+                key={m.id}
+                className={`max-w-full truncate rounded border px-2.5 py-1 text-[11px] font-medium backdrop-blur ${
+                  !m.mine && m.incoming && m.kind === 'attack'
+                    ? 'border-red-700 bg-red-950/70 text-red-200'
+                    : m.kind === 'reinforce'
+                      ? 'border-emerald-800 bg-emerald-950/70 text-emerald-200'
+                      : m.kind === 'return'
+                        ? 'border-neutral-800 bg-black/70 text-neutral-400'
+                        : 'border-orange-800 bg-orange-950/70 text-orange-200'
+                }`}
+              >
+                {line}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {camera.zoom < IDENTITY_ZOOM && (
         <div className="pointer-events-none absolute right-3 top-24 rounded border border-neutral-800 bg-black/70 px-3 py-2 backdrop-blur">
@@ -1150,7 +1285,9 @@ export default function WorldMap({
           />
           <div className="rounded-t-xl border-t border-neutral-700 bg-neutral-950 p-3 shadow-2xl">
             <div className="flex items-center gap-2 pb-3">
-              <h3 className="text-sm font-semibold text-neutral-100">{t('map.chooseSquad')}</h3>
+              <h3 className="text-sm font-semibold text-neutral-100">
+                {allied ? t('map.chooseSquadReinforce') : t('map.chooseSquad')}
+              </h3>
               <span className="font-mono text-[11px] text-neutral-500">
                 {attacking.x}, {attacking.y}
               </span>
@@ -1164,14 +1301,21 @@ export default function WorldMap({
 
             <div className="grid gap-2 sm:grid-cols-2">
               {SQUAD_NAMES.map((name) => {
-                const away = awaySquads.has(name);
+                const doing = awaySquads.get(name);
                 const filled = (squads?.squads[name] ?? []).filter(Boolean).length;
                 const power = squads?.power[name] ?? 0;
                 // A squad that is out cannot be sent, and an empty one has
                 // nothing to send. Both are said rather than merely disabled -
                 // a greyed button with no reason is a bug as far as a player
-                // is concerned.
-                const why = away ? t('map.squadAway') : filled === 0 ? t('map.squadEmpty') : null;
+                // is concerned. A squad on its way home says so, because that
+                // one clears itself and the others do not.
+                const why = doing
+                  ? doing === 'return'
+                    ? t('map.squadReturning')
+                    : t('map.squadAway')
+                  : filled === 0
+                    ? t('map.squadEmpty')
+                    : null;
                 return (
                   <div key={name}>
                     <button
@@ -1180,7 +1324,9 @@ export default function WorldMap({
                       className={`flex w-full items-center gap-3 rounded border px-3 py-2 text-left transition ${
                         why
                           ? 'border-neutral-900 bg-neutral-950/50 opacity-50'
-                          : 'border-neutral-700 bg-neutral-900 hover:border-red-600'
+                          : allied
+                            ? 'border-neutral-700 bg-neutral-900 hover:border-emerald-600'
+                            : 'border-neutral-700 bg-neutral-900 hover:border-red-600'
                       }`}
                     >
                       <span className="text-sm font-semibold text-neutral-100">{name}</span>
@@ -1251,19 +1397,27 @@ export default function WorldMap({
                     // attack, so it is fetched then rather than with the map.
                     void api.squads().then(setSquads).catch(() => undefined);
                   }}
-                  className="mt-2 w-full rounded border border-red-800 bg-red-950/40 px-3 py-2 text-sm font-semibold text-red-200 hover:border-red-500"
+                  className={`mt-2 w-full rounded border px-3 py-2 text-sm font-semibold ${
+                    allied
+                      ? 'border-emerald-800 bg-emerald-950/40 text-emerald-200 hover:border-emerald-500'
+                      : 'border-red-800 bg-red-950/40 text-red-200 hover:border-red-500'
+                  }`}
                 >
-                  {t('map.attack')}
+                  {allied ? t('map.reinforce') : t('map.attack')}
                 </button>
               )}
             </>
           ) : (
             <button
               onClick={() => void moveHere()}
-              disabled={moving}
+              disabled={moving || squadsOut}
               className="mt-3 w-full rounded bg-orange-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
-              {moving ? t('map.relocating') : t('map.moveHere')}
+              {squadsOut
+                ? t('map.cannotMove')
+                : moving
+                  ? t('map.relocating')
+                  : t('map.moveHere')}
             </button>
           )}
 

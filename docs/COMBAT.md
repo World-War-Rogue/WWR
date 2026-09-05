@@ -61,6 +61,62 @@ the same warning a real one would.
 
 ---
 
+## 2a. The rules that go with marching
+
+Four rules follow from "the squad you send is not defending". Each one exists
+because the rule above is worth nothing if a squad can be in two places.
+
+### You cannot move your base while a squad is out
+
+Relocating with a column in the air would let you dodge every counter-attack:
+send Alpha, get hit, jump three hundred plots, and the retaliation arrives at
+empty ground. So the map refuses. The button says *Bring your squads home
+first* rather than greying out, because a disabled control with no reason is a
+bug as far as a player is concerned. The server refuses independently — the
+label is a courtesy, not the check.
+
+### You cannot attack your own alliance. You reinforce them
+
+The same march, aimed at a teammate, becomes a reinforcement: same travel time,
+same visibility, but on arrival it joins their defence instead of fighting it.
+It stands there for **eight hours**, then walks home.
+
+**One squad per teammate.** Not one per player — one *per teammate*. Four
+squads cannot stack on whoever is being hit, because an alliance whose answer
+to every attack is "everyone pile onto Dave" is not a network of people holding
+ground, it is one base with five accounts. The limit is a unique index, not a
+check: two taps in the same instant would both read the board as clear.
+
+A garrisoned squad is **away**. It defends the ally it is standing at and
+nothing else — not its own base, and it cannot march again until it is home.
+That is the whole cost of reinforcing, and without it one squad would hold two
+plots at once, which is the cheapest exploit in the game and the first one an
+alliance would find.
+
+### A march is public in both directions
+
+Everybody sees every column, not just the two players in it. Attacks are
+orange going out and red coming at you; reinforcements are green whoever they
+belong to, so a friendly squad crossing your plot never reads as a threat for
+the half-second it takes to find the name; return legs are dim, because a
+squad going home is the one march on the map nobody has to answer.
+
+Above the map, anything aimed at you or belonging to you also gets a line of
+text with a countdown. The dot tells you something is coming; the countdown
+tells you whether there is time to do anything about it.
+
+### And the squad has to come home
+
+Arrival is not the end. Survivors get a **return leg** — a real march, same
+speed, drawn on the map, watched by everyone — and the squad is away for the
+whole round trip. An expired garrison gets one too; a reinforcement does not
+blink home, it visibly leaves.
+
+So the true cost of an attack is *twice* the flight, and a raid on the far side
+of the map is a decision about the next hour, not the next four minutes.
+
+---
+
 ## 3. What decides the outcome
 
 Two things decide a battle, and they are the same mechanism seen twice.

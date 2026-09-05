@@ -8,6 +8,7 @@
 
 import type {CosmeticItem, CosmeticSlot, Loadout} from '../../shared/cosmetics';
 import type {BattleDetail, BattleSummary} from '../../shared/battles';
+import type {MarchKind} from '../../shared/march';
 
 export interface ChatMessage {
   id: string;
@@ -194,6 +195,14 @@ export interface MarchView {
   arrivesAt: number;
   mine: boolean;
   incoming: boolean;
+  /**
+   * What the column is for. An attack and a reinforcement look different on
+   * the map on purpose - an alliance member watching a friendly squad cross
+   * their plot should not have to read the name to know it is not an attack -
+   * and a return leg is drawn dimly because there is nothing left to decide
+   * about it.
+   */
+  kind: MarchKind;
 }
 
 export interface SquadView {

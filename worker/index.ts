@@ -725,6 +725,7 @@ async function handleWorld(request: Request, env: Env, player: PlayerRow): Promi
       arrivesAt: m.arrives_at,
       mine: m.attacker_id === player.id,
       incoming: m.defender_id === player.id,
+      kind: m.kind,
     })),
     skins: SKINS,
     bases,
@@ -758,6 +759,15 @@ async function handleMove(request: Request, env: Env, player: PlayerRow): Promis
 
   if (Math.abs(x) > world.extent || Math.abs(y) > world.extent) {
     return fail(400, 'That is beyond the edge of the map.');
+  }
+
+  // Moving is instant, and a squad in transit is aimed at where you ARE. Allow
+  // both and an attacker sends a squad, sees the counter-attack coming, and
+  // relocates - the raid lands on empty ground and the defender has wasted the
+  // one squad they committed. Attacking has to pin you as well as thin you.
+  const away = await marchingSquads(env.DB, player.id);
+  if (away.size > 0) {
+    return fail(409, 'You cannot move while a squad is out.');
   }
 
   const moved = await tryPlace(env.DB, world.id, player.id, x, y, now);
@@ -1071,6 +1081,20 @@ async function handleAttack(request: Request, env: Env, player: PlayerRow): Prom
   if (!mine) return fail(409, 'You are not standing anywhere yet.');
   if (!target) return fail(404, 'Nobody is there.');
 
+  // An alliance is the one place where the answer has to be no rather than
+  // "yes, but you shouldn't". The same march becomes a reinforcement: it takes
+  // the same time and everybody watches it, but on arrival it joins their
+  // defence instead of fighting it.
+  const [mineAlliance, theirs] = await Promise.all([
+    env.DB.prepare(`SELECT alliance_id AS id FROM alliance_members WHERE player_id = ?1`)
+      .bind(player.id)
+      .first<{id: string}>(),
+    env.DB.prepare(`SELECT alliance_id AS id FROM alliance_members WHERE player_id = ?1`)
+      .bind(target.id)
+      .first<{id: string}>(),
+  ]);
+  const allied = !!mineAlliance && mineAlliance.id === theirs?.id;
+
   const result = await launch(
     env.DB,
     world.id,
@@ -1081,13 +1105,18 @@ async function handleAttack(request: Request, env: Env, player: PlayerRow): Prom
     {x, y},
     now,
     newId,
+    allied ? 'reinforce' : 'attack',
   );
   if (!result.ok) return fail(409, result.error);
 
-  return json({arrivesAt: result.arrivesAt, seconds: result.seconds});
+  return json({
+    arrivesAt: result.arrivesAt,
+    seconds: result.seconds,
+    kind: allied ? 'reinforce' : 'attack',
+  });
 }
 
-/** Drag one slot onto another: move, or swap with whatever is already there. *//** Drag one slot onto another: move, or swap with whatever is already there. */
+/** Drag one slot onto another: move, or swap with whatever is already there. */
 async function handleMove2(request: Request, env: Env, player: PlayerRow): Promise<Response> {
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   const from = body?.from as {squad?: unknown; slot?: unknown} | undefined;

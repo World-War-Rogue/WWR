@@ -40,6 +40,25 @@ export function marchProgress(departedAt: number, arrivesAt: number, now: number
   return Math.min(1, Math.max(0, (now - departedAt) / (arrivesAt - departedAt)));
 }
 
+/**
+ * What a march is for.
+ *
+ * A return leg is a march like any other on purpose - drawn on the map, taking
+ * the same time, watched by everybody. The squad is away for the whole round
+ * trip rather than only the journey out, which is most of what attacking
+ * actually costs.
+ */
+export type MarchKind = 'attack' | 'reinforce' | 'return';
+
+/**
+ * How long a reinforcing squad stands at an ally's base before coming home.
+ *
+ * Long enough to actually be there when a raid lands, short enough that
+ * parking a squad on somebody is a decision you revisit rather than a place
+ * you leave it.
+ */
+export const GARRISON_HOURS = 8;
+
 export interface MarchView {
   id: string;
   attacker: string;
@@ -53,4 +72,5 @@ export interface MarchView {
   mine: boolean;
   /** True when it is heading at you. */
   incoming: boolean;
+  kind: MarchKind;
 }
