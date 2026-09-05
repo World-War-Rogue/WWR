@@ -257,7 +257,8 @@ async function sendGarrisonsHome(
 ): Promise<number> {
   const done = await db
     .prepare(
-      `SELECT id, attacker_id, squad, units, from_x, from_y, to_x, to_y
+      `SELECT id, attacker_id, squad, units, from_x, from_y, to_x, to_y,
+                departed_at, arrives_at
          FROM marches
         WHERE world_id = ?1 AND kind = 'reinforce'
           AND garrison_until IS NOT NULL AND garrison_until <= ?2
@@ -273,6 +274,8 @@ async function sendGarrisonsHome(
       from_y: number;
       to_x: number;
       to_y: number;
+      departed_at: number;
+      arrives_at: number;
     }>();
 
   let sent = 0;
@@ -286,25 +289,11 @@ async function sendGarrisonsHome(
       .run();
     if ((claim.meta?.changes ?? 0) === 0) continue;
 
-    let units: Array<{assetId: string; level: number}> = [];
-    try {
-      const parsed = JSON.parse(row.units) as Array<{assetId: string; level: number}>;
-      if (Array.isArray(parsed)) units = parsed;
-    } catch {
-      units = [];
-    }
-    const slowest = units.length
-      ? Math.min(
-          ...units.map((u) => {
-            const asset = ASSET_BY_ID[u.assetId];
-            return asset ? attributeAtLevel(asset.attributes.mobility, u.level) : 5;
-          }),
-        )
-      : 5;
-    const home = marchSeconds(
-      plotsBetween(row.to_x, row.to_y, row.from_x, row.from_y),
-      slowest,
-    );
+    // The way home takes exactly as long as the way out took. Not recomputed
+    // from the distance: it is the same distance anyway, and recomputing would
+    // quietly change the answer whenever the roster did - a squad whose
+    // slowest vehicle died would somehow get home faster than it left.
+    const home = row.arrives_at - row.departed_at;
 
     await db
       .prepare(
@@ -324,7 +313,7 @@ async function sendGarrisonsHome(
         row.from_x,
         row.from_y,
         now,
-        now + home * 1000,
+        now + home,
       )
       .run();
     sent += 1;
@@ -342,7 +331,7 @@ export async function settleArrivals(
     .prepare(
       `SELECT m.id, m.world_id, m.attacker_id, a.username AS attacker, m.squad, m.units,
               m.defender_id, d.username AS defender, m.kind,
-              m.from_x, m.from_y, m.to_x, m.to_y, m.arrives_at
+              m.from_x, m.from_y, m.to_x, m.to_y, m.departed_at, m.arrives_at
          FROM marches m
          JOIN players a ON a.id = m.attacker_id
          JOIN players d ON d.id = m.defender_id
@@ -365,6 +354,7 @@ export async function settleArrivals(
       from_y: number;
       to_x: number;
       to_y: number;
+      departed_at: number;
       arrives_at: number;
     }>();
 
@@ -518,16 +508,10 @@ export async function settleArrivals(
       (u) => !result.attacker.units.find((r) => r.assetId === u.assetId && r.damaged),
     );
     if (survivors.length > 0) {
-      const slowest = Math.min(
-        ...survivors.map((u) => {
-          const asset = ASSET_BY_ID[u.assetId];
-          return asset ? attributeAtLevel(asset.attributes.mobility, u.level) : 5;
-        }),
-      );
-      const home = marchSeconds(
-        plotsBetween(march.to_x, march.to_y, march.from_x, march.from_y),
-        slowest,
-      );
+      // As long as the way out took. Recomputing it from the survivors would
+      // mean a squad that lost its slowest vehicle got home faster than it
+      // arrived, which reads as a reward for taking casualties.
+      const home = march.arrives_at - march.departed_at;
       await db
         .prepare(
           `INSERT INTO marches
@@ -547,7 +531,7 @@ export async function settleArrivals(
           march.from_x,
           march.from_y,
           now,
-          now + home * 1000,
+          now + home,
         )
         .run()
         .catch(() => undefined);
@@ -692,23 +676,19 @@ export async function recall(
     return {ok: false, error: `${squad} has already moved.`};
   }
 
-  let units: Array<{assetId: string; level: number}> = [];
-  try {
-    const parsed = JSON.parse(row.units) as Array<{assetId: string; level: number}>;
-    if (Array.isArray(parsed)) units = parsed;
-  } catch {
-    units = [];
-  }
-  const slowest = units.length
-    ? Math.min(
-        ...units.map((u) => {
-          const asset = ASSET_BY_ID[u.assetId];
-          return asset ? attributeAtLevel(asset.attributes.mobility, u.level) : 5;
-        }),
-      )
-    : 5;
-  const home = marchSeconds(plotsBetween(atX, atY, row.from_x, row.from_y), slowest);
-  const arrivesAt = now + home * 1000;
+  // The way back takes exactly as long as the way out has taken so far. Turn
+  // around twenty seconds in and you are home twenty seconds later.
+  //
+  // Elapsed time, not distance. Distance would be re-rounded to a plot and put
+  // through the same floor every march gets, so a squad recalled in the first
+  // few seconds would still owe three quarters of a minute - which is not what
+  // "I changed my mind" should cost. A garrison has already flown the whole
+  // way, so it owes the whole way back.
+  const outbound = row.arrives_at - row.departed_at;
+  // Floored at a second so the return leg is always a real march with a real
+  // duration - a zero-length one would divide by zero when the map drew it.
+  const home = standing ? outbound : Math.min(outbound, Math.max(1000, now - row.departed_at));
+  const arrivesAt = now + home;
 
   await db
     .prepare(

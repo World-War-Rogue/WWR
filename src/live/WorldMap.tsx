@@ -473,25 +473,6 @@ function drawMarch(
 }
 
 /**
- * One line of text for a column in the air. Kept out of the component because
- * it is a pure translation of a march into words, and because the four cases
- * read better side by side than nested in JSX.
- */
-function marchLine(m: MarchView, left: string): string {
-  // Mine first. A return leg is addressed to its own owner, so testing
-  // `incoming` first would announce your own squad as an inbound attack.
-  if (!m.mine && m.incoming) {
-    return m.kind === 'reinforce'
-      ? t('map.incomingHelp', {attacker: m.attacker, time: left})
-      : t('map.incoming', {attacker: m.attacker, time: left});
-  }
-  if (m.kind === 'return') return t('map.outReturn', {squad: m.squad, time: left});
-  if (m.kind === 'reinforce')
-    return t('map.outReinforce', {squad: m.squad, defender: m.defender, time: left});
-  return t('map.outAttack', {squad: m.squad, x: m.to.x, y: m.to.y, time: left});
-}
-
-/**
  * One squad, away from home.
  *
  * Four states and they read differently on purpose: an attack has a target and
@@ -1108,26 +1089,17 @@ export default function WorldMap({
   }
 
   /**
-   * Columns worth a line of text: anything aimed at you, and anything of
-   * yours. Everybody else's is on the map and nowhere else - the strip is for
-   * the marches you have to answer, and a list of forty is a list of none.
-   */
-  const notable = useMemo(
-    () => (view?.marches ?? []).filter((m) => m.incoming || m.mine),
-    [view],
-  );
-
-  /**
-   * A clock that only runs while something is in the air. The canvas has its
-   * own animation loop; this exists solely so the countdowns in the strip
-   * below tick, and stopping it when the map is quiet keeps an idle tab from
+   * A clock that only runs while a squad is away. The canvas has its own
+   * animation loop; this exists solely so the countdowns in the squads panel
+   * tick, and stopping it when every squad is home keeps an idle tab from
    * re-rendering once a second forever.
+   *
+   * "Away", not "moving": a garrison has nothing in the air and its countdown
+   * still has to run.
    */
   const [clock, setClock] = useState(() => Date.now());
-  // A garrison has nothing in the air and its countdown still has to run, so
-  // the clock follows "is anything away", not "is anything moving".
   const deployed = view?.you.deployments ?? [];
-  const anyMarch = notable.length > 0 || deployed.length > 0;
+  const anyMarch = deployed.length > 0;
   useEffect(() => {
     if (!anyMarch) return;
     setClock(Date.now());
@@ -1263,38 +1235,6 @@ export default function WorldMap({
           )}
         </div>
       </div>
-
-      {/*
-        What is in the air, in words. The map already shows every column, but a
-        countdown you can read is the difference between knowing an attack is
-        coming and knowing whether you have time to do anything about it - and
-        a defender who has to squint at a moving dot to work out how long they
-        have is a defender who does nothing.
-      */}
-      {notable.length > 0 && (
-        <div className="pointer-events-none absolute inset-x-0 top-[4.75rem] flex flex-col items-center gap-1 px-3">
-          {notable.slice(0, 4).map((m) => {
-            const left = formatDuration(Math.max(0, m.arrivesAt - clock));
-            const line = marchLine(m, left);
-            return (
-              <div
-                key={m.id}
-                className={`max-w-full truncate rounded border px-2.5 py-1 text-[11px] font-medium backdrop-blur ${
-                  !m.mine && m.incoming && m.kind === 'attack'
-                    ? 'border-red-700 bg-red-950/70 text-red-200'
-                    : m.kind === 'reinforce'
-                      ? 'border-emerald-800 bg-emerald-950/70 text-emerald-200'
-                      : m.kind === 'return'
-                        ? 'border-neutral-800 bg-black/70 text-neutral-400'
-                        : 'border-orange-800 bg-orange-950/70 text-orange-200'
-                }`}
-              >
-                {line}
-              </div>
-            );
-          })}
-        </div>
-      )}
 
       {camera.zoom < IDENTITY_ZOOM && (
         <div className="pointer-events-none absolute right-3 top-24 rounded border border-neutral-800 bg-black/70 px-3 py-2 backdrop-blur">

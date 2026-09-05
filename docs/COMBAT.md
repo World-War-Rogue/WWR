@@ -101,9 +101,9 @@ belong to, so a friendly squad crossing your plot never reads as a threat for
 the half-second it takes to find the name; return legs are dim, because a
 squad going home is the one march on the map nobody has to answer.
 
-Above the map, anything aimed at you or belonging to you also gets a line of
-text with a countdown. The dot tells you something is coming; the countdown
-tells you whether there is time to do anything about it.
+No times are drawn on the map itself. A column tells you something is
+happening and to whom; the numbers live in one place, which is the squads
+panel, and that panel is about *your* squads.
 
 ### And the squad has to come home
 
@@ -124,10 +124,23 @@ garrison the base it is holding and when it leaves, a return leg only the time.
 
 **Recall is not a cancel.** The squad turns around *from wherever it actually
 is* and takes a return leg home like any other march — visible to everyone,
-and away until it lands. Recalled one plot out, it is home in seconds; recalled
-at the far end, it pays for the whole trip. That is what stops recall being a
-free look at somebody's defence, and it is why the answer to "someone is
-inbound and my squads are away" is a real decision rather than a button.
+and away until it lands.
+
+**The way back takes exactly as long as the way out has taken so far.** Turn
+around twenty seconds in and the squad is home twenty seconds later; turn
+around at the far end and it pays for the whole trip. Elapsed time, not
+distance — measuring the distance back would round to a plot and apply the
+45-second floor every march gets, so a squad recalled after five seconds would
+still owe most of a minute, which is not what changing your mind should cost.
+
+The same rule covers every other way home. A battle's survivors take as long
+going back as they took coming out, and so does an expired garrison. Nothing
+is recomputed from the roster, because a squad that lost its slowest vehicle
+getting home *faster* reads as a reward for taking casualties.
+
+Recall still costs the journey, and that is what stops it being a free look at
+somebody's defence — the answer to "someone is inbound and my squads are away"
+stays a real decision rather than a button.
 
 Recalling a garrison ends it immediately: the ally loses that squad from their
 defence the moment you press it. Being able to leave a teammate exposed is the
