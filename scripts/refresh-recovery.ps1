@@ -43,12 +43,21 @@ function Resolve-Git {
         if ($path -and (Test-Path $path)) { return $path }
     }
 
-    # GitHub Desktop's bundled git. The app folder carries the version, so sort
-    # descending and take the newest rather than guessing a number.
+    # GitHub Desktop's bundled git. The app folder carries the version, and old
+    # ones linger after an upgrade, so the newest has to be picked.
+    #
+    # Sorted as a version, not as a string. Sorting the names would put app-3.6
+    # above app-3.10, because '6' beats '1' one character in - and the failure
+    # would be silent, since the older bundled git works fine. That is exactly
+    # the kind of quiet wrongness this folder exists to avoid.
     $desktop = Join-Path $env:LOCALAPPDATA 'GitHubDesktop'
     if (Test-Path $desktop) {
         $found = Get-ChildItem $desktop -Filter 'app-*' -Directory -ErrorAction SilentlyContinue |
-            Sort-Object Name -Descending |
+            Sort-Object @{Expression = {
+                $parsed = $null
+                if ([version]::TryParse($_.Name.Substring(4), [ref]$parsed)) { $parsed }
+                else { [version]'0.0' }
+            }} -Descending |
             ForEach-Object { Join-Path $_.FullName 'resources\app\git\cmd\git.exe' } |
             Where-Object { Test-Path $_ } |
             Select-Object -First 1
