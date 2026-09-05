@@ -150,6 +150,23 @@ export default function Squads({
     return map;
   }, [view]);
 
+  /**
+   * Squads in the field, and the assets sitting in them.
+   *
+   * The server refuses either edit anyway; this exists so the screen never
+   * offers one. A button that is going to be rejected is worse than no button,
+   * because the player learns the rule from an error instead of from the
+   * layout.
+   */
+  const away = useMemo(() => new Set(view?.away ?? []), [view]);
+  const assetAway = useMemo(() => {
+    const out = new Map<string, string>();
+    for (const name of view?.away ?? []) {
+      for (const id of view?.squads[name] ?? []) if (id) out.set(id, name);
+    }
+    return out;
+  }, [view]);
+
   useEffect(() => {
     if (!picking) return;
     setPickQuery('');
@@ -176,6 +193,12 @@ export default function Squads({
         return;
       }
       const [squad, slot] = hit.dataset.slot.split(':');
+      // A squad in the field is not a drop target. Refused here rather than on
+      // release, so the cell never lights up as though it would accept.
+      if (away.has(squad)) {
+        setOverSlot(null);
+        return;
+      }
       setOverSlot({squad, slot: Number(slot)});
     };
 
@@ -198,10 +221,11 @@ export default function Squads({
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', up);
     };
-  }, [drag, overSlot]);
+  }, [drag, overSlot, away]);
 
   function beginDrag(squad: string, slot: number, e: ReactPointerEvent) {
     if (!view?.squads[squad]?.[slot]) return;
+    if (away.has(squad)) return;
     dragRef.current = {squad, slot, x: e.clientX, y: e.clientY, moved: false};
 
     const watch = (ev: PointerEvent) => {
@@ -320,10 +344,23 @@ export default function Squads({
               {SQUAD_NAMES.map((name) => {
                 const used = view.lift.used[name] ?? 0;
                 const over = used > budget;
+                const out = away.has(name);
                 return (
-                  <section key={name} className="rounded border border-neutral-800 bg-neutral-950 p-3">
+                  <section
+                    key={name}
+                    className={`rounded border bg-neutral-950 p-3 ${
+                      out ? 'border-neutral-900 opacity-60' : 'border-neutral-800'
+                    }`}
+                  >
                     <div className="flex items-baseline justify-between gap-2">
-                      <h3 className="text-sm font-semibold text-neutral-100">{name}</h3>
+                      <h3 className="text-sm font-semibold text-neutral-100">
+                        {name}
+                        {out && (
+                          <span className="ml-2 rounded border border-orange-800 px-1.5 py-0.5 text-[10px] font-normal uppercase tracking-wider text-orange-300">
+                            {t('squads.away')}
+                          </span>
+                        )}
+                      </h3>
                       <span className="text-[11px] text-neutral-500">
                         power{' '}
                         <span className="font-mono text-neutral-300">
@@ -369,6 +406,14 @@ export default function Squads({
                                 // A drag ends over a slot and would otherwise
                                 // fire this too.
                                 if (dragRef.current?.moved) return;
+                                // A squad in the field is read-only. Said in
+                                // the error line rather than doing nothing,
+                                // because a slot that ignores a tap looks
+                                // broken.
+                                if (out) {
+                                  setError(t('squads.awayHint'));
+                                  return;
+                                }
                                 // An occupied slot asks what to do with what is
                                 // already there; an empty one goes straight to
                                 // the choices, because there is only one thing
@@ -545,7 +590,11 @@ export default function Squads({
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {choices.map((asset) => {
                   const where = placedIn.get(asset.id);
-                  const fits = asset.lift <= remaining + freed;
+                  // An asset sits in exactly one squad, so one that is in the
+                  // field cannot be taken - assigning it here would pull it out
+                  // of a squad that is at that moment attacking somebody.
+                  const out = assetAway.get(asset.id);
+                  const fits = !out && asset.lift <= remaining + freed;
                   return (
                     <div key={asset.id}>
                       <button
@@ -566,10 +615,16 @@ export default function Squads({
                             {CATEGORY_LABEL[asset.category]} ·{' '}
                             <span className={ROLE_TINT[asset.role]}>{ROLE_LABEL[asset.role]}</span>
                           </span>
-                          {where && (
-                            <span className="block text-[10px] text-orange-500/80">
-                              {t('squads.inSquad', {squad: where})}
+                          {out ? (
+                            <span className="block text-[10px] text-orange-400">
+                              {t('squads.assetAway', {squad: out})}
                             </span>
+                          ) : (
+                            where && (
+                              <span className="block text-[10px] text-orange-500/80">
+                                {t('squads.inSquad', {squad: where})}
+                              </span>
+                            )
                           )}
                         </span>
                         <span className="shrink-0 text-right">

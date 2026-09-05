@@ -66,6 +66,21 @@ the same warning a real one would.
 Four rules follow from "the squad you send is not defending". Each one exists
 because the rule above is worth nothing if a squad can be in two places.
 
+### You cannot change a squad that is out
+
+The roster is frozen at launch, so a squad in the field cannot be edited: no
+adding, removing, swapping or dragging, and the squad card is greyed with *in
+the field* on it.
+
+**And neither can the assets in it.** That is not the same rule twice. An asset
+sits in exactly one slot, so assigning one that is currently out would quietly
+*pull it out* of the squad holding it — emptying a squad in the middle of its
+attack from the other end of the screen. Those assets are shown in the chooser
+marked *out with Alpha* and cannot be picked.
+
+The rule covers a return leg and a garrison as well as a march, because all
+three mean the same thing: the squad is not at home.
+
 ### You cannot move your base while a squad is out
 
 Relocating with a column in the air would let you dodge every counter-attack:

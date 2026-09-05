@@ -1029,9 +1029,10 @@ async function handleSquads(env: Env, player: PlayerRow): Promise<Response> {
   const state = await settleAndLoad(env, player.id, now);
   if (!state) return fail(404, 'No base found.');
 
-  const [owned, board] = await Promise.all([
+  const [owned, board, away] = await Promise.all([
     ensureRoster(env.DB, player.id, now),
     readSquads(env.DB, player.id),
+    marchingSquads(env.DB, player.id),
   ]);
 
   const levels = new Map(owned.map((o) => [o.assetId, o.level]));
@@ -1056,6 +1057,9 @@ async function handleSquads(env: Env, player: PlayerRow): Promise<Response> {
       airfield: state.levels.airfield,
       barracks: state.levels.barracks,
     },
+    // Squads in the field. Sent so the screen can lock them rather than
+    // letting a player make a change that the server is going to refuse.
+    away: [...away],
   });
 }
 
@@ -1168,6 +1172,7 @@ async function handleMove2(request: Request, env: Env, player: PlayerRow): Promi
     {squad: from.squad, slot: Number(from.slot)},
     {squad: to.squad, slot: Number(to.slot)},
     state.levels,
+    await marchingSquads(env.DB, player.id),
   );
   if (!result.ok) return fail(409, result.error);
   return handleSquads(env, player);
@@ -1189,7 +1194,15 @@ async function handleAssign(request: Request, env: Env, player: PlayerRow): Prom
   if (!state) return fail(404, 'No base found.');
   await ensureRoster(env.DB, player.id, now);
 
-  const result = await assignSlot(env.DB, player.id, squad, slot, assetId, state.levels);
+  const result = await assignSlot(
+    env.DB,
+    player.id,
+    squad,
+    slot,
+    assetId,
+    state.levels,
+    await marchingSquads(env.DB, player.id),
+  );
   if (!result.ok) return fail(409, result.error);
 
   return handleSquads(env, player);

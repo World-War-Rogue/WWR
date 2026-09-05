@@ -213,6 +213,8 @@ export interface SquadView {
   lift: {budget: number; used: Record<string, number>};
   power: Record<string, number>;
   buildings: {motor_pool: number; airfield: number; barracks: number};
+  /** Squads in the field. Locked: what marched out is what fights. */
+  away: string[];
 }
 
 export interface RallyPoint {

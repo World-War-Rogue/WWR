@@ -103,6 +103,13 @@ export type AssignResult = {ok: true} | {ok: false; error: string};
  * failing. That is what a player means by dragging it, and the alternative is
  * making them clear the old slot first for no reason - the unique index still
  * guarantees it only ever sits in one place.
+ *
+ * A squad that is away cannot be touched, and neither can the assets in it.
+ * Both halves are the same rule: what marched out is what fights, and a roster
+ * that could be edited mid-flight would make that a lie. The second half is
+ * not redundant - because an asset lives in exactly one slot, assigning one
+ * that is currently out would PULL IT OUT of the away squad, quietly emptying
+ * a squad that is at that moment attacking somebody.
  */
 export async function assignSlot(
   db: D1Database,
@@ -111,8 +118,10 @@ export async function assignSlot(
   slot: number,
   assetId: string | null,
   buildingLevels: {motor_pool: number; airfield: number; barracks: number},
+  away: Set<string>,
 ): Promise<AssignResult> {
   if (slot < 0 || slot >= SQUAD_SLOTS) return {ok: false, error: 'No such slot.'};
+  if (away.has(squad)) return {ok: false, error: `${squad} is out. Bring it home first.`};
 
   if (assetId === null) {
     await db
@@ -132,6 +141,15 @@ export async function assignSlot(
   if (!owned) return {ok: false, error: 'You do not hold that asset.'};
 
   const board = await readSquads(db, playerId);
+
+  // Where this asset is now. If that is a squad in the field, it is not
+  // available: taking it would edit the away squad from the other end.
+  for (const name of SQUAD_NAMES) {
+    if (away.has(name) && board[name].includes(assetId)) {
+      return {ok: false, error: `${asset.name} is out with ${name}.`};
+    }
+  }
+
   const budget = squadLiftBudget(buildingLevels);
   const wouldUse = liftOfSquad(board, squad, slot) + asset.lift;
   if (wouldUse > budget) {
@@ -196,9 +214,15 @@ export async function moveSlot(
   from: {squad: SquadName; slot: number},
   to: {squad: SquadName; slot: number},
   buildingLevels: {motor_pool: number; airfield: number; barracks: number},
+  away: Set<string>,
 ): Promise<AssignResult> {
   if (from.slot < 0 || from.slot >= SQUAD_SLOTS) return {ok: false, error: 'No such slot.'};
   if (to.slot < 0 || to.slot >= SQUAD_SLOTS) return {ok: false, error: 'No such slot.'};
+  // Both ends. A swap edits two squads, so one of them being in the field is
+  // enough to refuse the whole move.
+  for (const name of [from.squad, to.squad]) {
+    if (away.has(name)) return {ok: false, error: `${name} is out. Bring it home first.`};
+  }
   if (from.squad === to.squad && from.slot === to.slot) return {ok: true};
 
   const board = await readSquads(db, playerId);
