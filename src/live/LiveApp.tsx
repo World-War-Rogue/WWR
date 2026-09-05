@@ -16,6 +16,8 @@ import Chat from './Chat';
 import Customize from './Customize';
 import Profile, {Portrait} from './Profile';
 import Gate from './Gate';
+import Settings from './Settings';
+import {installErrorTap} from './recentErrors';
 import WorldMap from './WorldMap';
 import {
   ApiError,
@@ -88,12 +90,14 @@ function PlayerMenu({
   onOpenProfile,
   onOpenCustomize,
   onOpenAlliance,
+  onOpenSettings,
   onSignOut,
 }: {
   player: Player;
   onOpenProfile: () => void;
   onOpenCustomize: () => void;
   onOpenAlliance: () => void;
+  onOpenSettings: () => void;
   onSignOut: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
@@ -222,6 +226,16 @@ function PlayerMenu({
           )}
 
           <button
+            onClick={() => {
+              setOpen(false);
+              onOpenSettings();
+            }}
+            className="block w-full border-t border-neutral-800 px-3 py-2.5 text-left text-sm text-neutral-200 hover:bg-neutral-900"
+          >
+            {t('settings.title')}
+          </button>
+
+          <button
             onClick={() => void onSignOut()}
             className="block w-full border-t border-neutral-800 px-3 py-2.5 text-left text-sm text-neutral-500 hover:bg-neutral-900 hover:text-red-300"
           >
@@ -244,6 +258,13 @@ export default function LiveApp() {
   const [screen, setScreen] = useState<
     'base' | 'world' | 'customize' | 'profile' | 'alliance' | 'battles' | 'assets' | 'squads'
   >('base');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Collect client errors from the first render, so a report filed at minute
+  // three still carries what went wrong at minute one.
+  useEffect(() => {
+    installErrorTap();
+  }, []);
   // Whose profile is open. Your own from the base header; somebody else's from
   // their base on the map.
   const [viewing, setViewing] = useState<string | null>(null);
@@ -320,15 +341,26 @@ export default function LiveApp() {
   if (!player) return <Gate onAuthed={setPlayer} />;
 
   // Chat is pinned to every signed-in screen rather than being one of them, so
-  // it is reachable from the map without leaving the map.
+  // it is reachable from the map without leaving the map. Settings rides along
+  // in the same element for the same reason - every screen already renders
+  // this, so the panel opens over whatever you were looking at without each
+  // branch having to know about it.
   const chat = (
-    <Chat
-      me={player.username}
-      onViewProfile={(name) => {
-        setViewing(name);
-        setScreen('profile');
-      }}
-    />
+    <>
+      <Chat
+        me={player.username}
+        onViewProfile={(name) => {
+          setViewing(name);
+          setScreen('profile');
+        }}
+      />
+      {settingsOpen && (
+        <Settings
+          screen={screen === 'world' ? 'map' : screen}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
+    </>
   );
 
   if (screen === 'alliance') {
@@ -489,6 +521,7 @@ export default function LiveApp() {
           }}
           onOpenCustomize={() => setScreen('customize')}
           onOpenAlliance={() => setScreen('alliance')}
+          onOpenSettings={() => setSettingsOpen(true)}
           onSignOut={async () => {
             await api.logout();
             setPlayer(null);

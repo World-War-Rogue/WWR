@@ -36,6 +36,7 @@ import {
   resolveAccess,
   translateMissing,
 } from './chat';
+import {type ReportInput, fileReport, recentReports, reportAllowedAt} from './support';
 import {
   LANGUAGE_CODES,
   MESSAGE_MAX,
@@ -2088,6 +2089,39 @@ async function handleChatRead(
  * recipient's Private tab without them having to already know it exists -
  * otherwise the first message to somebody would be invisible to them.
  */
+/**
+ * A bug report from inside the game.
+ *
+ * Deliberately the dullest endpoint in the file. It does not translate, it
+ * does not notify, and it depends on no feature a player might be reporting
+ * on - a report about chat must not travel through chat.
+ */
+async function handleBugReport(request: Request, env: Env, player: PlayerRow): Promise<Response> {
+  const now = Date.now();
+
+  // Rate limit before reading the body, so a flood costs one indexed read.
+  const blockedUntil = await reportAllowedAt(env.DB, player.id, now);
+  if (blockedUntil !== null) return fail(429, 'You just sent one. Give it a minute.');
+
+  const input = (await request.json().catch(() => null)) as ReportInput | null;
+  if (!input) return fail(400, 'Nothing to report.');
+
+  const home = await env.DB.prepare(`SELECT home_world_id AS id FROM bases WHERE player_id = ?1`)
+    .bind(player.id)
+    .first<{id: number | null}>();
+
+  const result = await fileReport(
+    env.DB,
+    {id: player.id, username: player.username, homeWorldId: home?.id ?? null},
+    isLanguage(player.locale) ? player.locale : 'en',
+    request.headers.get('user-agent'),
+    input,
+    now,
+  );
+  if (!result.ok) return fail(400, result.error);
+  return json({ok: true, id: result.id});
+}
+
 async function handleChatSend(
   request: Request,
   env: Env,
@@ -2457,6 +2491,15 @@ async function route(
   if (endpoint === 'GET /api/access/requests') return handleAdminRequests(env, player);
 
   if (endpoint === 'GET /api/admin/ai-check') return handleAiCheck(request, env, player);
+
+  if (endpoint === 'POST /api/support/report') return handleBugReport(request, env, player);
+
+  // Owner-only, and 404 rather than 403 so the endpoint does not announce
+  // itself to everyone else - the shape the admin routes already use.
+  if (endpoint === 'GET /api/support/reports') {
+    if (player.role !== 'owner') return fail(404, 'No such endpoint.');
+    return json({reports: await recentReports(env.DB, url.searchParams.get('status'), 200)});
+  }
 
   if (endpoint === 'GET /api/base') {
     const now = Date.now();

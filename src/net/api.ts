@@ -27,6 +27,14 @@ export interface ChatMessage {
   replyBody: string | null;
 }
 
+export interface BugReportInput {
+  body: string;
+  screen: string;
+  build: string;
+  viewport: string;
+  console: string[];
+}
+
 export interface PendingMention {
   messageId: string;
   channel: string;
@@ -298,6 +306,11 @@ export const api = {
       body: JSON.stringify({username, password}),
     }),
   logout: () => call<{ok: true}>('/api/auth/logout', {method: 'POST'}),
+  reportBug: (body: BugReportInput) =>
+    call<{ok: true; id: string}>('/api/support/report', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   base: () => call<BaseView>('/api/base'),
   world: (x: number, y: number, w: number, h: number, worldId?: number) => {
     const params = new URLSearchParams({x: String(x), y: String(y), w: String(w), h: String(h)});

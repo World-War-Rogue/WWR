@@ -31,6 +31,7 @@ import {CUSTOMIZE} from './en/customize';
 import {GATE} from './en/gate';
 import {MAP} from './en/map';
 import {PROFILE} from './en/profile';
+import {SETTINGS} from './en/settings';
 import {SQUADS} from './en/squads';
 
 export const EN = {
@@ -44,4 +45,5 @@ export const EN = {
   ...PROFILE,
   ...ALLIANCE,
   ...CUSTOMIZE,
+  ...SETTINGS,
 } as const;
