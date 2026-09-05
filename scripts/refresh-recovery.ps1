@@ -21,6 +21,57 @@
 
 $ErrorActionPreference = 'Stop'
 
+<#
+    Find git.
+
+    It is not on PATH in this PowerShell, and adding it there is a machine
+    setting that a script has no business changing. GitHub Desktop ships its
+    own copy, so the one already installed is found rather than required: the
+    folder is versioned (app-3.4.x) so the newest is taken, and the standalone
+    installs are checked first in case one is there.
+#>
+function Resolve-Git {
+    $onPath = Get-Command git -ErrorAction SilentlyContinue
+    if ($onPath) { return $onPath.Source }
+
+    $candidates = @(
+        "$env:ProgramFiles\Git\cmd\git.exe",
+        "${env:ProgramFiles(x86)}\Git\cmd\git.exe",
+        "$env:LOCALAPPDATA\Programs\Git\cmd\git.exe"
+    )
+    foreach ($path in $candidates) {
+        if ($path -and (Test-Path $path)) { return $path }
+    }
+
+    # GitHub Desktop's bundled git. The app folder carries the version, so sort
+    # descending and take the newest rather than guessing a number.
+    $desktop = Join-Path $env:LOCALAPPDATA 'GitHubDesktop'
+    if (Test-Path $desktop) {
+        $found = Get-ChildItem $desktop -Filter 'app-*' -Directory -ErrorAction SilentlyContinue |
+            Sort-Object Name -Descending |
+            ForEach-Object { Join-Path $_.FullName 'resources\app\git\cmd\git.exe' } |
+            Where-Object { Test-Path $_ } |
+            Select-Object -First 1
+        if ($found) { return $found }
+    }
+
+    throw @'
+Could not find git.
+
+It is not on PATH and it is not in any of the usual places. If GitHub Desktop
+is installed, look for git.exe under:
+
+    %LOCALAPPDATA%\GitHubDesktop\app-<version>\resources\app\git\cmd\
+
+and set WWR_GIT to its full path before running this again:
+
+    $env:WWR_GIT = 'C:\full\path\to\git.exe'
+    npm run recovery
+'@
+}
+
+$git = if ($env:WWR_GIT -and (Test-Path $env:WWR_GIT)) { $env:WWR_GIT } else { Resolve-Git }
+
 $repo = Split-Path -Parent $PSScriptRoot
 $recovery = Join-Path ([Environment]::GetFolderPath('Desktop')) 'WORLD WAR ROGUE RECOVERY'
 $snapshot = Join-Path $recovery 'source-snapshot'
@@ -30,17 +81,17 @@ try {
     # A dirty tree means the snapshot will not match what is on GitHub. Worth a
     # warning rather than a refusal - a snapshot one commit behind still beats
     # one three weeks behind - but you should know.
-    $dirty = git status --porcelain
+    $dirty = & $git status --porcelain
     if ($dirty) {
         Write-Warning 'Uncommitted changes - the snapshot will NOT include them:'
         $dirty | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkYellow }
         Write-Host ''
     }
 
-    $commit  = (git rev-parse HEAD).Trim()
-    $short   = (git rev-parse --short HEAD).Trim()
-    $subject = (git log -1 --pretty=%s).Trim()
-    $branch  = (git rev-parse --abbrev-ref HEAD).Trim()
+    $commit  = (& $git rev-parse HEAD).Trim()
+    $short   = (& $git rev-parse --short HEAD).Trim()
+    $subject = (& $git log -1 --pretty=%s).Trim()
+    $branch  = (& $git rev-parse --abbrev-ref HEAD).Trim()
 
     # Wipe first. Extracting over the top leaves files that have since been
     # deleted from the repo sitting in the snapshot, and a recovery folder that
@@ -51,7 +102,7 @@ try {
     # git archive writes a tar of exactly the tracked files at HEAD. Windows 10
     # and 11 ship tar, so this needs no extra tooling.
     $tar = Join-Path $env:TEMP 'wwr-snapshot.tar'
-    git archive --format=tar -o $tar HEAD
+    & $git archive --format=tar -o $tar HEAD
     tar -x -f $tar -C $snapshot
     Remove-Item $tar -Force
 
@@ -92,6 +143,7 @@ and compare. To refresh this folder after more work, run
     Write-Host ''
     Write-Host "Recovery folder refreshed - $files files at $short" -ForegroundColor Green
     Write-Host "  $recovery"
+    Write-Host "  git: $git" -ForegroundColor DarkGray
 }
 finally {
     Pop-Location

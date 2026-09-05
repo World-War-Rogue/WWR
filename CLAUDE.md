@@ -115,3 +115,11 @@ actual control bytes has broken the transport twice. Use codepoint checks.
 `git archive HEAD`. Run it after any run of work. It copies only committed
 files, so nothing gitignored can leak into it and a forgotten commit shows up as
 a missing file rather than a file surviving in one place only.
+
+**git is not on PATH in Matt's PowerShell** - he pushes from GitHub Desktop, so
+nothing ever put it there. The script therefore finds git rather than requiring
+it: PATH, then the standard installs, then GitHub Desktop's bundled copy under
+`%LOCALAPPDATA%\GitHubDesktop\app-<version>\resources\app\git\cmd\`. Set
+`$env:WWR_GIT` to a full path to override. Any other script that shells out to
+git has to do the same - assuming `git` on PATH is how this failed for a month
+without anyone noticing the snapshot was stale.
