@@ -27,6 +27,7 @@ export type SkinId =
   | 'custom_two'
   | 'ember_sentinel'
   | 'ravenkeep'
+  | 'shellwarden'
   | 'signature_one';
 
 export interface Palette {
@@ -108,6 +109,13 @@ export const SKIN_IDENTITY: Record<SkinId, SkinIdentity> = {
     name: 'Ravenkeep',
     blurb: 'The old keep still stands, and something still circles it.',
     palette: {ground: '#2e2a24', structure: '#c9b48a', accent: '#a855f7', roof: '#3a332a', wall: '#8f7f62'},
+    starter: false,
+  },
+  shellwarden: {
+    id: 'shellwarden',
+    name: 'Shellwarden',
+    blurb: 'He has carried the wall on his back since before you were posted here.',
+    palette: {ground: '#2b3124', structure: '#c6b389', accent: '#e2762b', roof: '#5a4530', wall: '#7c8a4a'},
     starter: false,
   },
   // The flagship commission. Sold once, to one player, and never again.

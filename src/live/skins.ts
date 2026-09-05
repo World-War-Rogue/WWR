@@ -170,6 +170,41 @@ const PRESENTATION: Record<SkinId, SkinPresentation> = {
       sway: {amount: 0.011, periodMs: 7600},
     },
   },
+  // A person, not a building - the first skin whose landmark is somebody
+  // standing there. That is worth doing precisely once or twice: at map zoom
+  // the only thing that survives is outline, and a figure reads differently
+  // from every keep and tower in the catalogue, which is exactly the contrast
+  // a store needs.
+  shellwarden: {
+    perimeter: 'palisade',
+    landmark: 'block',
+    art: {
+      src: '/skins/shellwarden.webp',
+      frames: 1,
+      cols: 1,
+      frameW: 512,
+      frameH: 640,
+      fps: 12,
+      overhang: 0.25,
+      // The figure uses about seventy percent of the frame's width - a
+      // standing pose leaves margin either side the way the Sentinel does -
+      // so it is pushed outward rather than sitting small on its own ground.
+      fill: 1.34,
+    },
+    motion: {
+      // He breathes. More than the stone skins and less than a banner: a
+      // living thing that held still would look like a statue of itself, and
+      // one that bobbed like cloth would look weightless.
+      bob: {amplitude: 0.02, periodMs: 3800},
+      // Warm and dim, in the orange already on the vest tabs and the armband.
+      // A lantern at his feet, not a spell - the halo is the only thing that
+      // says "occupied" at the zoom where his face is four pixels wide.
+      glow: {color: '#e2762b', radius: 0.7, periodMs: 3400},
+      // A slow shift of weight. Deliberately out of step with the bob so the
+      // pair never resolve into a single obvious cycle.
+      sway: {amount: 0.014, periodMs: 6700},
+    },
+  },
   // The flagship commission. Sold once, to one player, and never again.
   //
   // This is the first skin with real art. `frames: 1` means the atlas is a
