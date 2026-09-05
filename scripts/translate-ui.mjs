@@ -124,7 +124,10 @@ const SYSTEM = (name) => `You translate the interface of a modern-warfare strate
 
 Rules:
 - Reply with ONLY a JSON object mapping each key to its translation. No prose.
-- Keep {placeholders} EXACTLY as they appear, including the braces.
+- Keep {placeholders} EXACTLY as they appear, letter for letter, in English,
+  including the braces. NEVER translate the word inside the braces and never
+  drop one: {amount} stays {amount}. A renamed placeholder is shown to the
+  player as literal braces, so a string that changes one is thrown away.
 - Keep the register short and military. These are buttons and labels, not prose.
 - Vocabulary, in this game's sense:
   Lift = transport capacity a squad can carry. Not elevator, not raising.
@@ -177,9 +180,23 @@ for (const [code, name] of LANGUAGES) {
       if (start === -1 || end <= start) throw new Error('no JSON object in reply');
       const parsed = JSON.parse(reply.slice(start, end + 1));
       for (const key of keys) {
-        if (typeof parsed[key] === 'string' && parsed[key].trim()) {
-          table[key] = parsed[key].trim();
+        if (typeof parsed[key] !== 'string' || !parsed[key].trim()) continue;
+        const value = parsed[key].trim();
+
+        // The placeholders have to survive verbatim, and sometimes they do not:
+        // the model helpfully translates {amount} to {hoeveelheid}, or drops
+        // one entirely. Both are worse than no translation at all - t() looks
+        // for the English name, so a renamed placeholder is printed to the
+        // player as literal braces, and a dropped one loses the number the
+        // sentence was about. Refusing the string leaves the key missing, and a
+        // missing key falls back to English, which is at least correct.
+        const want = [...EN[key].matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort().join();
+        const got = [...value.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort().join();
+        if (want !== got) {
+          console.warn(`\n${code} ${key} rejected: placeholders {${got}} should be {${want}}`);
+          continue;
         }
+        table[key] = value;
       }
       process.stdout.write(`${code} ${Object.keys(table).length}/${Object.keys(EN).length}\r`);
     } catch (err) {
