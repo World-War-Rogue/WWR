@@ -7,6 +7,7 @@
 import {handleAdminRequests} from './admin';
 import {ensureRally, lastRalliedAt, rallyTo, readRally, setRally} from './rally';
 import {assignSlot, ensureRoster, moveSlot, readSquads, squadLiftUsed, squadPower} from './squads';
+import {launch, marchingSquads, pendingMarches, settleArrivals} from './march';
 import {SQUAD_NAMES, isSquadName, squadLiftBudget} from '../shared/assets';
 import {RALLY_COOLDOWN_MS, maySetRally, rallyCooldownLeft} from '../shared/rally';
 import {listBattles, readBattle} from './battles';
@@ -675,9 +676,15 @@ async function handleWorld(request: Request, env: Env, player: PlayerRow): Promi
   // its own. It changes when an officer moves it, which is exactly as often as
   // the map is already being refreshed, so a second endpoint would be a second
   // request for the same information.
-  const [rallyPoint, ralliedAt] = await Promise.all([
+  // Any march that has landed is fought now, by whoever looked first. Nothing
+  // ticks in the background, so a raid that arrives at three in the morning
+  // still lands correctly - it simply lands the next time anybody reads.
+  await settleArrivals(env.DB, world.id, now, newId);
+
+  const [rallyPoint, ralliedAt, marches] = await Promise.all([
     ownAlliance ? ensureRally(env.DB, ownAlliance.id, world.id, now) : Promise.resolve(null),
     lastRalliedAt(env.DB, world.id, player.id),
+    pendingMarches(env.DB, world.id),
   ]);
 
   return json({
@@ -704,6 +711,21 @@ async function handleWorld(request: Request, env: Env, player: PlayerRow): Promi
     // shown on the world it was planted in - a marker in your home world is
     // not a place you can walk to from an event map.
     rally: rallyPoint && rallyPoint.worldId === world.id ? rallyPoint : null,
+    // Everything in transit. Drawn on the map, so a defender sees what is
+    // coming - which is the whole reason marching exists rather than an
+    // attack being a button that resolves instantly.
+    marches: marches.map((m) => ({
+      id: m.id,
+      attacker: m.attacker,
+      defender: m.defender,
+      squad: m.squad,
+      from: {x: m.from_x, y: m.from_y},
+      to: {x: m.to_x, y: m.to_y},
+      departedAt: m.departed_at,
+      arrivesAt: m.arrives_at,
+      mine: m.attacker_id === player.id,
+      incoming: m.defender_id === player.id,
+    })),
     skins: SKINS,
     bases,
   });
@@ -1013,7 +1035,59 @@ async function handleSquads(env: Env, player: PlayerRow): Promise<Response> {
   });
 }
 
-/** Drag one slot onto another: move, or swap with whatever is already there. */
+/**
+ * Send a squad at somebody.
+ *
+ * The target is a plot, not a player id: you attack what is standing on a
+ * square, and who that is gets read here. A client naming the defender could
+ * name anyone.
+ */
+async function handleAttack(request: Request, env: Env, player: PlayerRow): Promise<Response> {
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const squad = body?.squad;
+  const x = Number(body?.x);
+  const y = Number(body?.y);
+  if (!isSquadName(squad)) return fail(400, 'No such squad.');
+  if (!Number.isInteger(x) || !Number.isInteger(y)) return fail(400, 'Pick a plot on the map.');
+
+  const now = Date.now();
+  const worlds = await reachableWorlds(env.DB, player.id, now);
+  const world = worlds.find((entry) => entry.kind === 'home') ?? worlds[0];
+  if (!world) return fail(409, 'You have not been deployed yet.');
+
+  const [mine, target] = await Promise.all([
+    env.DB.prepare(
+      `SELECT plot_x AS x, plot_y AS y FROM placements WHERE world_id = ?1 AND player_id = ?2`,
+    )
+      .bind(world.id, player.id)
+      .first<{x: number; y: number}>(),
+    env.DB.prepare(
+      `SELECT player_id AS id FROM placements WHERE world_id = ?1 AND plot_x = ?2 AND plot_y = ?3`,
+    )
+      .bind(world.id, x, y)
+      .first<{id: string}>(),
+  ]);
+
+  if (!mine) return fail(409, 'You are not standing anywhere yet.');
+  if (!target) return fail(404, 'Nobody is there.');
+
+  const result = await launch(
+    env.DB,
+    world.id,
+    player.id,
+    squad,
+    target.id,
+    mine,
+    {x, y},
+    now,
+    newId,
+  );
+  if (!result.ok) return fail(409, result.error);
+
+  return json({arrivesAt: result.arrivesAt, seconds: result.seconds});
+}
+
+/** Drag one slot onto another: move, or swap with whatever is already there. *//** Drag one slot onto another: move, or swap with whatever is already there. */
 async function handleMove2(request: Request, env: Env, player: PlayerRow): Promise<Response> {
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   const from = body?.from as {squad?: unknown; slot?: unknown} | undefined;
@@ -2326,6 +2400,8 @@ async function route(
   if (endpoint === 'POST /api/squads/assign') return handleAssign(request, env, player);
 
   if (endpoint === 'POST /api/squads/move') return handleMove2(request, env, player);
+
+  if (endpoint === 'POST /api/attack') return handleAttack(request, env, player);
 
   if (endpoint === 'GET /api/chat') return handleChatRead(request, env, player, ctx);
 

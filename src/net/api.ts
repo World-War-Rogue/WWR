@@ -179,6 +179,21 @@ export interface WorldView {
   bases: PlacedBase[];
   /** The alliance's marker, when there is one in the world being viewed. */
   rally: RallyPoint | null;
+  /** Squads in transit, so a defender can see what is coming. */
+  marches: MarchView[];
+}
+
+export interface MarchView {
+  id: string;
+  attacker: string;
+  defender: string;
+  squad: string;
+  from: {x: number; y: number};
+  to: {x: number; y: number};
+  departedAt: number;
+  arrivesAt: number;
+  mine: boolean;
+  incoming: boolean;
 }
 
 export interface SquadView {
@@ -292,6 +307,11 @@ export const api = {
       {method: 'POST'},
     ),
   squads: () => call<SquadView>('/api/squads'),
+  attack: (squad: string, x: number, y: number) =>
+    call<{arrivesAt: number; seconds: number}>('/api/attack', {
+      method: 'POST',
+      body: JSON.stringify({squad, x, y}),
+    }),
   assignSlot: (squad: string, slot: number, assetId: string | null) =>
     call<SquadView>('/api/squads/assign', {
       method: 'POST',

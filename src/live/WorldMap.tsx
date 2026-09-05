@@ -11,7 +11,7 @@
  * pixels appear only at the moment of drawing.
  */
 import {type RefObject, useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {ApiError, type PlacedBase, type WorldView, api} from '../net/api';
+import {ApiError, type PlacedBase, type SquadView, type WorldView, api} from '../net/api';
 import {EffectLayer, type EffectSource} from './effects';
 import {DEFAULT_SEASON, seasonSpec, terrainAt} from './terrain';
 import {normaliseLoadout} from '../../shared/cosmetics';
@@ -19,6 +19,8 @@ import {ALLEGIANCE, allegianceOf, drawAllegianceMarker} from './allegiance';
 import {artPending, onArtLoaded, skinIsAnimated} from './skinArt';
 import {drawBase as paintBase, skinSpec} from './skins';
 import {formatCooldown} from '../../shared/rally';
+import {marchProgress} from '../../shared/march';
+import {SQUAD_NAMES} from '../../shared/assets';
 import {t} from '../i18n';
 
 const MIN_ZOOM = 14; // pixels per plot when fully zoomed out
@@ -359,6 +361,79 @@ function drawRallyEdge(
   ctx.restore();
 }
 
+/**
+ * A squad crossing the map.
+ *
+ * Drawn as a line from where it left to where it is going, with the column
+ * itself at however far along it has got. The line is what makes an attack
+ * legible from across the map - a moving dot with no track behind it tells you
+ * something is happening but not to whom.
+ *
+ * Yours is orange, one aimed at you is red, and everybody else's is dim. That
+ * ordering is deliberate: the only two marches that require a decision from
+ * you are the ones you are in.
+ */
+function drawMarch(
+  ctx: CanvasRenderingContext2D,
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+  progress: number,
+  kind: 'mine' | 'incoming' | 'other',
+  scale: number,
+  time: number,
+) {
+  const colour =
+    kind === 'incoming' ? '#f87171' : kind === 'mine' ? '#f97316' : 'rgba(180,180,180,0.5)';
+
+  ctx.save();
+  ctx.strokeStyle = colour;
+  ctx.globalAlpha = kind === 'other' ? 0.35 : 0.55;
+  ctx.lineWidth = Math.max(1, scale * 0.03);
+  ctx.setLineDash([scale * 0.25, scale * 0.2]);
+  // The dashes crawl toward the target, so the direction of travel is readable
+  // without watching it move.
+  ctx.lineDashOffset = -(time / 40) % 1000;
+  ctx.beginPath();
+  ctx.moveTo(fromX, fromY);
+  ctx.lineTo(toX, toY);
+  ctx.stroke();
+  ctx.restore();
+
+  const px = fromX + (toX - fromX) * progress;
+  const py = fromY + (toY - fromY) * progress;
+  const r = Math.max(4, scale * 0.16);
+
+  ctx.save();
+  if (kind !== 'other') {
+    const halo = ctx.createRadialGradient(px, py, r * 0.3, px, py, r * 2.4);
+    halo.addColorStop(0, kind === 'incoming' ? 'rgba(248,113,113,0.5)' : 'rgba(249,115,22,0.45)');
+    halo.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(px, py, r * 2.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // A chevron pointing the way it is going.
+  const angle = Math.atan2(toY - fromY, toX - fromX);
+  ctx.translate(px, py);
+  ctx.rotate(angle);
+  ctx.fillStyle = colour;
+  ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(r, 0);
+  ctx.lineTo(-r * 0.7, -r * 0.72);
+  ctx.lineTo(-r * 0.35, 0);
+  ctx.lineTo(-r * 0.7, r * 0.72);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
 export default function WorldMap({
   onOpenBase,
   onViewProfile,
@@ -379,6 +454,10 @@ export default function WorldMap({
   const [error, setError] = useState<string | null>(null);
   const [moving, setMoving] = useState(false);
   const [rallying, setRallying] = useState(false);
+  /** The plot an attack is being aimed at, while a squad is chosen. */
+  const [attacking, setAttacking] = useState<{x: number; y: number} | null>(null);
+  const [squads, setSquads] = useState<SquadView | null>(null);
+  const [sending, setSending] = useState(false);
   const [centred, setCentred] = useState(false);
   /** Bumped to ask for another attempt after a failed load. */
   const [retry, setRetry] = useState(0);
@@ -695,6 +774,23 @@ export default function WorldMap({
       }
     }
 
+    // Marches, under the rendezvous marker but over the bases: a column
+    // crossing somebody's plot is in front of it, not behind.
+    for (const m of view?.marches ?? []) {
+      const p = marchProgress(m.departedAt, m.arrivesAt, Date.now());
+      drawMarch(
+        ctx,
+        toScreenX(m.from.x) + zoom / 2,
+        toScreenY(m.from.y) + zoom / 2,
+        toScreenX(m.to.x) + zoom / 2,
+        toScreenY(m.to.y) + zoom / 2,
+        p,
+        m.incoming ? 'incoming' : m.mine ? 'mine' : 'other',
+        zoom,
+        time,
+      );
+    }
+
     // The rendezvous marker, painted last so nothing can cover it, and at every
     // zoom including strategic - a rally point you can only see once you have
     // already found it is not a rally point.
@@ -724,7 +820,12 @@ export default function WorldMap({
     // Strategic markers do not move, so a zoomed-out map costs nothing to
     // leave open no matter how many animated skins are on it.
     const detailed = camera.zoom >= IDENTITY_ZOOM;
-    const running = () => layer.busy || (detailed && (animatedInView || artPending()));
+    // A march in transit is a fourth reason, and unlike the others it applies
+    // at EVERY zoom - the whole point of a column crossing the map is being
+    // seen from far away, and a frozen chevron reads as a bug.
+    const marching = (view?.marches ?? []).length > 0;
+    const running = () =>
+      layer.busy || marching || (detailed && (animatedInView || artPending()));
     const step = (time: number) => {
       const delta = lastFrameRef.current ? Math.min(64, time - lastFrameRef.current) : 16;
       lastFrameRef.current = time;
@@ -823,6 +924,32 @@ export default function WorldMap({
       setError(err instanceof ApiError ? err.message : 'Could not reach the server.');
     } finally {
       setRallying(false);
+    }
+  }
+
+  /**
+   * Which squads are away, read from the marches the map already has. No extra
+   * request: a squad is marching exactly when there is a march of yours in the
+   * world, and that is on screen anyway.
+   */
+  const awaySquads = useMemo(
+    () => new Set((view?.marches ?? []).filter((m) => m.mine).map((m) => m.squad)),
+    [view],
+  );
+
+  async function sendAttack(squad: string) {
+    if (!attacking) return;
+    setSending(true);
+    setError(null);
+    try {
+      await api.attack(squad, attacking.x, attacking.y);
+      setAttacking(null);
+      setSelected(null);
+      await load(camera, w, h);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not reach the server.');
+    } finally {
+      setSending(false);
     }
   }
 
@@ -1009,6 +1136,71 @@ export default function WorldMap({
         )}
       </div>
 
+      {/*
+        Choosing a squad to send. A sheet rather than a panel, for the same
+        reason the asset chooser is one: the decision is made from the top of
+        the screen and the options have to arrive over it.
+      */}
+      {attacking && (
+        <div className="absolute inset-0 z-40 flex flex-col bg-black/70 backdrop-blur-sm">
+          <button
+            aria-label={t('squads.cancel')}
+            onClick={() => setAttacking(null)}
+            className="min-h-[3rem] flex-1 cursor-default"
+          />
+          <div className="rounded-t-xl border-t border-neutral-700 bg-neutral-950 p-3 shadow-2xl">
+            <div className="flex items-center gap-2 pb-3">
+              <h3 className="text-sm font-semibold text-neutral-100">{t('map.chooseSquad')}</h3>
+              <span className="font-mono text-[11px] text-neutral-500">
+                {attacking.x}, {attacking.y}
+              </span>
+              <button
+                onClick={() => setAttacking(null)}
+                className="ml-auto rounded border border-neutral-700 px-2 py-1 text-xs text-neutral-300 hover:border-orange-600"
+              >
+                {t('squads.cancel')}
+              </button>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              {SQUAD_NAMES.map((name) => {
+                const away = awaySquads.has(name);
+                const filled = (squads?.squads[name] ?? []).filter(Boolean).length;
+                const power = squads?.power[name] ?? 0;
+                // A squad that is out cannot be sent, and an empty one has
+                // nothing to send. Both are said rather than merely disabled -
+                // a greyed button with no reason is a bug as far as a player
+                // is concerned.
+                const why = away ? t('map.squadAway') : filled === 0 ? t('map.squadEmpty') : null;
+                return (
+                  <div key={name}>
+                    <button
+                      onClick={() => void sendAttack(name)}
+                      disabled={sending || !!why || !squads}
+                      className={`flex w-full items-center gap-3 rounded border px-3 py-2 text-left transition ${
+                        why
+                          ? 'border-neutral-900 bg-neutral-950/50 opacity-50'
+                          : 'border-neutral-700 bg-neutral-900 hover:border-red-600'
+                      }`}
+                    >
+                      <span className="text-sm font-semibold text-neutral-100">{name}</span>
+                      <span className="ml-auto text-right">
+                        <span className="block font-mono text-[11px] text-neutral-300">
+                          {power.toLocaleString()}
+                        </span>
+                        <span className="block text-[10px] text-neutral-600">
+                          {why ?? `${filled}/6`}
+                        </span>
+                      </span>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {error && (
         <div className="absolute inset-x-3 bottom-32 rounded border border-red-900 bg-red-950/80 px-3 py-2 text-sm text-red-200 backdrop-blur">
           {error}
@@ -1044,12 +1236,27 @@ export default function WorldMap({
           </div>
 
           {occupied ? (
-            <button
-              onClick={() => onViewProfile(selectedBase.username)}
-              className="mt-3 w-full rounded border border-fuchsia-700 bg-fuchsia-950/40 px-3 py-2 text-sm font-semibold text-fuchsia-200 hover:border-fuchsia-500"
-            >
-              {t('map.viewProfile')}
-            </button>
+            <>
+              <button
+                onClick={() => onViewProfile(selectedBase.username)}
+                className="mt-3 w-full rounded border border-fuchsia-700 bg-fuchsia-950/40 px-3 py-2 text-sm font-semibold text-fuchsia-200 hover:border-fuchsia-500"
+              >
+                {t('map.viewProfile')}
+              </button>
+              {selectedBase.username !== view?.you.username && (
+                <button
+                  onClick={() => {
+                    setAttacking({x: selected.x, y: selected.y});
+                    // The roster is only needed once somebody decides to
+                    // attack, so it is fetched then rather than with the map.
+                    void api.squads().then(setSquads).catch(() => undefined);
+                  }}
+                  className="mt-2 w-full rounded border border-red-800 bg-red-950/40 px-3 py-2 text-sm font-semibold text-red-200 hover:border-red-500"
+                >
+                  {t('map.attack')}
+                </button>
+              )}
+            </>
           ) : (
             <button
               onClick={() => void moveHere()}

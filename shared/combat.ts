@@ -38,14 +38,18 @@ export const HP_PER_ARMOUR = 1.2;
 export const HP_SCALE = 8;
 
 /**
- * What a good matchup is worth, and what a bad one costs.
+ * What a matchup is worth.
  *
- * 1.5 / 0.6 was tried first and made the web too absolute - rotary beat armour
- * 96% of the time, which is the "counters decide almost everything" design
- * that was explicitly not chosen. These leave power as the main driver.
+ * A bonus to the attacker, never a penalty to the defender - so a matchup can
+ * only ever be an edge, and power stays the thing that decides most fights.
+ * The whole spread between the best and worst matchup is twenty per cent.
+ *
+ * Earlier attempts ran 1.5 against 0.6, an eighty per cent spread, and made
+ * rotary beat armour 96% of the time. That is the counters-decide-everything
+ * design that was explicitly not chosen.
  */
-export const COUNTER_STRONG = 1.35;
-export const COUNTER_WEAK = 0.75;
+export const COUNTER_PERFECT = 1.2;
+export const COUNTER_MEDIUM = 1.1;
 
 /**
  * What a squad pays for missing a band, per band missing.
@@ -94,17 +98,30 @@ export const CATEGORY_BAND: Record<AssetCategory, Band> = {
 };
 
 /**
- * What beats what. Symmetric by construction: what beats you also takes less
- * from you, so a squad of six tanks meeting helicopters is not slightly
- * behind - it is the wrong squad, and the report will read that way.
+ * What beats what. Every category counters two others and is countered by two,
+ * so nothing sits outside the web and no category is safe from everything.
+ *
+ * The perfect counters form one closed ring:
+ *
+ *   rotary -> armour -> drone -> artillery -> naval -> fixed wing -> rotary
+ *
+ * Each link is a real relationship. Helicopters kill tanks from above; tanks
+ * with close-in defences kill loitering munitions; drones are counter-battery;
+ * shore batteries threaten ships; ship air defence kills aircraft; fighters
+ * kill helicopters.
+ *
+ * The medium counters are the same ring stepped two places on, which keeps
+ * them symmetric and leaves each of them defensible on its own: helicopters
+ * hunt drones, armour overruns gun lines, drones hit ships, artillery shells
+ * airfields, ships shoot down helicopters, and close air support kills tanks.
  */
 export const COUNTER: Record<AssetCategory, Partial<Record<AssetCategory, number>>> = {
-  rotary: {armour: COUNTER_STRONG, fixed_wing: COUNTER_WEAK},
-  fixed_wing: {rotary: COUNTER_STRONG, drone: COUNTER_WEAK},
-  drone: {artillery: COUNTER_STRONG, fixed_wing: COUNTER_STRONG, armour: COUNTER_WEAK},
-  armour: {drone: COUNTER_STRONG, artillery: COUNTER_STRONG, rotary: COUNTER_WEAK},
-  artillery: {armour: COUNTER_STRONG, drone: COUNTER_WEAK, rotary: COUNTER_WEAK},
-  naval: {artillery: COUNTER_STRONG, fixed_wing: COUNTER_WEAK},
+  rotary: {armour: COUNTER_PERFECT, drone: COUNTER_MEDIUM},
+  armour: {drone: COUNTER_PERFECT, artillery: COUNTER_MEDIUM},
+  drone: {artillery: COUNTER_PERFECT, naval: COUNTER_MEDIUM},
+  artillery: {naval: COUNTER_PERFECT, fixed_wing: COUNTER_MEDIUM},
+  naval: {fixed_wing: COUNTER_PERFECT, rotary: COUNTER_MEDIUM},
+  fixed_wing: {rotary: COUNTER_PERFECT, armour: COUNTER_MEDIUM},
 };
 
 export function counterOf(attacker: AssetCategory, defender: AssetCategory): number {
