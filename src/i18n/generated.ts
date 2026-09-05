@@ -611,7 +611,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "squads.away": "no campo",
     "squads.awayHint": "Uma equipe que está fora não pode ser alterada, e nem o que está nela.",
     "squads.assetAway": "sai com {squad}",
-    "squads.hint": "Toque em uma vaga para preenchê-la. O Lift é o freio: bens mais pesados custam mais, e o orçamento vem do seu Pátio de Manutenção, Campo de Aviação e Quartel — então, inicialmente, uma equipe tem que ser mista, e isso é o ponto."
+    "squads.hint": "Toque em uma vaga para preenchê-la. O Lift é o freio: bens mais pesados custam mais, e o orçamento vem do seu Pátio de Manutenção, Campo de Aviação e Quartel — então, inicialmente, uma equipe tem que ser mista, e isso é o ponto.",
+    "alliance.applied": "Aplicado a {alliances}. Aguardando um oficial."
   },
   "fr": {
     "alliance.unaffiliated": "Non affilié",
@@ -1517,7 +1518,10 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "squads.away": "in campo",
     "squads.awayHint": "Una squadra che è fuori non può essere modificata, e neanche ciò che contiene.",
     "squads.assetAway": "fuori con {squad}",
-    "squads.hint": "Tocca una slot per riempirla. Il Lift è il freno: gli assetti più pesanti costano di più, e il budget proviene dal tuo Motor Pool, Airfield e Barracks — quindi all'inizio una squadra deve essere mista, e questo è il punto."
+    "squads.hint": "Tocca una slot per riempirla. Il Lift è il freno: gli assetti più pesanti costano di più, e il budget proviene dal tuo Motor Pool, Airfield e Barracks — quindi all'inizio una squadra deve essere mista, e questo è il punto.",
+    "alliance.applied": "Applicato a {alliances}. In attesa di un ufficiale.",
+    "squads.slot": "{squad} · slot {slot}",
+    "squads.liftFree": "{amount} lift libero"
   },
   "nl": {
     "alliance.unaffiliated": "Ongebonden",
@@ -1816,7 +1820,11 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "squads.away": "in het veld",
     "squads.awayHint": "Een squad dat is uit kan niet worden gewijzigd, en evenmin wat erin zit.",
     "squads.assetAway": "uit met {squad}",
-    "squads.hint": "Tik op een plek om hem te vullen. Lift is de rem: zwaardere assetten kosten meer, en de begroting komt van je Motor Pool, Luchthaven en Barrakken — dus moet je squad vroeg in het spel gemixt hebben, en dat is het punt."
+    "squads.hint": "Tik op een plek om hem te vullen. Lift is de rem: zwaardere assetten kosten meer, en de begroting komt van je Motor Pool, Luchthaven en Barrakken — dus moet je squad vroeg in het spel gemixt hebben, en dat is het punt.",
+    "battles.plotAt": "plot {x}, {y} · {when}",
+    "battles.looted": "{amount} buit gemaakt",
+    "chat.emptyChannel": "Nog niets. {about}",
+    "squads.slot": "{squad} · positie {slot}"
   },
   "pl": {
     "alliance.unaffiliated": "Nieprzypisany",
@@ -2116,7 +2124,10 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "squads.away": "w polu",
     "squads.awayHint": "Szturm, który jest w polu, nie może być zmieniony, a także nie może być zmieniony jego skład.",
     "squads.assetAway": "wyjechał z {squad}",
-    "squads.hint": "Naciśnij slot, aby go wypełnić. Przyśpieszenie to hamulec: cięższe aktywa kosztują więcej, a budżet pochodzi z Twojego Parku Samochodów, Lotniska i Żołnierza — więc na początku składanka musi być mieszana, a to jest punkt."
+    "squads.hint": "Naciśnij slot, aby go wypełnić. Przyśpieszenie to hamulec: cięższe aktywa kosztują więcej, a budżet pochodzi z Twojego Parku Samochodów, Lotniska i Żołnierza — więc na początku składanka musi być mieszana, a to jest punkt.",
+    "alliance.applied": "Zgłoszono do {alliances}. Oczekiwanie na oficera.",
+    "battles.plotAt": "plotuj {x}, {y} · {when}",
+    "battles.looted": "{amount} zdobyto"
   },
   "ru": {
     "alliance.unaffiliated": "Без альянса",
@@ -2708,7 +2719,21 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "squads.away": "у полі",
     "squads.awayHint": "Склад, що знаходиться у полі, не можна змінити, а також ніщо, що в ньому знаходиться.",
     "squads.assetAway": "відправлений з {squad}",
-    "squads.hint": "Натисніть на слот, щоб заповнити його. Lift — це обмеження: важчі засоби стоять дорожче, а бюджет отримується від Моторної бази, ВПС та Батарей — тому на початку складу мають бути змішані, і це саме завдання."
+    "squads.hint": "Натисніть на слот, щоб заповнити його. Lift — це обмеження: важчі засоби стоять дорожче, а бюджет отримується від Моторної бази, ВПС та Батарей — тому на початку складу мають бути змішані, і це саме завдання.",
+    "alliance.accept": "Прийняти",
+    "alliance.decline": "Відмовитися",
+    "alliance.roster": "Список учасників",
+    "alliance.memberStats": "{power} потужність · CP {commandPost}",
+    "alliance.promote": "Повісити",
+    "alliance.demote": "Знищити",
+    "alliance.makeGeneral": "Зробити генералом",
+    "alliance.handoverConfirm": "Передати командування {name}? Ви стаєте молодшим офіцером.",
+    "alliance.removeMember": "Видалити",
+    "alliance.settings": "Налагодження",
+    "alliance.purposePlaceholder": "Що таке ці спілки.",
+    "alliance.openJoin": "Кожен може приєднатися без застосування",
+    "battles.plotAt": "plot {x}, {y} · {when}",
+    "battles.looted": "{amount} захоплено"
   },
   "tr": {
     "alliance.unaffiliated": "Bağlı Olmayan",
@@ -3009,7 +3034,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "squads.away": "sahada",
     "squads.awayHint": "Sahada olan bir takımda değişiklik yapamazsınız ve içindekiler de değiştirilemez.",
     "squads.assetAway": "{squad} ile birlikte",
-    "squads.hint": "Bir slotu doldurmak için ona dokunun. Kaldırma, fren: ağır malzeme daha pahalıdır ve bütçe, Motor Parkı, Havaalanı ve Karargahınızdan gelir — bu nedenle erken bir takımda karışık olmanız gerekir ve bu da noktadır."
+    "squads.hint": "Bir slotu doldurmak için ona dokunun. Kaldırma, fren: ağır malzeme daha pahalıdır ve bütçe, Motor Parkı, Havaalanı ve Karargahınızdan gelir — bu nedenle erken bir takımda karışık olmanız gerekir ve bu da noktadır.",
+    "alliance.applied": "{alliances}e Uygulandı. Bir subay bekleniyor."
   },
   "ar": {
     "alliance.unaffiliated": "غير متعاقد",
@@ -3300,7 +3326,19 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "squads.away": "في الميدان",
     "squads.awayHint": "لا يمكن تغيير الفريق الذي يخرج، ولا يمكن تغيير ما يحتويه.",
     "squads.assetAway": "يخرج مع {squad}",
-    "squads.hint": "اضغط على فتحة لملؤها. Lift هي الحد: تُكلف الأصول الثقيلة أكثر، ويتأتي الميزانية من مخازنك للسيارات، والميدان الجوي، والبقعة العسكرية — لذلك في البداية يجب أن يكون الفريق مختلطًا، وهذا هو الهدف."
+    "squads.hint": "اضغط على فتحة لملؤها. Lift هي الحد: تُكلف الأصول الثقيلة أكثر، ويتأتي الميزانية من مخازنك للسيارات، والميدان الجوي، والبقعة العسكرية — لذلك في البداية يجب أن يكون الفريق مختلطًا، وهذا هو الهدف.",
+    "alliance.accept": "قبول",
+    "alliance.decline": "رفض",
+    "alliance.roster": "قائمة",
+    "alliance.memberStats": "{power} قوة · CP {commandPost}",
+    "alliance.promote": "تعيين",
+    "alliance.demote": "نقض",
+    "alliance.makeGeneral": "جعل جنرالاً",
+    "alliance.handoverConfirm": "هل ترغب في تسليم القيادة إلى {name}?",
+    "alliance.removeMember": "إزالة",
+    "alliance.settings": "إعدادات",
+    "alliance.purposePlaceholder": "ماذا هذا الاتحاد لخدمته؟",
+    "alliance.openJoin": "يمكن لأي شخص الانضمام دون طلب"
   },
   "he": {
     "alliance.unaffiliated": "Unaffiliated",
@@ -3598,7 +3636,10 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "squads.away": "בשטח",
     "squads.awayHint": "קבוצה שאינה בבסיס אינה ניתנת לשינוי, וכן אף מה שבה.",
     "squads.assetAway": "בחוץ עם {squad}",
-    "squads.hint": "לחץ על תיבה כדי למלא אותה. Lift הוא הברק: כלי צבאיים כבדים עולים במחיר, והתקציב מגיע ממכוניות השריון, התעופה והבסיס — כך, בשלבים הראשונים, צוות צריך להיות מעורב, וזה היה המטרה."
+    "squads.hint": "לחץ על תיבה כדי למלא אותה. Lift הוא הברק: כלי צבאיים כבדים עולים במחיר, והתקציב מגיע ממכוניות השריון, התעופה והבסיס — כך, בשלבים הראשונים, צוות צריך להיות מעורב, וזה היה המטרה.",
+    "battles.squadLosses": "{count} נפגע",
+    "chat.serverBlurb": "כל השחקנים בשרת",
+    "chat.allianceBlurb": "כל השחקנים בברית"
   },
   "hi": {
     "alliance.unaffiliated": "अनबन्धित",
@@ -4189,7 +4230,21 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "squads.away": "在 {squads.away}",
     "squads.awayHint": "一旦一支部队出发，不能再进行任何改变，包括部队成员。",
     "squads.assetAway": "随 {squad} 出发",
-    "squads.hint": "点击一个插槽以填充它。提升是制动器：重型资产的成本更高，预算来自你的机动车库、机场和兵营 — 因此，早期一个小队必须是混合的，这就是点。"
+    "squads.hint": "点击一个插槽以填充它。提升是制动器：重型资产的成本更高，预算来自你的机动车库、机场和兵营 — 因此，早期一个小队必须是混合的，这就是点。",
+    "alliance.accept": "接受",
+    "alliance.decline": "拒绝",
+    "alliance.roster": "阵容",
+    "alliance.memberStats": "{power} 力量 · CP {commandPost}",
+    "alliance.promote": "晋升",
+    "alliance.demote": "降职",
+    "alliance.makeGeneral": "任命总司令",
+    "alliance.handoverConfirm": "将指挥权交给 {name}？你将成为中尉",
+    "alliance.removeMember": "移除",
+    "alliance.settings": "设置",
+    "alliance.purposePlaceholder": "联盟的目的",
+    "alliance.openJoin": "任何人可以加入无需申请",
+    "base.storageCap": "基础存储容量 {amount} 每种资源。提高指挥中心提高容量并解锁其他地方的更高等级。",
+    "map.hits": "{time} 内的命中次数"
   },
   "ja": {
     "alliance.unaffiliated": "非連盟",
@@ -4489,7 +4544,10 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "squads.away": "戦場",
     "squads.awayHint": "戦場にいる部隊は変更できず、その中の資産も変更できません。",
     "squads.assetAway": "{squad}と共に",
-    "squads.hint": "スロットをタップして埋めます。 Liftはブレーキです: 重い資産はコストが高いので、Motor Pool、Airfield、Barracksから予算が来ます — したがって、早期の部隊は組み合わせなければならず、それがポイントです。"
+    "squads.hint": "スロットをタップして埋めます。 Liftはブレーキです: 重い資産はコストが高いので、Motor Pool、Airfield、Barracksから予算が来ます — したがって、早期の部隊は組み合わせなければならず、それがポイントです。",
+    "base.storageCap": "Storage cap {amount} per resource. Command Postを上げると、すべての場所でレベルが解除され、容量が増加します。",
+    "map.setRendezvous": "ここで会合場所を設定",
+    "crop.hint": "ドラッグで移動、スライダーでズーム"
   },
   "ko": {
     "alliance.unaffiliated": "무맹",
@@ -4786,7 +4844,12 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "squads.away": "전장에 배치",
     "squads.awayHint": "전장에 배치된 팀은 변경할 수 없으며, 그 팀에 포함된 자산도 변경할 수 없습니다.",
     "squads.assetAway": "{squad}과 함께 전장에 배치",
-    "squads.hint": "슬롯을 탭하여 채우십시오. Lift는 제동 역할을 합니다: 무게가 더 큰 자산은 더 비싸고, Motor Pool, Airfield 및 Barracks에서 예산이 제공되므로 초기에 팀을 혼합해야 하며, 그 것이 목적입니다."
+    "squads.hint": "슬롯을 탭하여 채우십시오. Lift는 제동 역할을 합니다: 무게가 더 큰 자산은 더 비싸고, Motor Pool, Airfield 및 Barracks에서 예산이 제공되므로 초기에 팀을 혼합해야 하며, 그 것이 목적입니다.",
+    "battles.attacked": "{name}에 공격",
+    "battles.defendedAgainst": "{name}에 대응",
+    "chat.replyingTo": "대답 중",
+    "base.storageCap": "{amount}씩 각 자원에 대한 저장 용량. Command Post를 높이는 것은 용량을 높이고 다른 모든 곳에서 레벨을 해제합니다.",
+    "map.setRendezvous": "여기에서 임시 기지 설정"
   },
   "vi": {
     "alliance.unaffiliated": "Không thuộc bất kỳ liên minh nào",
@@ -5088,7 +5151,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "squads.away": "trong chiến trường",
     "squads.awayHint": "Một đội đang không thể được thay đổi, và cũng không thể thay đổi những gì nó có.",
     "squads.assetAway": "đi cùng với {squad}",
-    "squads.hint": "Nhấn vào một khe để bổ sung. Lift là giới hạn: tài sản nặng hơn sẽ tốn nhiều hơn, và ngân sách đến từ Motor Pool, Sân bay và Trại quân đội - vì vậy ban đầu một đội phải được trộn lẫn, và đó là mục tiêu."
+    "squads.hint": "Nhấn vào một khe để bổ sung. Lift là giới hạn: tài sản nặng hơn sẽ tốn nhiều hơn, và ngân sách đến từ Motor Pool, Sân bay và Trại quân đội - vì vậy ban đầu một đội phải được trộn lẫn, và đó là mục tiêu.",
+    "alliance.applied": "Được áp dụng cho {alliances}. Chờ sự chấp thuận của một sĩ quan."
   },
   "th": {
     "alliance.unaffiliated": "ไม่มีสมาคม",
@@ -5688,6 +5752,10 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "squads.away": "di lapangan",
     "squads.awayHint": "Squad yang keluar tidak dapat diubah, dan tidak dapat apa yang ada di dalamnya.",
     "squads.assetAway": "keluar bersama {squad}",
-    "squads.hint": "Tekan slot untuk mengisi. Lift adalah rem: aset yang lebih berat lebih mahal, dan anggaran berasal dari Motor Pool, Lapangan Terbang dan Barraks — jadi awalnya, skuad harus campuran, dan itu adalah titik."
+    "squads.hint": "Tekan slot untuk mengisi. Lift adalah rem: aset yang lebih berat lebih mahal, dan anggaran berasal dari Motor Pool, Lapangan Terbang dan Barraks — jadi awalnya, skuad harus campuran, dan itu adalah titik.",
+    "battles.plotAt": "plot {x}, {y} · {when}",
+    "battles.looted": "{amount} loot ditemukan",
+    "squads.slot": "{squad} · slot {slot}",
+    "squads.liftFree": "{amount} lift gratis tersedia"
   }
 };
