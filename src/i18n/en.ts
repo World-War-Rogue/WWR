@@ -1,5 +1,5 @@
 /**
- * The source text. English, and the only file written by hand.
+ * The source text. English, and the only text written by hand.
  *
  * Keys are `screen.thing`, so a translator - human or model - can see roughly
  * where a string appears, which is most of the context they get. Anything with
@@ -7,170 +7,41 @@
  * moves between languages and a sentence assembled from fragments cannot be
  * translated at all.
  *
+ * ONE FILE PER SCREEN, in ./en/, composed here.
+ *
+ * It was a single file until the table passed a hundred and thirty keys with
+ * most of the interface still unconverted. Splitting it is not tidiness: two
+ * people - or two agents - converting two screens at once were editing the
+ * same block of the same file, and the merge was the risky part of a job that
+ * is otherwise purely mechanical. Now a screen's strings are a file nobody
+ * else touches.
+ *
+ * `as const` on every fragment is load-bearing. It is what keeps the literal
+ * key types, and MessageKey is derived from them - so a typo in a `t()` call
+ * is a compile error rather than a box that renders its own key at a player.
+ *
  * Adding a key here and running `npm run i18n` translates it everywhere.
  */
+import {ALLIANCE} from './en/alliance';
+import {ASSETS} from './en/assets';
+import {BATTLES} from './en/battles';
+import {CHAT} from './en/chat';
+import {CORE} from './en/core';
+import {CUSTOMIZE} from './en/customize';
+import {GATE} from './en/gate';
+import {MAP} from './en/map';
+import {PROFILE} from './en/profile';
+import {SQUADS} from './en/squads';
+
 export const EN = {
-  // Header and navigation
-  'nav.alliance': 'Alliance',
-  'nav.worldMap': 'World map',
-  'nav.myBase': 'My base',
-  'nav.squads': 'Squads',
-  'nav.back': 'Back',
-  'nav.close': 'Close',
-
-  // Player menu
-  'menu.viewProfile': 'View full profile',
-  'menu.customise': 'Customise base',
-  'menu.squads': 'Squads',
-  'menu.accessRequests': 'Access requests',
-  'menu.signOut': 'Sign out',
-  'menu.noAlliance': 'No alliance',
-  'menu.power': 'Power',
-  'menu.commandPost': 'Command Post',
-  'menu.server': 'Server',
-
-  // Resources
-  'resource.fuel': 'Fuel',
-  'resource.steel': 'Steel',
-  'resource.munitions': 'Munitions',
-  'resource.alloy': 'Alloy',
-
-  // Base
-  'base.upgrade': 'Upgrade',
-  'base.upgrading': 'Upgrading',
-  'base.storageCap': 'Storage cap {amount} per resource. Raising the Command Post raises the cap and unlocks higher levels everywhere else.',
-  'base.level': 'Lv {level}',
-
-  // World map
-  'map.homeWorld': 'Home world',
-  'map.battleTheatre': 'Battle theatre',
-  'map.basesInView': '{count} bases in view',
-  'map.oneBaseInView': '1 base in view',
-  'map.youAt': 'you at {x}, {y}',
-  'map.unplaced': 'unplaced',
-  'map.openGround': 'Open ground',
-  'map.moveHere': 'Move here',
-  'map.relocating': 'Relocating…',
-  'map.viewProfile': 'View profile',
-  'map.setRendezvous': 'Set rendezvous here',
-  'map.settingRendezvous': 'Setting…',
-  'map.attack': 'Attack',
-  'map.reinforce': 'Reinforce',
-  'map.attacking': 'Sending…',
-  'map.chooseSquad': 'Which squad?',
-  'map.chooseSquadReinforce': 'Which squad to send?',
-  'map.oneReinforcement': 'already reinforcing',
-  'map.cannotMove': 'Bring your squads home first',
-  'map.squadReturning': 'returning',
-  'map.squadAway': 'away',
-  'map.squadEmpty': 'empty',
-  'map.squadsOut': 'Squads out',
-  'map.allHome': 'All squads home',
-  'map.dAttack': 'attacking {target}',
-  'map.dReinforce': 'reinforcing {target}',
-  'map.dGarrison': 'holding {target}',
-  'map.dReturn': 'coming home',
-  'map.hits': 'hits in {time}',
-  'map.arrives': 'arrives in {time}',
-  'map.homeIn': 'home in {time}',
-  'map.leavesIn': 'leaves in {time}',
-  'map.recall': 'Recall',
-  'map.recalling': 'Recalling…',
-  'map.reports': 'Reports',
-  'map.home': 'Home',
-  'map.unreachable': 'Could not reach the server.',
-  'map.retrying': 'Retrying…',
-
-  // Allegiance
-  'allegiance.you': 'You',
-  'allegiance.ally': 'Your alliance',
-  'allegiance.server': 'Your server',
-  'allegiance.neutral': 'Another server',
-  'allegiance.hostile': 'At war',
-
-  // Chat
-  'chat.comms': 'Comms',
-  'chat.server': 'Server',
-  'chat.alliance': 'Alliance',
-  'chat.leadership': 'Leadership',
-  'chat.private': 'Private',
-  'chat.send': 'Send',
-  'chat.reply': 'Reply',
-  'chat.replyingTo': 'Replying to',
-  'chat.messagePlaceholder': 'Message {channel} — @ to name someone',
-  'chat.noChannel': 'No channel',
-  'chat.nothingYet': 'Nothing yet.',
-  'chat.allConversations': 'All conversations',
-  'chat.noMessagesYet': 'No messages yet',
-  'chat.messageRemoved': 'message removed',
-  'chat.didNotSend': 'That did not send.',
-
-  // Squads
-  'squads.title': 'Squads',
-  'squads.liftBudget': 'Lift budget {budget} per squad',
-  'squads.power': 'power',
-  'squads.lift': 'lift',
-  'squads.empty': 'empty',
-  'squads.slot': '{squad} · slot {slot}',
-  'squads.liftFree': '{amount} lift free',
-  'squads.clearSlot': 'Clear slot',
-  'squads.cancel': 'Cancel',
-  'squads.inSquad': 'in {squad}',
-  'squads.readingRoster': 'Reading the roster…',
-  'squads.remove': 'Remove',
-  'squads.replace': 'Replace',
-  'squads.inSlot': '{name} is in {squad}, slot {slot}',
-  'squads.dragHint': 'Drag an asset onto another slot to move or swap it.',
-  'squads.nothingFits': 'Nothing you hold fits in {amount} lift.',
-  'squads.nothingFitsHint': 'Clear a slot, or raise the Motor Pool, Airfield or Barracks to carry more.',
-  'squads.away': 'in the field',
-  'squads.awayHint':
-    'A squad that is out cannot be changed, and neither can the assets in it. What marched is what fights.',
-  'squads.assetAway': 'out with {squad}',
-  'squads.hint': 'Tap a slot to fill it. Lift is the brake: heavier assets cost more, and the budget comes from your Motor Pool, Airfield and Barracks — so early on a squad has to be mixed, and that is the point.',
-
-  // Assets
-  'assets.title': 'Assets',
-  'assets.inSquad': 'In {squad}',
-  'assets.unassigned': 'Not in a squad',
-  'assets.search': 'Search',
-  'assets.all': 'All',
-  'assets.showing': '{shown} of {total}',
-  'assets.nothingMatches': 'Nothing matches that.',
-  'assets.comingWithSeason': 'Coastal season',
-  'assets.losesTo': 'loses to {categories}',
-  'assets.noneStronger': 'No asset is stronger than another. Bigger numbers cost more lift, and a squad has a lift budget — so the choice is what a squad is for, not which entries are best.',
-
-  // Attributes
-  'attr.firepower': 'Firepower',
-  'attr.armour': 'Armour',
-  'attr.mobility': 'Mobility',
-  'attr.range': 'Range',
-  'attr.detection': 'Detection',
-
-  // Battle reports
-  'battles.title': 'Battle reports',
-  'battles.mine': 'Mine',
-  'battles.alliance': 'Alliance',
-  'battles.allReports': 'All reports',
-  'battles.none': 'No battles yet.',
-  'battles.noneHint': 'Reports appear here the moment combat exists and somebody fights one.',
-  'battles.won': 'won',
-  'battles.lost': 'lost',
-  'battles.drew': 'drew',
-  'battles.attacked': 'Attacked',
-  'battles.defendedAgainst': 'Defended against',
-  'battles.attacker': 'Attacker',
-  'battles.defender': 'Defender',
-  'battles.losses': 'Losses',
-  'battles.carriedOff': 'Carried off',
-  'battles.roundByRound': 'Round by round',
-  'battles.notes': 'Notes',
-  'battles.reading': 'Reading the wire…',
-
-  // Time
-  'time.justNow': 'just now',
-  'time.minutesAgo': '{count}m ago',
-  'time.hoursAgo': '{count}h ago',
-  'time.daysAgo': '{count}d ago',
+  ...CORE,
+  ...GATE,
+  ...MAP,
+  ...CHAT,
+  ...SQUADS,
+  ...ASSETS,
+  ...BATTLES,
+  ...PROFILE,
+  ...ALLIANCE,
+  ...CUSTOMIZE,
 } as const;

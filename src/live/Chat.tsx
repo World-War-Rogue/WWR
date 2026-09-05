@@ -14,14 +14,8 @@
  * first if chat ever becomes the reason people are here.
  */
 import {type FormEvent, useCallback, useEffect, useRef, useState} from 'react';
-import {
-  CHAT_TABS,
-  type ChatTab,
-  MESSAGE_MAX,
-  TAB_BLURB,
-  TAB_LABEL,
-} from '../../shared/chat';
-import {RANK_LABEL} from '../../shared/alliances';
+import {CHAT_TABS, type ChatTab, MESSAGE_MAX} from '../../shared/chat';
+import {RANK_KEY} from './ranks';
 import {
   GROUP_NAME_MAX,
   groupIdOf,
@@ -36,7 +30,30 @@ import {
   type PendingMention,
   api,
 } from '../net/api';
+import {type MessageKey, t} from '../i18n';
 import {Portrait} from './Profile';
+
+/**
+ * The tab names and the line that says who is in each channel.
+ *
+ * The English is in TAB_LABEL and TAB_BLURB, in shared/chat.ts, where the
+ * Worker can read it too - and the Worker has no interface language to draw
+ * in. So the screen keeps its own map from tab to message key and asks `t`,
+ * rather than rendering the shared strings.
+ */
+const TAB_LABEL_KEY: Record<ChatTab, MessageKey> = {
+  server: 'chat.server',
+  alliance: 'chat.alliance',
+  leadership: 'chat.leadership',
+  private: 'chat.private',
+};
+
+const TAB_BLURB_KEY: Record<ChatTab, MessageKey> = {
+  server: 'chat.serverBlurb',
+  alliance: 'chat.allianceBlurb',
+  leadership: 'chat.leadershipBlurb',
+  private: 'chat.privateBlurb',
+};
 
 /**
  * Split a message so callsigns can be picked out of it.
@@ -171,7 +188,7 @@ export default function Chat({
         setError(null);
       } catch (err) {
         if (alive) {
-          setError(err instanceof ApiError ? err.message : 'Chat is unreachable.');
+          setError(err instanceof ApiError ? err.message : t('chat.unreachable'));
         }
       }
     };
@@ -302,7 +319,7 @@ export default function Chat({
         setMessages((current) => [...current, ...result.messages].slice(-300));
       }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'That did not send.');
+      setError(err instanceof ApiError ? err.message : t('chat.didNotSend'));
       setDraft(text);
       setReplyTo(answering);
     }
@@ -315,7 +332,7 @@ export default function Chat({
       setThread(result.channel);
       await loadChannels();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not open that conversation.');
+      setError(err instanceof ApiError ? err.message : t('chat.couldNotOpen'));
     }
   }
 
@@ -373,7 +390,7 @@ export default function Chat({
                 <span className="text-neutral-500"> {preview.body}</span>
               </>
             ) : (
-              <span className="text-neutral-600">Comms</span>
+              <span className="text-neutral-600">{t('chat.comms')}</span>
             )}
           </span>
           {totalUnread > 0 && (
@@ -389,7 +406,7 @@ export default function Chat({
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-neutral-950">
       <header className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
-        <p className="text-xs uppercase tracking-[0.3em] text-orange-500">Comms</p>
+        <p className="text-xs uppercase tracking-[0.3em] text-orange-500">{t('chat.comms')}</p>
         {mentions.length > 0 && (
           <button
             onClick={() => goToMention(mentions[0])}
@@ -402,7 +419,7 @@ export default function Chat({
           onClick={() => setOpen(false)}
           className="rounded border border-neutral-700 px-3 py-1.5 text-sm text-neutral-300 hover:border-orange-600"
         >
-          Close
+          {t('nav.close')}
         </button>
       </header>
 
@@ -428,14 +445,14 @@ export default function Chat({
               key={key}
               onClick={() => setTab(key)}
               disabled={!available}
-              title={available ? TAB_BLURB[key] : 'Not available to you yet'}
+              title={available ? t(TAB_BLURB_KEY[key]) : t('chat.tabLocked')}
               className={`flex-1 border-b-2 px-2 py-2 text-sm transition ${
                 tab === key
                   ? 'border-orange-500 text-neutral-100'
                   : 'border-transparent text-neutral-500 hover:text-neutral-300'
               } disabled:text-neutral-700`}
             >
-              {TAB_LABEL[key]}
+              {t(TAB_LABEL_KEY[key])}
               {count > 0 && (
                 <span className="ml-1.5 rounded-full bg-orange-600 px-1.5 text-[10px] font-semibold text-white">
                   {count}
@@ -453,7 +470,7 @@ export default function Chat({
               <input
                 value={dmName}
                 onChange={(e) => setDmName(e.target.value)}
-                placeholder="Callsign"
+                placeholder={t('chat.callsign')}
                 className="min-w-0 flex-1 rounded border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm text-neutral-100 focus:border-orange-600 focus:outline-none"
               />
               <button
@@ -466,7 +483,7 @@ export default function Chat({
                 }}
                 className="shrink-0 rounded bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white"
               >
-                Message
+                {t('chat.startDm')}
               </button>
             </div>
             <div className="mt-2 flex gap-2">
@@ -474,7 +491,7 @@ export default function Chat({
                 value={groupName}
                 onChange={(e) => setGroupName(e.target.value)}
                 maxLength={GROUP_NAME_MAX}
-                placeholder="New group name"
+                placeholder={t('chat.newGroupName')}
                 className="min-w-0 flex-1 rounded border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm text-neutral-100 focus:border-orange-600 focus:outline-none"
               />
               <button
@@ -490,13 +507,13 @@ export default function Chat({
                     })
                     .catch((err) =>
                       setError(
-                        err instanceof ApiError ? err.message : 'Could not start that group.',
+                        err instanceof ApiError ? err.message : t('chat.couldNotStartGroup'),
                       ),
                     );
                 }}
                 className="shrink-0 rounded border border-neutral-700 px-3 py-1.5 text-sm text-neutral-300 hover:border-orange-600"
               >
-                Group
+                {t('chat.newGroup')}
               </button>
             </div>
           </div>
@@ -533,7 +550,7 @@ export default function Chat({
                           )}
                         </span>
                         <span className="block truncate text-xs text-neutral-500">
-                          {last ? `${last.author}: ${last.body}` : 'No messages yet'}
+                          {last ? `${last.author}: ${last.body}` : t('chat.noMessagesYet')}
                         </span>
                       </span>
                       {unread > 0 && (
@@ -549,10 +566,7 @@ export default function Chat({
           )}
 
           {(info?.threads.length ?? 0) === 0 ? (
-            <p className="p-4 text-sm text-neutral-600">
-              No conversations yet. Type a callsign above, or open somebody's profile from the
-              map.
-            </p>
+            <p className="p-4 text-sm text-neutral-600">{t('chat.noConversations')}</p>
           ) : (
             <ul className="divide-y divide-neutral-900">
               {info!.threads.map((t) => {
@@ -582,7 +596,7 @@ export default function Chat({
                           )}
                         </span>
                         <span className="block truncate text-xs text-neutral-500">
-                          {last ? `${last.author}: ${last.body}` : 'No messages yet'}
+                          {last ? `${last.author}: ${last.body}` : t('chat.noMessagesYet')}
                         </span>
                       </span>
                       {unread > 0 && (
@@ -605,7 +619,7 @@ export default function Chat({
             onClick={() => setThread(null)}
             className="px-4 py-2 text-left text-xs text-neutral-400 hover:text-neutral-200"
           >
-            &larr; All conversations
+            &larr; {t('chat.allConversations')}
           </button>
 
           {groupIdOf(thread) && (
@@ -613,7 +627,7 @@ export default function Chat({
               <input
                 value={addName}
                 onChange={(e) => setAddName(e.target.value)}
-                placeholder="Add a callsign"
+                placeholder={t('chat.addCallsign')}
                 className="min-w-0 flex-1 rounded border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm text-neutral-100 focus:border-orange-600 focus:outline-none"
               />
               <button
@@ -626,29 +640,29 @@ export default function Chat({
                     .chatAddToGroup(id, name)
                     .then(setInfo)
                     .catch((err) =>
-                      setError(err instanceof ApiError ? err.message : 'Could not add them.'),
+                      setError(err instanceof ApiError ? err.message : t('chat.couldNotAdd')),
                     );
                 }}
                 className="shrink-0 rounded border border-neutral-700 px-3 py-1.5 text-sm text-neutral-300 hover:border-orange-600"
               >
-                Add
+                {t('chat.add')}
               </button>
               <button
                 onClick={() => {
                   const id = groupIdOf(thread);
                   if (!id) return;
-                  if (!window.confirm('Leave this group?')) return;
+                  if (!window.confirm(t('chat.leaveConfirm'))) return;
                   api
                     .chatLeaveGroup(id)
                     .then((next) => {
                       setInfo(next);
                       setThread(null);
                     })
-                    .catch(() => setError('Could not leave that group.'));
+                    .catch(() => setError(t('chat.couldNotLeave')));
                 }}
                 className="shrink-0 rounded border border-red-900 px-3 py-1.5 text-sm text-red-300"
               >
-                Leave
+                {t('chat.leave')}
               </button>
             </div>
           )}
@@ -666,15 +680,17 @@ export default function Chat({
         {!channel ? (
           <p className="text-sm text-neutral-600">
             {tab === 'private'
-              ? 'Type a callsign above to start a conversation.'
+              ? t('chat.startPrivateHint')
               : tab === 'leadership'
-                ? 'Only the general and the lieutenants can see this channel.'
+                ? t('chat.leadershipOnly')
                 : tab === 'alliance'
-                  ? 'Join an alliance to use this channel.'
-                  : 'You have not been deployed yet.'}
+                  ? t('chat.allianceOnly')
+                  : t('chat.notDeployed')}
           </p>
         ) : messages.length === 0 ? (
-          <p className="text-sm text-neutral-600">Nothing yet. {TAB_BLURB[tab]}</p>
+          <p className="text-sm text-neutral-600">
+            {t('chat.emptyChannel', {about: t(TAB_BLURB_KEY[tab])})}
+          </p>
         ) : (
           <div className="space-y-3">
             {messages.map((m) => (
@@ -712,7 +728,7 @@ export default function Chat({
                     </button>
                     {m.rank && (
                       <span className="shrink-0 text-[10px] uppercase tracking-wider text-neutral-600">
-                        {RANK_LABEL[m.rank]}
+                        {t(RANK_KEY[m.rank])}
                       </span>
                     )}
                     <span className="shrink-0 font-mono text-[10px] text-neutral-700">
@@ -731,10 +747,10 @@ export default function Chat({
                       className="mb-1 flex w-full min-w-0 gap-1.5 border-l-2 border-neutral-700 pl-2 text-left hover:border-orange-600"
                     >
                       <span className="shrink-0 text-[11px] font-semibold text-neutral-500">
-                        {m.replyAuthor ?? 'someone'}
+                        {m.replyAuthor ?? t('chat.someone')}
                       </span>
                       <span className="min-w-0 truncate text-[11px] text-neutral-600">
-                        {m.replyBody ? replySnippet(m.replyBody) : 'message removed'}
+                        {m.replyBody ? replySnippet(m.replyBody) : t('chat.messageRemoved')}
                       </span>
                     </button>
                   )}
@@ -776,7 +792,7 @@ export default function Chat({
                     }}
                     className="mt-0.5 text-[11px] text-neutral-600 hover:text-orange-400"
                   >
-                    Reply
+                    {t('chat.reply')}
                   </button>
                 </div>
               </div>
@@ -798,7 +814,7 @@ export default function Chat({
         {replyTo && (
           <div className="flex items-center gap-2 border-b border-neutral-800 bg-neutral-900/60 px-3 py-1.5">
             <span className="shrink-0 text-[11px] uppercase tracking-wider text-neutral-500">
-              Replying to
+              {t('chat.replyingTo')}
             </span>
             <span className="shrink-0 text-[11px] font-semibold text-neutral-300">
               {replyTo.author}
@@ -885,7 +901,11 @@ export default function Chat({
           onBlur={() => setMentionQuery(null)}
           maxLength={MESSAGE_MAX}
           disabled={!channel}
-          placeholder={channel ? `Message ${TAB_LABEL[tab]} - @ to name someone` : 'No channel'}
+          placeholder={
+            channel
+              ? t('chat.messagePlaceholder', {channel: t(TAB_LABEL_KEY[tab])})
+              : t('chat.noChannel')
+          }
           className="min-w-0 flex-1 rounded border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-600 focus:border-orange-600 focus:outline-none disabled:opacity-50"
         />
         <button
@@ -893,7 +913,7 @@ export default function Chat({
           disabled={!channel || draft.trim() === ''}
           className="shrink-0 rounded bg-orange-600 px-4 py-2 text-sm font-semibold text-white disabled:bg-neutral-800 disabled:text-neutral-500"
         >
-          Send
+          {t('chat.send')}
         </button>
       </form>
       </div>

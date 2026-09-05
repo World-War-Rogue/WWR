@@ -23,6 +23,7 @@ import {LANGUAGES} from '../../shared/chat';
 import {nameFor} from './countries';
 import {drawGlyph} from './cosmeticsPaint';
 import {skinSpec} from './skins';
+import {t} from '../i18n';
 
 /**
  * A portrait: an uploaded picture when there is one, a drawn glyph when not.
@@ -148,7 +149,7 @@ export default function Profile({
         setLanguage(p.language);
       })
       .catch((err) =>
-        setError(err instanceof ApiError ? err.message : 'Could not load that profile.'),
+        setError(err instanceof ApiError ? err.message : t('profile.errorLoad')),
       );
   }, [username]);
 
@@ -171,7 +172,7 @@ export default function Profile({
       });
       setProfile(saved);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not save your profile.');
+      setError(err instanceof ApiError ? err.message : t('profile.errorSave'));
     } finally {
       setBusy(false);
     }
@@ -182,7 +183,7 @@ export default function Profile({
       <header className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-orange-500">
-            {editable ? 'Your profile' : 'Dossier'}
+            {editable ? t('profile.eyebrowOwn') : t('profile.eyebrowOther')}
           </p>
           <h1 className="text-xl font-semibold text-neutral-100">{profile?.username ?? username}</h1>
         </div>
@@ -190,7 +191,7 @@ export default function Profile({
           onClick={onClose}
           className="shrink-0 rounded border border-neutral-700 px-3 py-2 text-sm text-neutral-300 hover:border-orange-600"
         >
-          {editable ? 'Done' : 'Close'}
+          {editable ? t('profile.done') : t('nav.close')}
         </button>
       </header>
 
@@ -201,7 +202,7 @@ export default function Profile({
       )}
 
       {profile === null ? (
-        <p className="mt-8 text-sm text-neutral-600">Loading…</p>
+        <p className="mt-8 text-sm text-neutral-600">{t('profile.loading')}</p>
       ) : (
         <>
           <div className="mt-6 flex items-start gap-4">
@@ -218,7 +219,11 @@ export default function Profile({
               {editable && (
                 <button
                   type="button"
-                  title={profile.portrait.hasImage ? 'Change your picture' : 'Add a picture'}
+                  title={
+                    profile.portrait.hasImage
+                      ? t('profile.changePicture')
+                      : t('profile.addPicture')
+                  }
                   onClick={() => fileRef.current?.click()}
                   className="absolute -bottom-2 -right-2 flex h-7 w-7 items-center justify-center rounded-full border border-neutral-600 bg-neutral-900 text-lg leading-none text-neutral-200 transition hover:border-orange-500 hover:text-orange-300"
                 >
@@ -239,7 +244,7 @@ export default function Profile({
                 <input
                   value={motto}
                   maxLength={MOTTO_MAX}
-                  placeholder="Say something. One line."
+                  placeholder={t('profile.mottoPlaceholder')}
                   onChange={(e: ChangeEvent<HTMLInputElement>) => setMotto(e.target.value)}
                   className="mt-3 w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-neutral-100 placeholder:text-neutral-600 focus:border-orange-600 focus:outline-none"
                 />
@@ -264,7 +269,7 @@ export default function Profile({
               e.target.value = '';
               if (!file) return;
               if (file.size > PORTRAIT_MAX_SOURCE_BYTES) {
-                setError('That picture is too large. Try one under 16MB.');
+                setError(t('profile.errorPictureTooLarge'));
                 return;
               }
               setError(null);
@@ -289,7 +294,7 @@ export default function Profile({
                     })
                     .catch((err) =>
                       setError(
-                        err instanceof ApiError ? err.message : 'Could not save that picture.',
+                        err instanceof ApiError ? err.message : t('profile.errorPictureSave'),
                       ),
                     )
                     .finally(() => setBusy(false));
@@ -308,52 +313,59 @@ export default function Profile({
                     setProfile(saved);
                     setStamp(Date.now());
                   })
-                  .catch(() => setError('Could not remove that picture.'))
+                  .catch(() => setError(t('profile.errorPictureRemove')))
                   .finally(() => setBusy(false));
               }}
               className="mt-3 text-xs text-neutral-500 underline underline-offset-4 hover:text-neutral-300"
             >
-              Remove picture
+              {t('profile.removePicture')}
             </button>
           )}
 
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Stat label="Power" value={formatNumber(profile.power)} />
+            <Stat label={t('menu.power')} value={formatNumber(profile.power)} />
             <Stat
-              label="Alliance"
+              label={t('nav.alliance')}
               value={
                 profile.alliance
                   ? `[${profile.alliance.tag}] ${profile.alliance.name}`
-                  : 'None'
+                  : t('profile.noAlliance')
               }
             />
-            <Stat label="Server" value={profile.homeWorldId ? `#${profile.homeWorldId}` : '—'} />
-            <Stat label="Command Post" value={`Lv ${profile.commandPost}`} />
+            <Stat
+              label={t('menu.server')}
+              value={profile.homeWorldId ? `#${profile.homeWorldId}` : '—'}
+            />
+            <Stat
+              label={t('menu.commandPost')}
+              value={t('base.level', {level: profile.commandPost})}
+            />
           </div>
 
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Stat label="Base" value={profile.baseName} />
+            <Stat label={t('profile.baseLabel')} value={profile.baseName} />
             <Stat
-              label="Position"
-              value={profile.plot ? `${profile.plot.x}, ${profile.plot.y}` : 'Unplaced'}
+              label={t('profile.position')}
+              value={
+                profile.plot ? `${profile.plot.x}, ${profile.plot.y}` : t('profile.unplaced')
+              }
             />
           </div>
 
           <p className="mt-3 text-xs text-neutral-600">
-            Flying {skinSpec(profile.skin).name}
             {profile.joinedAt
-              ? ` · deployed ${new Date(profile.joinedAt).toLocaleDateString()}`
-              : ''}
+              ? t('profile.flyingDeployed', {
+                  skin: skinSpec(profile.skin).name,
+                  date: new Date(profile.joinedAt).toLocaleDateString(),
+                })
+              : t('profile.flying', {skin: skinSpec(profile.skin).name})}
           </p>
 
           {editable && (
             <div className="mt-8 space-y-6">
               <section>
-                <h2 className="text-sm font-semibold text-neutral-200">Language</h2>
-                <p className="mt-1 text-xs text-neutral-600">
-                  Chat written in another language is translated into this one for you. Your own
-                  messages are sent in it.
-                </p>
+                <h2 className="text-sm font-semibold text-neutral-200">{t('profile.language')}</h2>
+                <p className="mt-1 text-xs text-neutral-600">{t('profile.languageBlurb')}</p>
                 <select
                   value={language}
                   onChange={(e) => setLanguage(e.target.value)}
@@ -368,7 +380,7 @@ export default function Profile({
               </section>
 
               <section>
-                <h2 className="text-sm font-semibold text-neutral-200">Portrait</h2>
+                <h2 className="text-sm font-semibold text-neutral-200">{t('profile.portrait')}</h2>
                 <div className="mt-2 flex gap-2 overflow-x-auto pb-2">
                   {PORTRAIT_GLYPHS.map((g) => (
                     <div key={g} className="shrink-0">
@@ -389,17 +401,20 @@ export default function Profile({
               </section>
 
               <section>
-                <h2 className="text-sm font-semibold text-neutral-200">Colour</h2>
+                <h2 className="text-sm font-semibold text-neutral-200">{t('profile.colour')}</h2>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {PORTRAIT_TINTS.map((t) => (
+                  {/* Named `swatch` rather than `t`, which is the translator here. */}
+                  {PORTRAIT_TINTS.map((swatch) => (
                     <button
-                      key={t.id}
+                      key={swatch.id}
                       type="button"
-                      title={t.name}
-                      onClick={() => setTint(t.id)}
-                      style={{background: t.background}}
+                      title={swatch.name}
+                      onClick={() => setTint(swatch.id)}
+                      style={{background: swatch.background}}
                       className={`h-9 w-9 rounded border transition ${
-                        tint === t.id ? 'border-orange-400 ring-2 ring-orange-500/50' : 'border-neutral-700'
+                        tint === swatch.id
+                          ? 'border-orange-400 ring-2 ring-orange-500/50'
+                          : 'border-neutral-700'
                       }`}
                     />
                   ))}
@@ -411,7 +426,7 @@ export default function Profile({
                 disabled={!dirty || busy}
                 className="rounded bg-orange-600 px-6 py-2 text-sm font-semibold text-white disabled:bg-neutral-800 disabled:text-neutral-500"
               >
-                {busy ? 'Saving…' : dirty ? 'Save profile' : 'Saved'}
+                {busy ? t('profile.saving') : dirty ? t('profile.save') : t('profile.saved')}
               </button>
             </div>
           )}

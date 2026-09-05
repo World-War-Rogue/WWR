@@ -24,6 +24,7 @@ import {ApiError, api} from '../net/api';
 import {drawSwatch} from './cosmeticsPaint';
 import {skinIsAnimated} from './skinArt';
 import {drawBase, skinSpec} from './skins';
+import {t} from '../i18n';
 
 const SWATCH = 56;
 
@@ -62,7 +63,7 @@ function Tile({
     <button
       type="button"
       onClick={onPick}
-      title={locked ? `${label} — locked` : label}
+      title={locked ? t('customize.lockedItem', {item: label}) : label}
       className={`group relative rounded border p-1 transition ${
         selected
           ? 'border-orange-500 bg-orange-950/40'
@@ -132,7 +133,7 @@ function SkinTile(props: {
         ref.current = node;
       }}
       label={skinSpec(skin).name}
-      caption="Locked"
+      caption={t('customize.locked')}
       selected={props.selected}
       locked={props.locked}
       onPick={props.onPick}
@@ -220,7 +221,7 @@ export default function Customize({onClose}: {onClose: () => void}) {
         setDraft({loadout: data.loadout, skin: data.skin});
       })
       .catch((err) =>
-        setError(err instanceof ApiError ? err.message : 'Could not load the catalogue.'),
+        setError(err instanceof ApiError ? err.message : t('customize.errorLoad')),
       );
   }, []);
 
@@ -243,7 +244,7 @@ export default function Customize({onClose}: {onClose: () => void}) {
       setSaved({loadout: result.loadout, skin: result.skin});
       setDraft({loadout: result.loadout, skin: result.skin});
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not save that loadout.');
+      setError(err instanceof ApiError ? err.message : t('customize.errorSave'));
     } finally {
       setBusy(false);
     }
@@ -253,18 +254,17 @@ export default function Customize({onClose}: {onClose: () => void}) {
     <div className="mx-auto max-w-3xl px-5 py-8">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-orange-500">Customisation</p>
-          <h1 className="text-xl font-semibold text-neutral-100">Your colours</h1>
-          <p className="mt-1 max-w-md text-sm text-neutral-500">
-            None of this changes what your base can do. It changes what everyone else sees when
-            they find you on the map.
+          <p className="text-xs uppercase tracking-[0.3em] text-orange-500">
+            {t('customize.eyebrow')}
           </p>
+          <h1 className="text-xl font-semibold text-neutral-100">{t('customize.title')}</h1>
+          <p className="mt-1 max-w-md text-sm text-neutral-500">{t('customize.blurb')}</p>
         </div>
         <button
           onClick={onClose}
           className="shrink-0 rounded border border-neutral-700 px-3 py-2 text-sm text-neutral-300 hover:border-orange-600"
         >
-          Done
+          {t('customize.done')}
         </button>
       </header>
 
@@ -284,29 +284,27 @@ export default function Customize({onClose}: {onClose: () => void}) {
             disabled={!dirty || busy}
             className="mt-4 w-full rounded bg-orange-600 px-4 py-2 text-sm font-semibold text-white disabled:bg-neutral-800 disabled:text-neutral-500 sm:w-auto sm:px-6"
           >
-            {busy ? 'Saving…' : dirty ? 'Save look' : 'Saved'}
+            {busy ? t('customize.saving') : dirty ? t('customize.save') : t('customize.saved')}
           </button>
           {dirty && (
             <button
               onClick={() => setDraft(saved)}
               className="mt-2 block text-xs text-neutral-500 underline underline-offset-4 hover:text-neutral-300"
             >
-              Discard changes
+              {t('customize.discard')}
             </button>
           )}
         </div>
       </div>
 
       {items === null ? (
-        <p className="mt-8 text-sm text-neutral-600">Loading the catalogue…</p>
+        <p className="mt-8 text-sm text-neutral-600">{t('customize.loading')}</p>
       ) : (
         <div className="mt-8 space-y-6">
           <section>
             <div className="flex items-baseline justify-between gap-3">
-              <h2 className="text-sm font-semibold text-neutral-200">Base</h2>
-              <p className="truncate text-xs text-neutral-600">
-                The compound itself. Rendered art drops in here when it lands.
-              </p>
+              <h2 className="text-sm font-semibold text-neutral-200">{t('customize.skins')}</h2>
+              <p className="truncate text-xs text-neutral-600">{t('customize.skinsBlurb')}</p>
             </div>
             <div className="mt-2 flex gap-2 overflow-x-auto pb-2">
               {skinIds.map((id) => (
@@ -355,9 +353,7 @@ export default function Customize({onClose}: {onClose: () => void}) {
       )}
 
       <p className="mt-8 text-xs text-neutral-600">
-        Locked items preview on your own base but cannot be saved yet — there is nothing to buy
-        them with. Four slots, {items?.length ?? 0} items, 2,058 combinations before the base skin
-        is counted.
+        {t('customize.footnote', {count: items?.length ?? 0})}
       </p>
     </div>
   );

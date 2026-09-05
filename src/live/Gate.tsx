@@ -5,6 +5,8 @@
  * path from here into it without an approved account.
  */
 import {type FormEvent, type ReactNode, useEffect, useRef, useState} from 'react';
+import {LANGUAGE_CODES} from '../../shared/chat';
+import {setLanguage, t} from '../i18n';
 import {ApiError, type Player, api} from '../net/api';
 import {COUNTRIES, guessCountry, languageFor} from './countries';
 import {STARTER_SKINS} from './skins';
@@ -12,7 +14,10 @@ import {STARTER_SKINS} from './skins';
 type Mode = 'signin' | 'request';
 type Availability = 'idle' | 'checking' | 'free' | 'taken';
 
-const CALLSIGN_RULE = 'Callsign must be 6-20 letters, no numbers or symbols.';
+// Read at call time rather than held in a module constant: `t` answers in
+// whatever language is current when it runs, and on this screen that is only
+// settled once the effect below has looked at the browser.
+const callsignRule = () => t('gate.callsignRule');
 
 function Field({
   label,
@@ -53,6 +58,35 @@ export default function Gate({onAuthed}: {onAuthed: (player: Player) => void}) {
   // Ignore the answer to a check that has been superseded by later typing.
   const checkSeq = useRef(0);
 
+  // `t` reads a module variable, so changing the language re-renders nothing
+  // by itself. This is only here to make the screen redraw once the guess
+  // below has been applied.
+  const [, setLangTick] = useState(0);
+
+  // Nobody is signed in yet, so there is no saved preference to obey - and
+  // this is the one screen a player reaches before they could ever have set
+  // one, which makes it the screen where defaulting to English costs the
+  // most. The browser's own language is the only thing we know about them, so
+  // the interface starts there. `navigator.language` is a full tag like
+  // `pt-BR`; the interface is translated per language rather than per region,
+  // so only the part before the dash means anything here, and a language the
+  // game does not carry is left alone rather than forced to a near miss.
+  //
+  // The cleanup hands the language back to English on the way out, and that
+  // is the part that keeps a signed-in player's own choice winning. LiveApp
+  // sets the language from `player.language`, but its effect only re-runs
+  // when that value CHANGES - a player who has never chosen one would
+  // otherwise keep this guess for the rest of the session. React runs every
+  // cleanup in a commit before any effect in it, so unmounting the Gate
+  // resets to English first and LiveApp's own choice lands on top.
+  useEffect(() => {
+    const guess = (navigator.language || 'en').split('-')[0];
+    if (!LANGUAGE_CODES.includes(guess)) return;
+    setLanguage(guess);
+    setLangTick((n) => n + 1);
+    return () => setLanguage('en');
+  }, []);
+
   useEffect(() => {
     if (mode !== 'request') return;
     const name = username.trim();
@@ -63,7 +97,7 @@ export default function Gate({onAuthed}: {onAuthed: (player: Player) => void}) {
     }
     if (!/^[A-Za-z]{6,20}$/.test(name)) {
       setAvailability('taken');
-      setAvailabilityNote(CALLSIGN_RULE);
+      setAvailabilityNote(callsignRule());
       return;
     }
 
@@ -75,7 +109,7 @@ export default function Gate({onAuthed}: {onAuthed: (player: Player) => void}) {
         const result = await api.checkCallsign(name);
         if (seq !== checkSeq.current) return;
         setAvailability(result.available ? 'free' : 'taken');
-        setAvailabilityNote(result.available ? null : (result.reason ?? 'That callsign is taken.'));
+        setAvailabilityNote(result.available ? null : (result.reason ?? t('gate.callsignTaken')));
       } catch {
         if (seq !== checkSeq.current) return;
         setAvailability('idle');
@@ -105,7 +139,10 @@ export default function Gate({onAuthed}: {onAuthed: (player: Player) => void}) {
         setSent(result.message);
       }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not reach the server.');
+      // An ApiError carries a sentence the Worker wrote, in English, formed
+      // on the server - it cannot be translated here. Only the fallback,
+      // which this client writes, goes through `t`.
+      setError(err instanceof ApiError ? err.message : t('gate.networkError'));
     } finally {
       setBusy(false);
     }
@@ -115,12 +152,9 @@ export default function Gate({onAuthed}: {onAuthed: (player: Player) => void}) {
     return (
       <div className="mx-auto mt-24 w-full max-w-sm px-6">
         <p className="text-xs uppercase tracking-[0.3em] text-orange-500">World War Rogue</p>
-        <h1 className="mt-2 text-2xl font-semibold text-neutral-100">Request sent</h1>
+        <h1 className="mt-2 text-2xl font-semibold text-neutral-100">{t('gate.requestSent')}</h1>
         <p className="mt-3 text-sm text-neutral-400">{sent}</p>
-        <p className="mt-6 text-sm text-neutral-500">
-          Access is reviewed by hand while the game is in closed testing. You will be emailed either
-          way.
-        </p>
+        <p className="mt-6 text-sm text-neutral-500">{t('gate.reviewNote')}</p>
         <button
           onClick={() => {
             setSent(null);
@@ -128,7 +162,7 @@ export default function Gate({onAuthed}: {onAuthed: (player: Player) => void}) {
           }}
           className="mt-8 text-sm text-neutral-400 underline underline-offset-4 hover:text-neutral-200"
         >
-          Back to sign in
+          {t('gate.backToSignIn')}
         </button>
       </div>
     );
@@ -143,17 +177,15 @@ export default function Gate({onAuthed}: {onAuthed: (player: Player) => void}) {
     <div className="mx-auto mt-16 w-full max-w-sm px-6 pb-16">
       <p className="text-xs uppercase tracking-[0.3em] text-orange-500">World War Rogue</p>
       <h1 className="mt-2 text-2xl font-semibold text-neutral-100">
-        {requesting ? 'Request access' : 'Report for duty'}
+        {requesting ? t('gate.requestTitle') : t('gate.signInTitle')}
       </h1>
       <p className="mt-2 text-sm text-neutral-400">
-        {requesting
-          ? 'The game is in closed testing. Requests are reviewed by hand.'
-          : 'Sign in to your base. It has been running while you were away.'}
+        {requesting ? t('gate.requestIntro') : t('gate.signInIntro')}
       </p>
 
       <form onSubmit={submit} className="mt-8 space-y-4">
         {requesting && (
-          <Field label="Email">
+          <Field label={t('gate.email')}>
             <input
               type="email"
               value={email}
@@ -165,16 +197,20 @@ export default function Gate({onAuthed}: {onAuthed: (player: Player) => void}) {
         )}
 
         <Field
-          label="Callsign"
+          label={t('gate.callsign')}
           hint={
             requesting && availabilityNote ? (
               <span className="mt-1 block text-xs text-red-400">{availabilityNote}</span>
             ) : requesting && availability === 'free' ? (
-              <span className="mt-1 block text-xs text-emerald-400">Available</span>
+              <span className="mt-1 block text-xs text-emerald-400">
+                {t('gate.callsignAvailable')}
+              </span>
             ) : requesting && availability === 'checking' ? (
-              <span className="mt-1 block text-xs text-neutral-500">Checking…</span>
+              <span className="mt-1 block text-xs text-neutral-500">
+                {t('gate.callsignChecking')}
+              </span>
             ) : requesting ? (
-              <span className="mt-1 block text-xs text-neutral-600">{CALLSIGN_RULE}</span>
+              <span className="mt-1 block text-xs text-neutral-600">{callsignRule()}</span>
             ) : null
           }
         >
@@ -186,7 +222,7 @@ export default function Gate({onAuthed}: {onAuthed: (player: Player) => void}) {
           />
         </Field>
 
-        <Field label="Password">
+        <Field label={t('gate.password')}>
           <input
             type="password"
             value={password}
@@ -199,10 +235,10 @@ export default function Gate({onAuthed}: {onAuthed: (player: Player) => void}) {
         {requesting && (
           <>
             <Field
-              label="Country"
+              label={t('gate.country')}
               hint={
                 <span className="mt-1 block text-xs text-neutral-600">
-                  Sets your flag and language. Changeable in-game.
+                  {t('gate.countryHint')}
                 </span>
               }
             >
@@ -220,7 +256,9 @@ export default function Gate({onAuthed}: {onAuthed: (player: Player) => void}) {
             </Field>
 
             <div>
-              <span className="text-xs uppercase tracking-widest text-neutral-500">Base type</span>
+              <span className="text-xs uppercase tracking-widest text-neutral-500">
+                {t('gate.baseType')}
+              </span>
               <div className="mt-2 grid grid-cols-2 gap-2">
                 {STARTER_SKINS.map((option) => {
                   const active = option.id === skin;
@@ -259,10 +297,8 @@ export default function Gate({onAuthed}: {onAuthed: (player: Player) => void}) {
                 className="mt-0.5 h-4 w-4 accent-orange-600"
               />
               <span className="text-sm text-neutral-300">
-                I confirm I am 18 or over.
-                <span className="mt-1 block text-xs text-neutral-500">
-                  World War Rogue is not available to under-18s.
-                </span>
+                {t('gate.ageConfirm')}
+                <span className="mt-1 block text-xs text-neutral-500">{t('gate.ageNote')}</span>
               </span>
             </label>
           </>
@@ -279,7 +315,7 @@ export default function Gate({onAuthed}: {onAuthed: (player: Player) => void}) {
           disabled={busy || !canSubmit}
           className="w-full rounded bg-orange-600 px-4 py-2 font-semibold text-white disabled:opacity-40"
         >
-          {busy ? 'Working…' : requesting ? 'Request access' : 'Sign in'}
+          {busy ? t('gate.working') : requesting ? t('gate.requestAccess') : t('gate.signIn')}
         </button>
       </form>
 
@@ -292,7 +328,7 @@ export default function Gate({onAuthed}: {onAuthed: (player: Player) => void}) {
         }}
         className="mt-6 text-sm text-neutral-400 underline underline-offset-4 hover:text-neutral-200"
       >
-        {requesting ? 'Already have a callsign? Sign in.' : 'No account? Request access.'}
+        {requesting ? t('gate.toSignIn') : t('gate.toRequest')}
       </button>
     </div>
   );

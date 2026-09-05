@@ -13,6 +13,7 @@
  */
 import {type ChangeEvent, useCallback, useEffect, useRef, useState} from 'react';
 import {PORTRAIT_SIZE} from '../../shared/portraits';
+import {t} from '../i18n';
 
 const FRAME = 264;
 
@@ -83,7 +84,7 @@ export default function PortraitCrop({
       URL.revokeObjectURL(url);
     };
     img.onerror = () => {
-      setError('That file could not be opened as an image.');
+      setError(t('crop.errorOpen'));
       URL.revokeObjectURL(url);
     };
     img.src = url;
@@ -131,7 +132,7 @@ export default function PortraitCrop({
       <div className="rounded border border-red-900 bg-red-950/60 p-4">
         <p className="text-sm text-red-300">{error}</p>
         <button onClick={onCancel} className="mt-3 text-xs text-neutral-400 underline">
-          Back
+          {t('nav.back')}
         </button>
       </div>
     );
@@ -139,8 +140,8 @@ export default function PortraitCrop({
 
   return (
     <div className="rounded border border-neutral-800 bg-neutral-950 p-4">
-      <p className="text-sm font-semibold text-neutral-200">Frame your picture</p>
-      <p className="mt-1 text-xs text-neutral-500">Drag to move, slider to zoom.</p>
+      <p className="text-sm font-semibold text-neutral-200">{t('crop.title')}</p>
+      <p className="mt-1 text-xs text-neutral-500">{t('crop.hint')}</p>
 
       <div className="mt-3 flex flex-col items-center gap-3">
         <canvas
@@ -182,13 +183,13 @@ export default function PortraitCrop({
           disabled={!image}
           className="rounded bg-orange-600 px-4 py-2 text-sm font-semibold text-white disabled:bg-neutral-800"
         >
-          Use this
+          {t('crop.use')}
         </button>
         <button
           onClick={onCancel}
           className="rounded border border-neutral-700 px-4 py-2 text-sm text-neutral-300 hover:border-neutral-500"
         >
-          Cancel
+          {t('crop.cancel')}
         </button>
       </div>
     </div>

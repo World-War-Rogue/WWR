@@ -7,28 +7,61 @@
  * cheaper before the resolver exists than after it has been written to fit
  * whatever the screen happened to render.
  */
-import {useCallback, useEffect, useState} from 'react';
+import {type ReactNode, useCallback, useEffect, useState} from 'react';
+import {type MessageKey, t} from '../i18n';
 import {api, type ApiError} from '../net/api';
 import type {BattleDetail, BattleSummary} from '../../shared/battles';
 import {verdictFor} from '../../shared/battles';
 
 type Scope = 'mine' | 'alliance';
 
+// The relative-time phrases live in core: every screen that stamps something
+// with an age says it the same way, and a translator should only have to
+// decide what "5m ago" is once.
 function when(ts: number): string {
   const delta = Date.now() - ts;
   const minutes = Math.floor(delta / 60000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 1) return t('time.justNow');
+  if (minutes < 60) return t('time.minutesAgo', {count: minutes});
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+  if (hours < 24) return t('time.hoursAgo', {count: hours});
+  return t('time.daysAgo', {count: Math.floor(hours / 24)});
 }
+
+// The verdict arrives as a code, not as a word, so it is looked up rather
+// than rendered - `verdictFor` returns 'won' | 'lost' | 'drew'.
+const VERDICT_LABEL: Record<string, MessageKey> = {
+  won: 'battles.won',
+  lost: 'battles.lost',
+  drew: 'battles.drew',
+};
 
 const VERDICT_STYLE: Record<string, string> = {
   won: 'border-emerald-800 bg-emerald-950/60 text-emerald-300',
   lost: 'border-red-900 bg-red-950/60 text-red-300',
   drew: 'border-neutral-700 bg-neutral-900 text-neutral-300',
 };
+
+/**
+ * A line like "Attacked Ripcord", with the callsign still styled inside it.
+ *
+ * The whole sentence is one key with a {name} placeholder rather than a verb
+ * this screen glues a name onto - word order moves between languages, and a
+ * sentence assembled from fragments cannot be translated at all. To keep the
+ * name in its own span the placeholder is left unsubstituted and the
+ * translated string split around it, so the callsign lands wherever that
+ * language puts it.
+ */
+function withName(text: string, name: ReactNode): ReactNode {
+  const [before, after] = text.split('{name}');
+  return (
+    <>
+      {before}
+      <span className="font-semibold">{name}</span>
+      {after}
+    </>
+  );
+}
 
 function Row({report, onOpen}: {report: BattleSummary; onOpen: () => void}) {
   const verdict = verdictFor(report.outcome, report.yourSide);
@@ -44,17 +77,28 @@ function Row({report, onOpen}: {report: BattleSummary; onOpen: () => void}) {
       <span
         className={`w-14 shrink-0 rounded border px-2 py-1 text-center text-[11px] font-semibold uppercase ${VERDICT_STYLE[verdict]}`}
       >
-        {verdict}
+        {t(VERDICT_LABEL[verdict])}
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm text-neutral-100">
-          {report.yourSide === 'attacker' ? 'Attacked' : 'Defended against'}{' '}
-          <span className="font-semibold">{them.name}</span>
-          {them.alliance && <span className="text-neutral-500"> [{them.alliance}]</span>}
+          {withName(
+            t(report.yourSide === 'attacker' ? 'battles.attacked' : 'battles.defendedAgainst'),
+            <>
+              {them.name}
+              {them.alliance && (
+                <span className="font-normal text-neutral-500"> [{them.alliance}]</span>
+              )}
+            </>,
+          )}
         </span>
         <span className="block font-mono text-[11px] text-neutral-500">
-          plot {report.x}, {report.y} · {when(report.foughtAt)}
-          {looted > 0 && <span className="text-amber-500"> · {looted.toLocaleString()} looted</span>}
+          {t('battles.plotAt', {x: report.x, y: report.y, when: when(report.foughtAt)})}
+          {looted > 0 && (
+            <span className="text-amber-500">
+              {' · '}
+              {t('battles.looted', {amount: looted.toLocaleString()})}
+            </span>
+          )}
         </span>
       </span>
       <span className="shrink-0 text-neutral-600">›</span>
@@ -73,13 +117,15 @@ function Detail({
 }) {
   const verdict = verdictFor(report.outcome, report.yourSide);
   const loot = report.loot;
+  // The four resources are named in core, so a report calls them what the
+  // rest of the interface calls them.
   const lootRows = (
     [
-      ['Fuel', loot.fuel],
-      ['Steel', loot.steel],
-      ['Munitions', loot.munitions],
-      ['Alloy', loot.alloy],
-    ] as Array<[string, number]>
+      ['resource.fuel', loot.fuel],
+      ['resource.steel', loot.steel],
+      ['resource.munitions', loot.munitions],
+      ['resource.alloy', loot.alloy],
+    ] as Array<[MessageKey, number]>
   ).filter(([, value]) => value > 0);
 
   return (
@@ -89,15 +135,15 @@ function Detail({
           onClick={onBack}
           className="rounded border border-neutral-700 px-2 py-1 text-sm text-neutral-300 hover:border-orange-600"
         >
-          ‹ All reports
+          ‹ {t('battles.allReports')}
         </button>
         <span
           className={`rounded border px-2 py-1 text-[11px] font-semibold uppercase ${VERDICT_STYLE[verdict]}`}
         >
-          {verdict}
+          {t(VERDICT_LABEL[verdict])}
         </span>
         <span className="font-mono text-[11px] text-neutral-500">
-          plot {report.x}, {report.y} · {when(report.foughtAt)}
+          {t('battles.plotAt', {x: report.x, y: report.y, when: when(report.foughtAt)})}
         </span>
       </div>
 
@@ -115,18 +161,20 @@ function Detail({
                 }`}
               >
                 <p className="text-[11px] uppercase tracking-wide text-neutral-500">
-                  {side === 'attacker' ? 'Attacker' : 'Defender'}
-                  {report.yourSide === side && <span className="text-orange-500"> · you</span>}
+                  {side === 'attacker' ? t('battles.attacker') : t('battles.defender')}
+                  {report.yourSide === side && (
+                    <span className="text-orange-500"> · {t('battles.you')}</span>
+                  )}
                 </p>
                 <p className="truncate font-semibold text-neutral-100">{who.name}</p>
                 {who.alliance && <p className="text-xs text-neutral-500">[{who.alliance}]</p>}
                 <dl className="mt-2 space-y-1 text-xs">
                   <div className="flex justify-between">
-                    <dt className="text-neutral-500">Power</dt>
+                    <dt className="text-neutral-500">{t('battles.power')}</dt>
                     <dd className="font-mono text-neutral-200">{who.power.toLocaleString()}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-neutral-500">Losses</dt>
+                    <dt className="text-neutral-500">{t('battles.losses')}</dt>
                     <dd className="font-mono text-red-400">{who.losses.toLocaleString()}</dd>
                   </div>
                 </dl>
@@ -137,11 +185,14 @@ function Detail({
 
         {lootRows.length > 0 && (
           <section className="mt-3 rounded border border-neutral-800 bg-neutral-950 p-3">
-            <h3 className="text-[11px] uppercase tracking-wide text-neutral-500">Carried off</h3>
+            <h3 className="text-[11px] uppercase tracking-wide text-neutral-500">
+              {t('battles.carriedOff')}
+            </h3>
             <div className="mt-2 flex flex-wrap gap-3">
               {lootRows.map(([label, value]) => (
                 <span key={label} className="text-xs text-neutral-300">
-                  {label} <span className="font-mono text-amber-400">{value.toLocaleString()}</span>
+                  {t(label)}{' '}
+                  <span className="font-mono text-amber-400">{value.toLocaleString()}</span>
                 </span>
               ))}
             </div>
@@ -150,15 +201,20 @@ function Detail({
 
         {detail.squads.length > 0 && (
           <section className="mt-3 rounded border border-neutral-800 bg-neutral-950 p-3">
-            <h3 className="text-[11px] uppercase tracking-wide text-neutral-500">Squads</h3>
+            <h3 className="text-[11px] uppercase tracking-wide text-neutral-500">
+              {t('battles.squads')}
+            </h3>
             <ul className="mt-2 space-y-2">
               {detail.squads.map((squad, i) => (
                 <li key={`${squad.side}-${squad.squad}-${i}`} className="text-xs">
                   <span className="font-semibold text-neutral-200">{squad.squad}</span>
                   <span className="text-neutral-500">
-                    {' '}
-                    · {squad.side} · {squad.survived ? 'withdrew' : 'destroyed'} · {squad.losses}{' '}
-                    lost
+                    {' · '}
+                    {squad.side === 'attacker' ? t('battles.attacker') : t('battles.defender')}
+                    {' · '}
+                    {squad.survived ? t('battles.withdrew') : t('battles.destroyed')}
+                    {' · '}
+                    {t('battles.squadLosses', {count: squad.losses})}
                   </span>
                   {squad.heroes.length > 0 && (
                     <p className="font-mono text-[11px] text-neutral-600">
@@ -174,7 +230,7 @@ function Detail({
         {detail.rounds.length > 0 && (
           <section className="mt-3 rounded border border-neutral-800 bg-neutral-950 p-3">
             <h3 className="text-[11px] uppercase tracking-wide text-neutral-500">
-              Round by round
+              {t('battles.roundByRound')}
             </h3>
             <ol className="mt-2 space-y-2">
               {detail.rounds.map((round) => (
@@ -192,7 +248,9 @@ function Detail({
 
         {detail.notes.length > 0 && (
           <section className="mt-3 rounded border border-neutral-800 bg-neutral-950 p-3">
-            <h3 className="text-[11px] uppercase tracking-wide text-neutral-500">Notes</h3>
+            <h3 className="text-[11px] uppercase tracking-wide text-neutral-500">
+              {t('battles.notes')}
+            </h3>
             <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-neutral-400">
               {detail.notes.map((note, i) => (
                 <li key={i}>{note}</li>
@@ -202,9 +260,7 @@ function Detail({
         )}
 
         {detail.rounds.length === 0 && detail.squads.length === 0 && (
-          <p className="mt-3 text-xs text-neutral-600">
-            No blow-by-blow was recorded for this battle.
-          </p>
+          <p className="mt-3 text-xs text-neutral-600">{t('battles.noDetail')}</p>
         )}
       </div>
     </div>
@@ -244,9 +300,9 @@ export default function Battles({onClose}: {onClose: () => void}) {
           onClick={onClose}
           className="rounded border border-neutral-700 px-2 py-1 text-sm text-neutral-300 hover:border-orange-600"
         >
-          ‹ Map
+          ‹ {t('battles.toMap')}
         </button>
-        <h2 className="font-semibold text-neutral-100">Battle reports</h2>
+        <h2 className="font-semibold text-neutral-100">{t('battles.title')}</h2>
         <div className="ml-auto flex gap-1">
           {(['mine', 'alliance'] as const).map((which) => (
             <button
@@ -258,7 +314,7 @@ export default function Battles({onClose}: {onClose: () => void}) {
                   : 'border-neutral-700 text-neutral-400 hover:border-neutral-500'
               }`}
             >
-              {which === 'mine' ? 'Mine' : 'Alliance'}
+              {which === 'mine' ? t('battles.mine') : t('battles.alliance')}
             </button>
           ))}
         </div>
@@ -267,14 +323,12 @@ export default function Battles({onClose}: {onClose: () => void}) {
       <div className="min-h-0 flex-1 overflow-y-auto">
         {error && <p className="px-3 py-4 text-sm text-red-300">{error}</p>}
         {list === null && !error && (
-          <p className="px-3 py-4 text-sm text-neutral-500">Reading the wire…</p>
+          <p className="px-3 py-4 text-sm text-neutral-500">{t('battles.reading')}</p>
         )}
         {list?.length === 0 && !error && (
           <div className="px-3 py-8 text-center">
-            <p className="text-sm text-neutral-400">No battles yet.</p>
-            <p className="mt-1 text-xs text-neutral-600">
-              Reports appear here the moment combat exists and somebody fights one.
-            </p>
+            <p className="text-sm text-neutral-400">{t('battles.none')}</p>
+            <p className="mt-1 text-xs text-neutral-600">{t('battles.noneHint')}</p>
           </div>
         )}
         {list?.map((report) => (

@@ -5,7 +5,8 @@
  *     node scripts/translate-ui.mjs --force    # everything, again
  *     node scripts/translate-ui.mjs --lang ko  # one language
  *
- * Reads src/i18n/en.ts, sends the strings to Workers AI in batches, and writes
+ * Reads every fragment in src/i18n/en/, sends the strings to Workers AI in
+ * batches, and writes
  * src/i18n/generated.ts. Run it whenever a key is added; the output is checked
  * in, so players never wait for a model and the game costs nothing to render
  * in twenty languages.
@@ -20,7 +21,7 @@
  * a first draft for a hundred strings, and the words that matter get fixed by
  * somebody who speaks the language.
  */
-import {readFileSync, writeFileSync, existsSync} from 'node:fs';
+import {readFileSync, readdirSync, writeFileSync, existsSync} from 'node:fs';
 
 const MODEL = '@cf/meta/llama-3.1-8b-instruct-fast';
 const BATCH = 20;
@@ -44,13 +45,36 @@ const LANGUAGES = [
   ['ko', 'Korean'], ['vi', 'Vietnamese'], ['th', 'Thai'], ['id', 'Indonesian'],
 ];
 
-// Parse en.ts without importing it: this is a plain script and en.ts is TS.
-const source = readFileSync('src/i18n/en.ts', 'utf8');
+// Parse the source text without importing it: this is a plain script and the
+// fragments are TS. en.ts itself holds no strings any more - it composes the
+// files in src/i18n/en/ - so read those, all of them, rather than naming them.
+const source = readdirSync('src/i18n/en')
+  .filter((f) => f.endsWith('.ts'))
+  .sort()
+  .map((f) => readFileSync(`src/i18n/en/${f}`, 'utf8'))
+  .join('\n');
 const EN = {};
 for (const m of source.matchAll(/^  '([^']+)': '((?:[^'\\]|\\.)*)',$/gm)) {
   EN[m[1]] = m[2].replace(/\\'/g, "'").replace(/\\\\/g, '\\');
 }
-console.log(`${Object.keys(EN).length} keys to translate`);
+
+// The pattern above only matches a key and its value on ONE line, which is how
+// prettier leaves most of them - but it wraps a long one onto the next line,
+// and such a key then matches nothing. That failure is completely silent: the
+// string is simply never translated and nobody finds out until a player says
+// the interface is still in English. So count the keys a second way and shout
+// if the two disagree.
+const declared = (source.match(/^  '[^']+':/gm) ?? []).length;
+const parsed = Object.keys(EN).length;
+if (parsed !== declared) {
+  console.error(
+    `\n  ${declared} keys declared in en.ts but only ${parsed} could be read.\n` +
+      '  A value wrapped onto its own line does not match the parser.\n' +
+      '  Put each key and its string on one line in src/i18n/en/ and retry.\n',
+  );
+  process.exit(1);
+}
+console.log(`${parsed} keys to translate`);
 
 const existing = {};
 if (existsSync('src/i18n/generated.ts') && !force) {
