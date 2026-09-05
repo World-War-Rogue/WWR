@@ -22,14 +22,30 @@ import {
 } from '../../shared/cosmetics';
 import {ApiError, api} from '../net/api';
 import {drawSwatch} from './cosmeticsPaint';
-import {skinIsAnimated} from './skinArt';
+import {onArtLoaded, skinIsAnimated} from './skinArt';
 import {STARTER_SKIN_IDS, drawBase, skinSpec} from './skins';
 import {t} from '../i18n';
 
 const SWATCH = 56;
 
+/**
+ * Ticks whenever a skin atlas finishes loading.
+ *
+ * Canvases here paint once and stop. An atlas arrives over the network some
+ * time after that, so whichever skins were not already cached painted their
+ * drawn fallback and kept it - five grey blocks where five rendered bases
+ * should be, until the panel was closed and reopened. The map already solves
+ * this by subscribing to the same signal; this is that fix, one screen later.
+ */
+function useArtTick(): number {
+  const [tick, setTick] = useState(0);
+  useEffect(() => onArtLoaded(() => setTick((n) => n + 1)), []);
+  return tick;
+}
+
 function useSwatchCanvas(paint: (ctx: CanvasRenderingContext2D, size: number) => void) {
   const ref = useRef<HTMLCanvasElement | null>(null);
+  const tick = useArtTick();
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
@@ -40,7 +56,8 @@ function useSwatchCanvas(paint: (ctx: CanvasRenderingContext2D, size: number) =>
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     paint(ctx, SWATCH);
-  }, [paint]);
+    // tick is not read - it is here to repaint when an atlas lands.
+  }, [paint, tick]);
   return ref;
 }
 
@@ -151,6 +168,7 @@ function Preview({skin, loadout}: {skin: string; loadout: Loadout}) {
   const ref = useRef<HTMLCanvasElement | null>(null);
   const spec = skinSpec(skin);
   const animated = skinIsAnimated(spec.art, spec.motion);
+  const tick = useArtTick();
 
   useEffect(() => {
     const canvas = ref.current;
@@ -182,7 +200,9 @@ function Preview({skin, loadout}: {skin: string; loadout: Loadout}) {
     return () => {
       if (frame !== null) window.cancelAnimationFrame(frame);
     };
-  }, [spec, loadout, animated]);
+    // tick repaints a still preview once its atlas arrives. An animated one
+    // is already on requestAnimationFrame and would have corrected itself.
+  }, [spec, loadout, animated, tick]);
 
   return (
     <canvas

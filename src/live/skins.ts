@@ -169,19 +169,13 @@ const PRESENTATION: Record<SkinId, SkinPresentation> = {
       // side, and without this it would sit small in the middle of its plot.
       fill: 1.3,
     },
-    motion: {
-      // Barely moves. It is a stone monument, and a plinth that bobbed like a
-      // banner would read as weightless.
-      bob: {amplitude: 0.012, periodMs: 4600},
-      // Faster than the bob, because firelight flickers and stone does not.
-      glow: {color: '#ff6a1f', radius: 0.8, periodMs: 1900},
-    },
   },
   // Three flat cards - keep, arcane energy, raven - composited into one still.
   // The package it arrived in was built for a 24-frame Blender loop, and it can
   // still become one: `frames: 24, cols: 6` and a new atlas is the entire
-  // change. Until then the motion below does the work, which is the same route
-  // both other art skins took.
+  // change. It stands still until then - the bob and glow it used to carry
+  // were removed with every other skin's, because real animation is coming
+  // and a canvas that fakes it reads worse than one that does not try.
   ravenkeep: {
     perimeter: 'palisade',
     landmark: 'tower',
@@ -197,19 +191,6 @@ const PRESENTATION: Record<SkinId, SkinPresentation> = {
       // edge to edge, unlike the two statue skins that needed pushing outward
       // to stop them sitting small in the middle of their ground.
       fill: 1.12,
-    },
-    motion: {
-      // A building, not a monument and not a banner: enough to breathe, not
-      // enough to look like it is floating. Masonry that bobbed like a flag
-      // would give away that it is a flat card.
-      bob: {amplitude: 0.016, periodMs: 4100},
-      // Violet, taken from the arcane energy already in the art. A halo in a
-      // colour the art does not contain reads as a filter laid over it rather
-      // than as light coming off it.
-      glow: {color: '#a855f7', radius: 0.85, periodMs: 2300},
-      // Slower than the bob and much slower than the glow, so the three never
-      // line up and the loop never announces its length.
-      sway: {amount: 0.011, periodMs: 7600},
     },
   },
   // A person, not a building - the first skin whose landmark is somebody
@@ -236,27 +217,14 @@ const PRESENTATION: Record<SkinId, SkinPresentation> = {
       // tall for his width.
       fill: 1.07,
     },
-    motion: {
-      // He breathes. More than the stone skins and less than a banner: a
-      // living thing that held still would look like a statue of itself, and
-      // one that bobbed like cloth would look weightless.
-      bob: {amplitude: 0.02, periodMs: 3800},
-      // Warm and dim, in the orange already on the vest tabs and the armband.
-      // A lantern at his feet, not a spell - the halo is the only thing that
-      // says "occupied" at the zoom where his face is four pixels wide.
-      glow: {color: '#e2762b', radius: 0.7, periodMs: 3400},
-      // A slow shift of weight. Deliberately out of step with the bob so the
-      // pair never resolve into a single obvious cycle.
-      sway: {amount: 0.014, periodMs: 6700},
-    },
   },
   // The flagship commission. Sold once, to one player, and never again.
   //
   // This is the first skin with real art. `frames: 1` means the atlas is a
-  // single rendered still and every bit of movement comes from `motion` below
-  // - the rise and fall, the lantern-coloured halo, the slow lean. That is the
-  // cheap half of the pipeline working: one image, no rig, and it still reads
-  // as alive next to bases that are not moving.
+  // single rendered still, and it now stands still: the bob, halo and lean it
+  // used to carry came out along with every other skin's. They were standing
+  // in for animation that had not been made yet, and a still render reads
+  // better than a still render being nudged around.
   //
   // Replacing it with a 24-frame Blender loop later is this block and nothing
   // else: frames 24, cols 6. The art below stays exactly where it is.
@@ -274,14 +242,6 @@ const PRESENTATION: Record<SkinId, SkinPresentation> = {
       // Wider than her plot, so she crowds her neighbours a little. A base
       // that stops exactly on its grid line reads as a counter on a board.
       fill: 1.34,
-    },
-    motion: {
-      bob: {amplitude: 0.022, periodMs: 3600},
-      // Gold, to match the lanterns the art is already lit by. A halo in a
-      // colour the art does not contain reads as a filter over it rather than
-      // as light coming off it.
-      glow: {color: '#f0b429', radius: 0.95, periodMs: 2600},
-      sway: {amount: 0.015, periodMs: 7200},
     },
   },
 };
