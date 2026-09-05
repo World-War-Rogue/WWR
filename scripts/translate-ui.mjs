@@ -24,7 +24,11 @@
 import {readFileSync, readdirSync, writeFileSync, existsSync} from 'node:fs';
 
 const MODEL = '@cf/meta/llama-3.1-8b-instruct-fast';
-const BATCH = 20;
+// Twelve, not twenty. The reply has a token ceiling and a batch that runs past
+// it comes back as JSON cut off mid-string - so the batch size is really a bet
+// on how long twenty translations will be in the wordiest language in the
+// list. Losing that bet used to cost the whole batch.
+const BATCH = 12;
 
 const ACCOUNT = process.env.CLOUDFLARE_ACCOUNT_ID;
 const TOKEN = process.env.CLOUDFLARE_API_TOKEN;
@@ -96,12 +100,21 @@ async function ask(messages) {
     {
       method: 'POST',
       headers: {Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json'},
-      body: JSON.stringify({messages, max_tokens: 2000, temperature: 0.1}),
+      body: JSON.stringify({messages, max_tokens: 4000, temperature: 0.1}),
     },
   );
   if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
   const body = await res.json();
-  return body?.result?.response ?? '';
+  const reply = body?.result?.response;
+
+  // Workers AI does not always hand back a string. When the model emits clean
+  // JSON the runtime may parse it for us and put the OBJECT here instead,
+  // which used to blow up further down as "reply.indexOf is not a function" -
+  // an error that says nothing about the actual cause. Normalise to text and
+  // let the caller do the parsing either way.
+  if (typeof reply === 'string') return reply;
+  if (reply && typeof reply === 'object') return JSON.stringify(reply);
+  return '';
 }
 
 // The system prompt carries the context a bare word cannot. "Lift", "Screen"
@@ -140,9 +153,20 @@ for (const [code, name] of LANGUAGES) {
   }
 
   const table = {...have};
-  for (let i = 0; i < missing.length; i += BATCH) {
-    const slice = missing.slice(i, i + BATCH);
-    const payload = Object.fromEntries(slice.map((k) => [k, EN[k]]));
+
+  /**
+   * Translate some keys, and on failure try again with half as many.
+   *
+   * The failure that matters is truncation: the model has a token ceiling on
+   * its reply, and a batch whose translations run long comes back as JSON cut
+   * off mid-string. Retrying the same batch would fail identically forever, so
+   * the retry has to make the job SMALLER. Halving down to a single key means
+   * one difficult string costs a few extra calls instead of losing the
+   * nineteen around it, which is what the old flat loop did.
+   */
+  async function translate(keys) {
+    if (keys.length === 0) return;
+    const payload = Object.fromEntries(keys.map((k) => [k, EN[k]]));
     try {
       const reply = await ask([
         {role: 'system', content: SYSTEM(name)},
@@ -150,16 +174,30 @@ for (const [code, name] of LANGUAGES) {
       ]);
       const start = reply.indexOf('{');
       const end = reply.lastIndexOf('}');
+      if (start === -1 || end <= start) throw new Error('no JSON object in reply');
       const parsed = JSON.parse(reply.slice(start, end + 1));
-      for (const key of slice) {
+      for (const key of keys) {
         if (typeof parsed[key] === 'string' && parsed[key].trim()) {
           table[key] = parsed[key].trim();
         }
       }
       process.stdout.write(`${code} ${Object.keys(table).length}/${Object.keys(EN).length}\r`);
     } catch (err) {
-      console.warn(`\n${code} batch ${i / BATCH} failed: ${err.message}`);
+      if (keys.length === 1) {
+        // One string the model will not return cleanly. Left missing rather
+        // than guessed at: a missing key falls back to English, which is a
+        // sentence a player can read.
+        console.warn(`\n${code} ${keys[0]} skipped: ${err.message}`);
+        return;
+      }
+      const half = Math.ceil(keys.length / 2);
+      await translate(keys.slice(0, half));
+      await translate(keys.slice(half));
     }
+  }
+
+  for (let i = 0; i < missing.length; i += BATCH) {
+    await translate(missing.slice(i, i + BATCH));
   }
   out[code] = table;
   console.log(`${code}  ${Object.keys(table).length}/${Object.keys(EN).length}`);
