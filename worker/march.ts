@@ -7,7 +7,14 @@
  * lands correctly anyway, and a world nobody is playing costs nothing to run.
  */
 import {ASSET_BY_ID, type SquadName, assetPower, attributeAtLevel} from '../shared/assets';
-import {GARRISON_HOURS, type MarchKind, marchSeconds, plotsBetween} from '../shared/march';
+import {
+  type Deployment,
+  GARRISON_HOURS,
+  type MarchKind,
+  marchProgress,
+  marchSeconds,
+  plotsBetween,
+} from '../shared/march';
 import {type SideSpec, resolve} from '../shared/combat';
 import {readSquads} from './squads';
 
@@ -558,4 +565,172 @@ function hash(s: string): number {
     h = Math.imul(h, 16777619);
   }
   return h | 0;
+}
+
+/**
+ * Where all four squads are, for the panel that shows it.
+ *
+ * Two queries because a squad is away for two different reasons and only one
+ * of them is a row in flight: an attack or a reinforcement on its way, and a
+ * reinforcement already standing at an ally's base. The second has a settled
+ * row - which is why it is easy to forget, and why forgetting it would leave
+ * the eight-hour commitment invisible on the one screen meant to show it.
+ */
+export async function deployments(
+  db: D1Database,
+  playerId: string,
+  now: number,
+): Promise<Deployment[]> {
+  const rows = await db
+    .prepare(
+      `SELECT m.id, m.squad, m.kind, m.to_x, m.to_y, m.arrives_at, m.garrison_until,
+              d.username AS target
+         FROM marches m
+         JOIN players d ON d.id = m.defender_id
+        WHERE m.attacker_id = ?1
+          AND (m.resolved_at IS NULL OR m.garrison_until IS NOT NULL)
+        ORDER BY m.arrives_at ASC
+        LIMIT 8`,
+    )
+    .bind(playerId)
+    .all<{
+      id: string;
+      squad: string;
+      kind: string;
+      to_x: number;
+      to_y: number;
+      arrives_at: number;
+      garrison_until: number | null;
+      target: string;
+    }>();
+
+  return (rows.results ?? []).map((r) => {
+    // A settled row with a garrison on it is a squad standing still. It is not
+    // 'reinforce' any more - that was the journey, and the journey is over.
+    const standing = r.garrison_until !== null && r.garrison_until > now;
+    return {
+      marchId: r.id,
+      squad: r.squad,
+      kind: standing ? ('garrison' as const) : (r.kind as MarchKind),
+      target: r.target,
+      to: {x: r.to_x, y: r.to_y},
+      arrivesAt: standing ? null : r.arrives_at,
+      until: standing ? r.garrison_until : null,
+    };
+  });
+}
+
+/**
+ * Bring a squad home now.
+ *
+ * Recall is not a cancel. The squad does not blink back onto its plot: it gets
+ * a return leg from wherever it actually is, drawn on the map like any other
+ * march, and it is still away until it lands. Turning a column around within
+ * sight of its target costs the whole journey back, which is what keeps
+ * recall from being a free look at somebody's defence.
+ *
+ * From WHERE IT IS, not from where it was going. A squad recalled one plot out
+ * is home in seconds; one recalled at the far end pays for the whole trip.
+ */
+export async function recall(
+  db: D1Database,
+  playerId: string,
+  squad: string,
+  now: number,
+  newId: () => string,
+): Promise<{ok: true; arrivesAt: number} | {ok: false; error: string}> {
+  const row = await db
+    .prepare(
+      `SELECT id, world_id, kind, units, from_x, from_y, to_x, to_y,
+              departed_at, arrives_at, garrison_until
+         FROM marches
+        WHERE attacker_id = ?1 AND squad = ?2
+          AND (resolved_at IS NULL OR garrison_until IS NOT NULL)
+        LIMIT 1`,
+    )
+    .bind(playerId, squad)
+    .first<{
+      id: string;
+      world_id: number;
+      kind: string;
+      units: string;
+      from_x: number;
+      from_y: number;
+      to_x: number;
+      to_y: number;
+      departed_at: number;
+      arrives_at: number;
+      garrison_until: number | null;
+    }>();
+
+  if (!row) return {ok: false, error: `${squad} is already home.`};
+  if (row.kind === 'return' && row.garrison_until === null) {
+    return {ok: false, error: `${squad} is already on its way home.`};
+  }
+
+  // Where the squad actually is. A garrison is standing at the target; a march
+  // in flight is somewhere along its line, rounded to the nearest plot.
+  const standing = row.garrison_until !== null;
+  const progress = standing ? 1 : marchProgress(row.departed_at, row.arrives_at, now);
+  const atX = Math.round(row.from_x + (row.to_x - row.from_x) * progress);
+  const atY = Math.round(row.from_y + (row.to_y - row.from_y) * progress);
+
+  // Claim it. Whichever column is the one that can only be won once is the
+  // one to test, so two taps cannot both turn the same squad around and leave
+  // it with two return legs - which the busy index would reject anyway, but
+  // as a database error rather than an answer.
+  const claim = standing
+    ? await db
+        .prepare(`UPDATE marches SET garrison_until = NULL WHERE id = ?1 AND garrison_until IS NOT NULL`)
+        .bind(row.id)
+        .run()
+    : await db
+        .prepare(`UPDATE marches SET resolved_at = ?2 WHERE id = ?1 AND resolved_at IS NULL`)
+        .bind(row.id, now)
+        .run();
+  if ((claim.meta?.changes ?? 0) === 0) {
+    return {ok: false, error: `${squad} has already moved.`};
+  }
+
+  let units: Array<{assetId: string; level: number}> = [];
+  try {
+    const parsed = JSON.parse(row.units) as Array<{assetId: string; level: number}>;
+    if (Array.isArray(parsed)) units = parsed;
+  } catch {
+    units = [];
+  }
+  const slowest = units.length
+    ? Math.min(
+        ...units.map((u) => {
+          const asset = ASSET_BY_ID[u.assetId];
+          return asset ? attributeAtLevel(asset.attributes.mobility, u.level) : 5;
+        }),
+      )
+    : 5;
+  const home = marchSeconds(plotsBetween(atX, atY, row.from_x, row.from_y), slowest);
+  const arrivesAt = now + home * 1000;
+
+  await db
+    .prepare(
+      `INSERT INTO marches
+         (id, world_id, attacker_id, squad, defender_id, units,
+          from_x, from_y, to_x, to_y, departed_at, arrives_at, kind)
+       VALUES (?1,?2,?3,?4,?3,?5,?6,?7,?8,?9,?10,?11,'return')`,
+    )
+    .bind(
+      newId(),
+      row.world_id,
+      playerId,
+      squad,
+      row.units,
+      atX,
+      atY,
+      row.from_x,
+      row.from_y,
+      now,
+      arrivesAt,
+    )
+    .run();
+
+  return {ok: true, arrivesAt};
 }

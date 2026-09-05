@@ -115,6 +115,29 @@ blink home, it visibly leaves.
 So the true cost of an attack is *twice* the flight, and a raid on the far side
 of the map is a decision about the next hour, not the next four minutes.
 
+### And you can call it back
+
+Top right of the world map, under the world card, is the list of squads that
+are not at home: what each one is doing, who to, and how long until it happens.
+An attack shows the moment of impact, a reinforcement in flight its arrival, a
+garrison the base it is holding and when it leaves, a return leg only the time.
+
+**Recall is not a cancel.** The squad turns around *from wherever it actually
+is* and takes a return leg home like any other march — visible to everyone,
+and away until it lands. Recalled one plot out, it is home in seconds; recalled
+at the far end, it pays for the whole trip. That is what stops recall being a
+free look at somebody's defence, and it is why the answer to "someone is
+inbound and my squads are away" is a real decision rather than a button.
+
+Recalling a garrison ends it immediately: the ally loses that squad from their
+defence the moment you press it. Being able to leave a teammate exposed is the
+cost that makes the eight hours mean something.
+
+The panel is also the only place a garrison is visible at all — that squad has
+no column on the map and no line in the incoming strip, it is simply standing
+at somebody else's base. A commitment that long has to be somewhere you can see
+it without having to remember you made it.
+
 ---
 
 ## 3. What decides the outcome

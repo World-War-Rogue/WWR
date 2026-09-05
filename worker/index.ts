@@ -7,7 +7,14 @@
 import {handleAdminRequests} from './admin';
 import {ensureRally, lastRalliedAt, rallyTo, readRally, setRally} from './rally';
 import {assignSlot, ensureRoster, moveSlot, readSquads, squadLiftUsed, squadPower} from './squads';
-import {launch, marchingSquads, pendingMarches, settleArrivals} from './march';
+import {
+  deployments,
+  launch,
+  marchingSquads,
+  pendingMarches,
+  recall,
+  settleArrivals,
+} from './march';
 import {SQUAD_NAMES, isSquadName, squadLiftBudget} from '../shared/assets';
 import {RALLY_COOLDOWN_MS, maySetRally, rallyCooldownLeft} from '../shared/rally';
 import {listBattles, readBattle} from './battles';
@@ -681,10 +688,13 @@ async function handleWorld(request: Request, env: Env, player: PlayerRow): Promi
   // still lands correctly - it simply lands the next time anybody reads.
   await settleArrivals(env.DB, world.id, now, newId);
 
-  const [rallyPoint, ralliedAt, marches] = await Promise.all([
+  const [rallyPoint, ralliedAt, marches, away] = await Promise.all([
     ownAlliance ? ensureRally(env.DB, ownAlliance.id, world.id, now) : Promise.resolve(null),
     lastRalliedAt(env.DB, world.id, player.id),
     pendingMarches(env.DB, world.id),
+    // Read after settling, so a squad that just landed is not still listed as
+    // in the air on the one panel that is supposed to say where it is.
+    deployments(env.DB, player.id, now),
   ]);
 
   return json({
@@ -706,6 +716,10 @@ async function handleWorld(request: Request, env: Env, player: PlayerRow): Promi
       rank: ownAlliance?.rank ?? null,
       maySetRally: maySetRally(ownAlliance?.rank),
       rallyCooldownMs: rallyCooldownLeft(ralliedAt, now),
+      // Where your squads are. Rides along with the map because it changes
+      // exactly when the map does, and a second endpoint would be a second
+      // request for the same answer.
+      deployments: away,
     },
     // Null when the player has no alliance, or nobody has planted one. Only
     // shown on the world it was planted in - a marker in your home world is
@@ -1114,6 +1128,22 @@ async function handleAttack(request: Request, env: Env, player: PlayerRow): Prom
     seconds: result.seconds,
     kind: allied ? 'reinforce' : 'attack',
   });
+}
+
+/**
+ * Bring a squad home.
+ *
+ * The whole decision is server-side: which march the squad is on, where it has
+ * got to, and how long the way back takes. The client sends a squad name.
+ */
+async function handleRecall(request: Request, env: Env, player: PlayerRow): Promise<Response> {
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const squad = body?.squad;
+  if (!isSquadName(squad)) return fail(400, 'No such squad.');
+
+  const result = await recall(env.DB, player.id, squad, Date.now(), newId);
+  if (!result.ok) return fail(409, result.error);
+  return json({arrivesAt: result.arrivesAt});
 }
 
 /** Drag one slot onto another: move, or swap with whatever is already there. */
@@ -2431,6 +2461,7 @@ async function route(
   if (endpoint === 'POST /api/squads/move') return handleMove2(request, env, player);
 
   if (endpoint === 'POST /api/attack') return handleAttack(request, env, player);
+  if (endpoint === 'POST /api/recall') return handleRecall(request, env, player);
 
   if (endpoint === 'GET /api/chat') return handleChatRead(request, env, player, ctx);
 

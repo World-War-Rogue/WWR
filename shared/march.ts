@@ -74,3 +74,27 @@ export interface MarchView {
   incoming: boolean;
   kind: MarchKind;
 }
+
+/**
+ * One of your squads, away from home.
+ *
+ * Not the same thing as a march. A squad standing at an ally's base has no
+ * march in flight - its row was settled on arrival - but it is still away, and
+ * the one screen that has to tell you where all four squads are cannot have a
+ * blind spot exactly where the eight-hour commitment is.
+ */
+export type DeploymentKind = MarchKind | 'garrison';
+
+export interface Deployment {
+  /** The march this came from, and what a recall names. */
+  marchId: string;
+  squad: string;
+  kind: DeploymentKind;
+  /** Whose base: the target of an attack, the ally being held, or your own. */
+  target: string;
+  to: {x: number; y: number};
+  /** When it lands. Null for a garrison, which has already landed. */
+  arrivesAt: number | null;
+  /** When the garrison ends and it walks home on its own. Null otherwise. */
+  until: number | null;
+}

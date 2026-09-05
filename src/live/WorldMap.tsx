@@ -28,7 +28,7 @@ import {artPending, onArtLoaded, skinIsAnimated} from './skinArt';
 import {drawBase as paintBase, skinSpec} from './skins';
 import {formatCooldown} from '../../shared/rally';
 import {marchProgress} from '../../shared/march';
-import type {MarchKind} from '../../shared/march';
+import type {Deployment, MarchKind} from '../../shared/march';
 import {SQUAD_NAMES} from '../../shared/assets';
 import {t} from '../i18n';
 
@@ -489,6 +489,82 @@ function marchLine(m: MarchView, left: string): string {
   if (m.kind === 'reinforce')
     return t('map.outReinforce', {squad: m.squad, defender: m.defender, time: left});
   return t('map.outAttack', {squad: m.squad, x: m.to.x, y: m.to.y, time: left});
+}
+
+/**
+ * One squad, away from home.
+ *
+ * Four states and they read differently on purpose: an attack has a target and
+ * a moment of impact, a reinforcement in flight has a destination, a garrison
+ * has a place it is standing and a time it leaves, and a return has only a
+ * time. The countdown is the point of the row - "Alpha, attacking Voss" is
+ * half an answer without "hits in 3m 20s".
+ *
+ * Recall is offered on everything except a squad already coming home, where
+ * there is nothing to bring back. It is deliberately not a cancel: the squad
+ * turns around from wherever it is and pays for the journey, which is what
+ * stops recall being a free look at somebody's defence.
+ */
+function DeployedRow({
+  deployment: d,
+  clock,
+  busy,
+  onRecall,
+}: {
+  deployment: Deployment;
+  clock: number;
+  busy: boolean;
+  onRecall: () => void;
+}) {
+  const what =
+    d.kind === 'attack'
+      ? t('map.dAttack', {target: d.target})
+      : d.kind === 'reinforce'
+        ? t('map.dReinforce', {target: d.target})
+        : d.kind === 'garrison'
+          ? t('map.dGarrison', {target: d.target})
+          : t('map.dReturn');
+
+  const deadline = d.kind === 'garrison' ? d.until : d.arrivesAt;
+  const left = deadline === null ? '' : formatDuration(Math.max(0, deadline - clock));
+  const when =
+    deadline === null
+      ? ''
+      : d.kind === 'attack'
+        ? t('map.hits', {time: left})
+        : d.kind === 'reinforce'
+          ? t('map.arrives', {time: left})
+          : d.kind === 'garrison'
+            ? t('map.leavesIn', {time: left})
+            : t('map.homeIn', {time: left});
+
+  const tint =
+    d.kind === 'attack'
+      ? 'text-red-300'
+      : d.kind === 'return'
+        ? 'text-neutral-400'
+        : 'text-emerald-300';
+
+  return (
+    <div className="px-3 py-2 text-left">
+      <div className="flex items-baseline gap-2">
+        <span className="text-xs font-semibold text-neutral-100">{d.squad}</span>
+        <span className={`truncate text-[11px] ${tint}`}>{what}</span>
+      </div>
+      <div className="mt-0.5 flex items-center gap-2">
+        <span className="font-mono text-[11px] text-neutral-400">{when}</span>
+        {d.kind !== 'return' && (
+          <button
+            onClick={onRecall}
+            disabled={busy}
+            className="ml-auto rounded border border-neutral-700 px-2 py-0.5 text-[10px] font-semibold text-neutral-300 transition hover:border-orange-500 hover:text-orange-200 disabled:opacity-50"
+          >
+            {busy ? t('map.recalling') : t('map.recall')}
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function WorldMap({
@@ -1048,13 +1124,31 @@ export default function WorldMap({
    * re-rendering once a second forever.
    */
   const [clock, setClock] = useState(() => Date.now());
-  const anyMarch = notable.length > 0;
+  // A garrison has nothing in the air and its countdown still has to run, so
+  // the clock follows "is anything away", not "is anything moving".
+  const deployed = view?.you.deployments ?? [];
+  const anyMarch = notable.length > 0 || deployed.length > 0;
   useEffect(() => {
     if (!anyMarch) return;
     setClock(Date.now());
     const id = window.setInterval(() => setClock(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, [anyMarch]);
+
+  const [recalling, setRecalling] = useState<string | null>(null);
+
+  async function recallSquad(squad: string) {
+    setRecalling(squad);
+    setError(null);
+    try {
+      await api.recall(squad);
+      await load(camera, w, h);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not reach the server.');
+    } finally {
+      setRecalling(null);
+    }
+  }
 
   const occupied = selectedBase !== null;
   const rally = view?.rally ?? null;
@@ -1113,7 +1207,8 @@ export default function WorldMap({
           nothing here is pressed - so it belongs out of the way of the two
           things that are, and the right is where the eye goes last.
         */}
-        <div className="pointer-events-auto justify-self-end rounded border border-neutral-800 bg-black/70 px-3 py-2 text-right backdrop-blur">
+        <div className="flex flex-col items-end gap-2 justify-self-end">
+          <div className="pointer-events-auto rounded border border-neutral-800 bg-black/70 px-3 py-2 text-right backdrop-blur">
           <p className="text-[10px] uppercase tracking-[0.25em] text-orange-500">
             {view?.world.kind === 'event' ? t('map.battleTheatre') : t('map.homeWorld')}
           </p>
@@ -1129,6 +1224,43 @@ export default function WorldMap({
               ? t('map.youAt', {x: view.you.plot.x, y: view.you.plot.y})
               : t('map.unplaced')}
           </p>
+          </div>
+
+          {/*
+            Where the squads are.
+
+            Under the world card, because it answers the same kind of question -
+            what is true right now - and because the two controls that matter
+            keep the left and the centre. It is the only place a garrison is
+            visible at all: that squad has no column on the map and no line in
+            the strip, it is simply standing at somebody else's base for eight
+            hours, and a commitment that long has to be somewhere you can see it
+            without remembering you made it.
+          */}
+          {deployed.length > 0 && (
+            <div className="pointer-events-auto w-56 rounded border border-neutral-800 bg-black/70 backdrop-blur">
+              <p className="border-b border-neutral-800 px-3 py-1.5 text-[10px] uppercase tracking-[0.25em] text-orange-500">
+                {t('map.squadsOut')}
+              </p>
+              <div className="divide-y divide-neutral-900">
+                {/*
+                  The key goes on a wrapper, not on DeployedRow. Without
+                  @types/react, JSX does not special-case `key` on a custom
+                  component and type-checks it as a prop it does not have.
+                */}
+                {deployed.map((d) => (
+                  <div key={d.marchId}>
+                    <DeployedRow
+                      deployment={d}
+                      clock={clock}
+                      busy={recalling === d.squad}
+                      onRecall={() => void recallSquad(d.squad)}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

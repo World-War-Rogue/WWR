@@ -8,7 +8,7 @@
 
 import type {CosmeticItem, CosmeticSlot, Loadout} from '../../shared/cosmetics';
 import type {BattleDetail, BattleSummary} from '../../shared/battles';
-import type {MarchKind} from '../../shared/march';
+import type {Deployment, MarchKind} from '../../shared/march';
 
 export interface ChatMessage {
   id: string;
@@ -175,6 +175,8 @@ export interface WorldView {
     maySetRally: boolean;
     /** Milliseconds until they may answer one; 0 when they may now. */
     rallyCooldownMs: number;
+    /** Every squad of yours that is not at home, and what it is doing. */
+    deployments: Deployment[];
   };
   skins: Record<string, SkinSpec>;
   bases: PlacedBase[];
@@ -320,6 +322,11 @@ export const api = {
     call<{arrivesAt: number; seconds: number}>('/api/attack', {
       method: 'POST',
       body: JSON.stringify({squad, x, y}),
+    }),
+  recall: (squad: string) =>
+    call<{arrivesAt: number}>('/api/recall', {
+      method: 'POST',
+      body: JSON.stringify({squad}),
     }),
   assignSlot: (squad: string, slot: number, assetId: string | null) =>
     call<SquadView>('/api/squads/assign', {
