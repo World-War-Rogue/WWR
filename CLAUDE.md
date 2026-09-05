@@ -109,6 +109,22 @@ mean the code is wrong.
 Do not put raw control characters in a heredoc - a regex literal written with
 actual control bytes has broken the transport twice. Use codepoint checks.
 
+## The translate token hijacks wrangler
+
+`npm run i18n` needs `CLOUDFLARE_API_TOKEN` in the environment. **Wrangler reads
+the same variable**, and prefers it over its own stored login - so in a shell
+that has just run the translator, `wrangler deploy` authenticates as the narrow
+Workers-AI-read token and fails with `Authentication error [code: 10000]`.
+
+Nothing is wrong with the login. Close that window, or:
+
+    Remove-Item Env:CLOUDFLARE_API_TOKEN
+    Remove-Item Env:CLOUDFLARE_ACCOUNT_ID
+
+Run the translator in its own window and deploy from a different one. Wrangler
+does say so in the note under the error, which is easy to read past when the
+headline is an auth failure.
+
 ## The recovery folder
 
 `npm run recovery` rebuilds the recovery folder on the Desktop from

@@ -15,6 +15,12 @@
  * a token with Workers AI read. It is a build tool - it is never called from
  * the game, and no key it uses is in the deployed bundle.
  *
+ * RUN THIS IN ITS OWN SHELL. Wrangler reads CLOUDFLARE_API_TOKEN too and
+ * prefers it over its own stored login, so `wrangler deploy` in the same
+ * window afterwards authenticates as this narrow read-only token and fails
+ * with `Authentication error [code: 10000]`. Nothing is wrong with the login;
+ * close the window, or Remove-Item both variables.
+ *
  * KEEPING TRANSLATIONS HONEST. Anything already present is left alone unless
  * --force is given, so a string corrected by a human stays corrected. That is
  * the whole reason this is a committed file rather than a cache: the model is
