@@ -257,7 +257,12 @@ export default function LiveApp() {
   const [, setLangTick] = useState(0);
   const [screen, setScreen] = useState<
     'base' | 'world' | 'customize' | 'profile' | 'alliance' | 'battles' | 'assets' | 'squads'
-  >('base');
+    // The map, not the base. A player opening the game wants to see where they
+    // are and what is around them - the base screen is a menu, and starting on
+    // a menu hides the thing the game is actually about. The map already opens
+    // at 94px per plot centred on your own plot, which is what the Home button
+    // does, so this needs no second concept of "home".
+  >('world');
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Collect client errors from the first render, so a report filed at minute

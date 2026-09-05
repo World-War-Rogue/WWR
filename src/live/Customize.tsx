@@ -23,7 +23,7 @@ import {
 import {ApiError, api} from '../net/api';
 import {drawSwatch} from './cosmeticsPaint';
 import {skinIsAnimated} from './skinArt';
-import {drawBase, skinSpec} from './skins';
+import {STARTER_SKIN_IDS, drawBase, skinSpec} from './skins';
 import {t} from '../i18n';
 
 const SWATCH = 56;
@@ -198,13 +198,17 @@ export default function Customize({onClose}: {onClose: () => void}) {
   const [owned, setOwned] = useState<Set<string>>(new Set());
   const [skinIds, setSkinIds] = useState<string[]>([]);
   const [skinsOwned, setSkinsOwned] = useState<Set<string>>(new Set());
+  // Placeholder until the server answers, so it only has to be a real id.
+  // It was a hardcoded 'desert_fob', which quietly became a skin that does not
+  // exist the moment the catalogue changed - deriving it means the catalogue
+  // is the only place a skin is named.
   const [saved, setSaved] = useState<{loadout: Loadout; skin: string}>({
     loadout: DEFAULT_LOADOUT,
-    skin: 'desert_fob',
+    skin: STARTER_SKIN_IDS[0],
   });
   const [draft, setDraft] = useState<{loadout: Loadout; skin: string}>({
     loadout: DEFAULT_LOADOUT,
-    skin: 'desert_fob',
+    skin: STARTER_SKIN_IDS[0],
   });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

@@ -19,12 +19,11 @@
  */
 
 export type SkinId =
-  | 'desert_fob'
-  | 'arctic_station'
-  | 'jungle_outpost'
-  | 'urban_garrison'
-  | 'custom_one'
-  | 'custom_two'
+  | 'circular_shield_bunker'
+  | 'desert_command_citadel'
+  | 'field_workshop'
+  | 'medieval_fortress'
+  | 'rose_command_citadel'
   | 'ember_sentinel'
   | 'ravenkeep'
   | 'shellwarden'
@@ -54,48 +53,40 @@ export interface SkinIdentity {
 }
 
 export const SKIN_IDENTITY: Record<SkinId, SkinIdentity> = {
-  desert_fob: {
-    id: 'desert_fob',
-    name: 'Desert FOB',
-    blurb: 'HESCO barriers and sand berms. Built fast, holds hard.',
-    palette: {ground: '#b08248', structure: '#d9c39a', accent: '#e07a29', roof: '#8d6636', wall: '#c9ac78'},
+  circular_shield_bunker: {
+    id: 'circular_shield_bunker',
+    name: 'Circular Shield Bunker',
+    blurb: 'A sealed dome and one hatch. Nothing gets in that is not let in.',
+    palette: {ground: '#4a5560', structure: '#d8d3c4', accent: '#22d3ee', roof: '#5a6875', wall: '#b9bec4'},
     starter: true,
   },
-  arctic_station: {
-    id: 'arctic_station',
-    name: 'Arctic Station',
-    blurb: 'Radar domes above the treeline. Nothing crosses unseen.',
-    palette: {ground: '#9fb6c6', structure: '#e8f1f6', accent: '#3fa9d6', roof: '#7d97a8', wall: '#cddde6'},
+  desert_command_citadel: {
+    id: 'desert_command_citadel',
+    name: 'Desert Command Citadel',
+    blurb: 'Terraced stone and comms masts. The whole valley is watched from here.',
+    palette: {ground: '#8a6f4a', structure: '#d9c9a3', accent: '#e2701f', roof: '#5c5148', wall: '#c2ad82'},
     starter: true,
   },
-  jungle_outpost: {
-    id: 'jungle_outpost',
-    name: 'Jungle Outpost',
-    blurb: 'Camouflage netting and raised platforms. Hard to find.',
-    palette: {ground: '#4e6b3a', structure: '#7b8f5c', accent: '#9fd356', roof: '#3c5430', wall: '#5f7a45'},
+  field_workshop: {
+    id: 'field_workshop',
+    name: 'Field Workshop',
+    blurb: 'A ramp, a roller door and room to work. Everything here runs again.',
+    palette: {ground: '#5c5a52', structure: '#b7ac93', accent: '#f5a524', roof: '#6b6a63', wall: '#9a9384'},
     starter: true,
   },
-  urban_garrison: {
-    id: 'urban_garrison',
-    name: 'Urban Garrison',
-    blurb: 'Blast walls and concrete. A city block turned strongpoint.',
-    palette: {ground: '#6b6b6b', structure: '#9aa0a6', accent: '#d64545', roof: '#4f5155', wall: '#8a9096'},
+  medieval_fortress: {
+    id: 'medieval_fortress',
+    name: 'Medieval Fortress',
+    blurb: 'Six towers and a portcullis. Older than the war and unbothered by it.',
+    palette: {ground: '#6e6a63', structure: '#cfcac1', accent: '#c9a227', roof: '#4a5560', wall: '#b3ada3'},
     starter: true,
   },
-  // Not offered at signup. Reserved for skins under test.
-  custom_one: {
-    id: 'custom_one',
-    name: 'Custom I',
-    blurb: 'Awaiting reference art. Motion is live.',
-    palette: {ground: '#5b4b6e', structure: '#b9a7d0', accent: '#c084fc', roof: '#413352', wall: '#8f7cab'},
-    starter: false,
-  },
-  custom_two: {
-    id: 'custom_two',
-    name: 'Custom II',
-    blurb: 'Awaiting reference art. Motion is live.',
-    palette: {ground: '#6e5b3a', structure: '#d6c08a', accent: '#facc15', roof: '#4d3f27', wall: '#a89066'},
-    starter: false,
+  rose_command_citadel: {
+    id: 'rose_command_citadel',
+    name: 'Rose Command Citadel',
+    blurb: 'Rose quartz and gold, cut into spires. Built to be looked at.',
+    palette: {ground: '#7a4a63', structure: '#f0cfd6', accent: '#d4a24a', roof: '#6b3f56', wall: '#e0b3c0'},
+    starter: true,
   },
   ember_sentinel: {
     id: 'ember_sentinel',

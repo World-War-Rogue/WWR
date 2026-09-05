@@ -68,43 +68,85 @@ export interface SkinPresentation {
 export type SkinSpec = SkinIdentity & SkinPresentation;
 
 const PRESENTATION: Record<SkinId, SkinPresentation> = {
-  desert_fob: {
-    perimeter: 'bastion',
-    landmark: 'tower',
-  },
-  arctic_station: {
-    perimeter: 'berm',
+  // The five starters. Each is a single rendered still cut out of its white
+  // background and packed to the house frame - 512x640, bottom-anchored, so
+  // the frame's lower edge is the plot's and the overhang is room above it.
+  //
+  // The drawn recipe under each one is not decoration. It is what the map
+  // shows while the atlas loads, and what it falls back to if the atlas ever
+  // fails, so the perimeter and landmark are chosen to read as the same
+  // building in outline rather than as a generic block.
+  circular_shield_bunker: {
+    perimeter: 'blast',
     landmark: 'dome',
-  },
-  jungle_outpost: {
-    perimeter: 'palisade',
-    landmark: 'canopy',
-  },
-  urban_garrison: {
-    perimeter: 'blast',
-    landmark: 'block',
-  },
-  // Reserved for the two custom skins. Palettes are placeholders until the
-  // reference images land; the renderer already handles them.
-  // The two premium slots. No art yet, so they draw with the recipe - but they
-  // carry motion, which means the rise-and-fall and the pulsing halo a bought
-  // skin will have can be seen and tuned now, on placeholder geometry, before
-  // anybody is paid to model anything.
-  custom_one: {
-    perimeter: 'blast',
-    landmark: 'tower',
-    motion: {
-      bob: {amplitude: 0.022, periodMs: 3400},
-      glow: {color: '#a855f7', radius: 0.85, periodMs: 2600},
+    art: {
+      src: '/skins/circular_shield_bunker.webp',
+      frames: 1,
+      cols: 1,
+      frameW: 512,
+      frameH: 640,
+      fps: 12,
+      overhang: 0.25,
+      // The art fills its frame edge to edge, so it needs only a little push
+      // past the plot line - the same reason Ravenkeep sits at 1.12 while the
+      // statue skins need a third again.
+      fill: 1.12,
     },
   },
-  custom_two: {
+  desert_command_citadel: {
     perimeter: 'bastion',
-    landmark: 'dome',
-    motion: {
-      bob: {amplitude: 0.016, periodMs: 4200},
-      glow: {color: '#facc15', radius: 0.7, periodMs: 3100},
-      sway: {amount: 0.03, periodMs: 5200},
+    landmark: 'tower',
+    art: {
+      src: '/skins/desert_command_citadel.webp',
+      frames: 1,
+      cols: 1,
+      frameW: 512,
+      frameH: 640,
+      fps: 12,
+      overhang: 0.25,
+      fill: 1.12,
+    },
+  },
+  field_workshop: {
+    perimeter: 'blast',
+    landmark: 'block',
+    art: {
+      src: '/skins/field_workshop.webp',
+      frames: 1,
+      cols: 1,
+      frameW: 512,
+      frameH: 640,
+      fps: 12,
+      overhang: 0.25,
+      fill: 1.12,
+    },
+  },
+  medieval_fortress: {
+    perimeter: 'bastion',
+    landmark: 'tower',
+    art: {
+      src: '/skins/medieval_fortress.webp',
+      frames: 1,
+      cols: 1,
+      frameW: 512,
+      frameH: 640,
+      fps: 12,
+      overhang: 0.25,
+      fill: 1.12,
+    },
+  },
+  rose_command_citadel: {
+    perimeter: 'berm',
+    landmark: 'tower',
+    art: {
+      src: '/skins/rose_command_citadel.webp',
+      frames: 1,
+      cols: 1,
+      frameW: 512,
+      frameH: 640,
+      fps: 12,
+      overhang: 0.25,
+      fill: 1.12,
     },
   },
   // Cut from a single rendered still, like the Empress. Tall and narrow where
@@ -186,10 +228,13 @@ const PRESENTATION: Record<SkinId, SkinPresentation> = {
       frameH: 640,
       fps: 12,
       overhang: 0.25,
-      // The figure uses about seventy percent of the frame's width - a
-      // standing pose leaves margin either side the way the Sentinel does -
-      // so it is pushed outward rather than sitting small on its own ground.
-      fill: 1.34,
+      // Was 1.34, which stood him a fifth too tall and put his head through
+      // the base on the plot behind him. drawH is size * (1 + overhang) *
+      // fill, so fill is the only lever that shrinks him without squashing
+      // the frame's proportions - overhang has to keep matching 512x640.
+      // He narrows by the same fifth, which is fine: he was too big, not too
+      // tall for his width.
+      fill: 1.07,
     },
     motion: {
       // He breathes. More than the stone skins and less than a banner: a
