@@ -310,7 +310,18 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "squads.awayHint": "Un escuadrón que está fuera no puede ser cambiado, y lo mismo aplica a sus miembros.",
     "squads.assetAway": "fuera con {squad}",
     "squads.hint": "Toca una ranura para llenarla. El Lift es el freno: los activos más pesados cuestan más, y el presupuesto proviene de tu Motor Pool, Aeródromo y Cuartel — por lo tanto, al principio una unidad tiene que ser mixta, y eso es el punto.",
-    "chat.translating": "Traduciendo\\u2026"
+    "chat.translating": "Traduciendo\\u2026",
+    "settings.title": "Configuración",
+    "settings.close": "Cerrar",
+    "settings.reportBug": "Informar un error",
+    "settings.reportBlurb": "Escribe en tu propio idioma. Se almacena exactamente como lo escribes y nunca se traduce en el camino de ida.",
+    "settings.reportPlaceholder": "¿Qué pasó y qué estabas haciendo cuando pasó?",
+    "settings.reportSend": "Enviar informe",
+    "settings.reportSending": "Enviando…",
+    "settings.reportThanks": "Informe enviado. Referencia {id}.",
+    "settings.reportAnother": "Informar algo más",
+    "settings.reportEmpty": "Describe lo que pasó primero.",
+    "settings.reportContext": "Se envía con este informe: tu apodo, la pantalla en la que estabas y tu versión de construcción."
   },
   "pt": {
     "alliance.unaffiliated": "Desafeto",
@@ -614,7 +625,18 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "squads.assetAway": "sai com {squad}",
     "squads.hint": "Toque em uma vaga para preenchê-la. O Lift é o freio: bens mais pesados custam mais, e o orçamento vem do seu Pátio de Manutenção, Campo de Aviação e Quartel — então, inicialmente, uma equipe tem que ser mista, e isso é o ponto.",
     "alliance.applied": "Aplicado a {alliances}. Aguardando um oficial.",
-    "chat.translating": "Traduzindo\\u2026"
+    "chat.translating": "Traduzindo\\u2026",
+    "settings.title": "Configurações",
+    "settings.close": "Fechar",
+    "settings.reportBug": "Relatar um bug",
+    "settings.reportBlurb": "Escreva em sua própria língua. É armazenado exatamente como você digita e nunca traduzido no caminho.",
+    "settings.reportPlaceholder": "O que aconteceu e o que você estava fazendo quando isso aconteceu?",
+    "settings.reportSend": "Enviar relatório",
+    "settings.reportSending": "Enviando…",
+    "settings.reportThanks": "Relatório enviado. Referência {id}.",
+    "settings.reportAnother": "Relatar algo mais",
+    "settings.reportEmpty": "Descreva o que aconteceu primeiro.",
+    "settings.reportContext": "Enviado com esse relatório: seu apelido de chamada, a tela que você estava, e sua versão de construção."
   },
   "fr": {
     "alliance.unaffiliated": "Non affilié",
@@ -918,7 +940,17 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "squads.awayHint": "Une équipe qui est en zone d'opération ne peut pas être modifiée, et ce qui est en elle ne peut pas l'être non plus.",
     "squads.assetAway": "en mission avec {squad}",
     "squads.hint": "Appuyez sur une case pour la remplir. La capacité de transport est la limite : les charges lourdes coûtent plus cher, et le budget provient de votre Garage, Aérodrome et Caserne — donc au début, un escadron doit être mixte, et c'est le but.",
-    "chat.translating": "Traduisant\\u2026"
+    "chat.translating": "Traduisant\\u2026",
+    "settings.title": "Paramètres",
+    "settings.close": "Fermer",
+    "settings.reportBug": "Signaler un bug",
+    "settings.reportBlurb": "Écrivez dans votre propre langue. Il est stocké exactement comme vous le tapez et n'est jamais traduit lors de l'envoi.",
+    "settings.reportPlaceholder": "Qu'est-ce qui s'est passé, et ce que vous faisiez lorsque cela s'est produit?",
+    "settings.reportSend": "Envoyer le rapport",
+    "settings.reportSending": "Envoi en cours…",
+    "settings.reportThanks": "Rapport envoyé. Référence {id}.",
+    "settings.reportAnother": "Signalez autre chose",
+    "settings.reportEmpty": "Décrivez d'abord ce qui s'est passé."
   },
   "de": {
     "alliance.unaffiliated": "Unabhängig",
@@ -1222,7 +1254,18 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "squads.awayHint": "Ein im Einsatz befindliches Team kann nicht geändert werden, und ebenso nicht, was sich in ihm befindet.",
     "squads.assetAway": "aus mit {squad}",
     "squads.hint": "Tippe auf eine Position, um sie zu befüllen. Der Lift ist das Bremspedal: Schwere Lasten kosten mehr, und der Budget stammt aus deinem Motorpool, Flugfeld und Kasernement - also muss man frühzeitig eine Mischung einsetzen, und das ist das Ziel.",
-    "chat.translating": "Übertragen\\u2026"
+    "chat.translating": "Übertragen\\u2026",
+    "settings.title": "Einstellungen",
+    "settings.close": "Schließen",
+    "settings.reportBug": "Meldung eines Fehlers melden",
+    "settings.reportBlurb": "Schreiben Sie in Ihrer eigenen Sprache. Es wird genau so gespeichert, wie Sie es eingeben, und nie übersetzt, wenn Sie es eingeben.",
+    "settings.reportPlaceholder": "Was ist passiert und was taten Sie, als es passierte?",
+    "settings.reportSend": "Meldung senden",
+    "settings.reportSending": "Senden…",
+    "settings.reportThanks": "Meldung gesendet. Referenz {id}.",
+    "settings.reportAnother": "Melden Sie etwas anderes",
+    "settings.reportEmpty": "Beschreiben Sie, was passiert ist, zuerst.",
+    "settings.reportContext": "Mit dieser Meldung gesendet: Ihr Rufzeichen, die Seite, auf der Sie waren, und Ihre Build-Version."
   },
   "it": {
     "alliance.unaffiliated": "Non affiliato",
@@ -1526,7 +1569,18 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "alliance.applied": "Applicato a {alliances}. In attesa di un ufficiale.",
     "squads.slot": "{squad} · slot {slot}",
     "squads.liftFree": "{amount} lift libero",
-    "chat.translating": "Sto traducendo\\u2026"
+    "chat.translating": "Sto traducendo\\u2026",
+    "settings.title": "Impostazioni",
+    "settings.close": "Chiudi",
+    "settings.reportBug": "Segnala un bug",
+    "settings.reportBlurb": "Scrivi nella tua lingua. Viene memorizzato esattamente come lo scrivi e non viene mai tradotto durante l'invio.",
+    "settings.reportPlaceholder": "Cosa è successo e cosa stavi facendo quando è successo?",
+    "settings.reportSend": "Invia rapporto",
+    "settings.reportSending": "Invio in corso…",
+    "settings.reportThanks": "Rapporto inviato. Riferimento {id}.",
+    "settings.reportAnother": "Segnala qualcos'altro",
+    "settings.reportEmpty": "Descrivi cosa è successo per primo.",
+    "settings.reportContext": "Inviato con questo rapporto: il tuo chiamato segnale, la schermata su cui ti trovavi e la tua versione di build."
   },
   "nl": {
     "alliance.unaffiliated": "Ongebonden",
@@ -1830,7 +1884,18 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "battles.looted": "{amount} buit gemaakt",
     "chat.emptyChannel": "Nog niets. {about}",
     "squads.slot": "{squad} · positie {slot}",
-    "chat.translating": "Vertalen\\u2026"
+    "chat.translating": "Vertalen\\u2026",
+    "settings.title": "Instellingen",
+    "settings.close": "Sluiten",
+    "settings.reportBug": "Meld een fout",
+    "settings.reportBlurb": "Schrijf in uw eigen taal. Het wordt exact opgeslagen zoals u het typt en wordt nooit vertaald op de weg naar binnen.",
+    "settings.reportPlaceholder": "Wat gebeurde er, en wat deed u toen het gebeurde?",
+    "settings.reportSend": "Rapport versturen",
+    "settings.reportSending": "Versturen…",
+    "settings.reportThanks": "Rapport verstuurd. Referentie {id}.",
+    "settings.reportAnother": "Meld iets anders",
+    "settings.reportEmpty": "Beschrijf eerst wat er gebeurde.",
+    "settings.reportContext": "Verstuurd met dit rapport: uw oproepnaam, het scherm waar u op was en uw build-versie."
   },
   "pl": {
     "alliance.unaffiliated": "Nieprzypisany",
@@ -2134,7 +2199,17 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "alliance.applied": "Zgłoszono do {alliances}. Oczekiwanie na oficera.",
     "battles.plotAt": "plotuj {x}, {y} · {when}",
     "battles.looted": "{amount} zdobyto",
-    "chat.translating": "Tłumaczenie\\u2026"
+    "chat.translating": "Tłumaczenie\\u2026",
+    "settings.title": "Ustawienia",
+    "settings.close": "Zamknij",
+    "settings.reportBug": "Zgłoś błąd",
+    "settings.reportBlurb": "Napisz w swoim własnym języku. Zapisywane jest dokładnie tak, jak napiszesz, i nigdy nie tłumaczone jest w trakcie wysyłania.",
+    "settings.reportPlaceholder": "Co się stało, a czego robisz, gdy się to stało?",
+    "settings.reportSend": "Wyślij zgłoszenie",
+    "settings.reportSending": "Wysyłanie…",
+    "settings.reportThanks": "Zgłoszenie wysłane. Odnośnik {id}.",
+    "settings.reportAnother": "Zgłoś coś innego",
+    "settings.reportEmpty": "Opisz, co się stało, najpierw."
   },
   "ru": {
     "alliance.unaffiliated": "Без альянса",
@@ -2438,7 +2513,17 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "squads.awayHint": "Сquad, находящийся в поле боя, не может быть изменен, и того же самое относится к его составу.",
     "squads.assetAway": "с {squad}",
     "squads.hint": "Нажмите на слот, чтобы заполнить его. Тормоз - это грузоподъемность: более тяжелые активы стоят дороже, а бюджет получается из вашего Моторного парка, Воздушной базы и Батальона - поэтому в начале состав должен быть смешанным, и это главная цель.",
-    "chat.translating": "Перевод\\u2026"
+    "chat.translating": "Перевод\\u2026",
+    "settings.title": "Настройки",
+    "settings.close": "Закрыть",
+    "settings.reportBug": "Сообщить о баге",
+    "settings.reportBlurb": "Напишите на своем языке. Это хранится точно так, как вы его набираете, и никогда не переводится на входе.",
+    "settings.reportPlaceholder": "Что произошло, и что вы делали, когда это произошло?",
+    "settings.reportSend": "Отправить отчет",
+    "settings.reportSending": "Отправка…",
+    "settings.reportThanks": "Отчет отправлен. Ссылка на {id}.",
+    "settings.reportAnother": "Отчет о другом",
+    "settings.reportEmpty": "Сначала опишите, что произошло."
   },
   "uk": {
     "alliance.unaffiliated": "Незалежний",
@@ -2742,7 +2827,18 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "alliance.openJoin": "Кожен може приєднатися без застосування",
     "battles.plotAt": "plot {x}, {y} · {when}",
     "battles.looted": "{amount} захоплено",
-    "chat.translating": "Перекладає\\u2026"
+    "chat.translating": "Перекладає\\u2026",
+    "settings.title": "Налаштування",
+    "settings.close": "Закрити",
+    "settings.reportBug": "Звіт про помилку",
+    "settings.reportBlurb": "Напишіть на свій розсуд. Ця інформація зберігається точно так, як ви її ввели, і ніколи не перекладається під час входу.",
+    "settings.reportPlaceholder": "Що відбулося, і що ви робили, коли це відбулося?",
+    "settings.reportSend": "Відправити звіт",
+    "settings.reportSending": "Відправляю звіти…",
+    "settings.reportThanks": "Звіт відправлений. Посилання {id}.",
+    "settings.reportAnother": "Звіт про щось інше",
+    "settings.reportEmpty": "Опишіть, що відбулося, спочатку.",
+    "settings.reportContext": "Відправляється разом із цим звітом: ваше позивний, екран, на якому ви були, та ваша версія будівництва."
   },
   "tr": {
     "alliance.unaffiliated": "Bağlı Olmayan",
@@ -3045,7 +3141,18 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "squads.assetAway": "{squad} ile birlikte",
     "squads.hint": "Bir slotu doldurmak için ona dokunun. Kaldırma, fren: ağır malzeme daha pahalıdır ve bütçe, Motor Parkı, Havaalanı ve Karargahınızdan gelir — bu nedenle erken bir takımda karışık olmanız gerekir ve bu da noktadır.",
     "alliance.applied": "{alliances}e Uygulandı. Bir subay bekleniyor.",
-    "chat.translating": "Tercüme yapılıyor\\u2026"
+    "chat.translating": "Tercüme yapılıyor\\u2026",
+    "settings.title": "Ayarlar",
+    "settings.close": "Kapat",
+    "settings.reportBug": "Hata Bildir",
+    "settings.reportBlurb": "Dilediğiniz dilde yazın. Tam olarak yazdığınız şekilde depolanır ve hiçbir zaman çeviri yapılmaz.",
+    "settings.reportPlaceholder": "Ne oldu ve ne yapıyordunuz?",
+    "settings.reportSend": "Rapor gönder",
+    "settings.reportSending": "Gönderiliyor…",
+    "settings.reportThanks": "Rapor gönderildi. Referans {id}.",
+    "settings.reportAnother": "Diğer bir şey raporla",
+    "settings.reportEmpty": "Ne oldu önce anlatın.",
+    "settings.reportContext": "Bu rapora gönderildi: çağrı işaretiniz, ekranınız ve build sürümünüz."
   },
   "ar": {
     "alliance.unaffiliated": "غير متعاقد",
@@ -3349,7 +3456,18 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "alliance.settings": "إعدادات",
     "alliance.purposePlaceholder": "ماذا هذا الاتحاد لخدمته؟",
     "alliance.openJoin": "يمكن لأي شخص الانضمام دون طلب",
-    "chat.translating": "ترجمة\\u2026"
+    "chat.translating": "ترجمة\\u2026",
+    "settings.title": "الإعدادات",
+    "settings.close": "إغلاق",
+    "settings.reportBug": "إبلاغ عطل",
+    "settings.reportBlurb": "اكتب بلغتك الخاصة. يتم تخزينها بالكامل كما تكتبها و لا يتم ترجمتها أثناء الدخول.",
+    "settings.reportPlaceholder": "ما حدث، و ما كنت تفعل عندما حدث ذلك؟",
+    "settings.reportSend": "إرسال التقرير",
+    "settings.reportSending": "إرسال…",
+    "settings.reportThanks": "تم إرسال التقرير. المرجع {id}.",
+    "settings.reportAnother": "ابلغ عن شيء آخر",
+    "settings.reportEmpty": "اكتب ما حدث أولاً.",
+    "settings.reportContext": "تم إرسال هذا التقرير معه: اسمك، الشاشة التي كنت عليها، و إصدار البناء."
   },
   "he": {
     "alliance.unaffiliated": "Unaffiliated",
@@ -3652,7 +3770,18 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "chat.serverBlurb": "כל השחקנים בשרת",
     "chat.allianceBlurb": "כל השחקנים בברית",
     "chat.translating": "Translating\\u2026",
-    "map.leavesIn": "leaves in {time}"
+    "map.leavesIn": "leaves in {time}",
+    "settings.title": "הגדרות",
+    "settings.close": "סגור",
+    "settings.reportBug": "דווח תקלה",
+    "settings.reportBlurb": "כתוב בשפתך. הוא מאוחסן בדיוק כפי שאתה כותבו, ולעולם אינו מתורגם בדרך.",
+    "settings.reportPlaceholder": "מה קרה, ומה היית עושה כשקרה?",
+    "settings.reportSend": "שלח דיווח",
+    "settings.reportSending": "משלח…",
+    "settings.reportThanks": "דיווח נשלח. תיקייה {id}.",
+    "settings.reportAnother": "דווח עוד",
+    "settings.reportEmpty": "תיאור מה קרה ראשון.",
+    "settings.reportContext": "שלח עם דיווח זה: כינוי הקריאה שלך, המסך שעליך, וגרסת הבנייה שלך."
   },
   "hi": {
     "alliance.unaffiliated": "अनबन्धित",
@@ -3955,7 +4084,17 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "squads.awayHint": "एक स्क्वाड जो बाहर है, इसे बदलना या इसमें कुछ भी बदलना संभव नहीं है।",
     "squads.assetAway": "{squad} स्क्वाड के साथ बाहर है",
     "squads.hint": "एक स्लॉट पर टैप करें. लिफ्ट ब्रेक है: भारी संसाधन अधिक लागत वाले होते हैं और बजट आपके मोटर पूल, एयरफील्ड और बैरक से आता है - इसलिए शुरुआत में एक स्क्वाड को मिश्रित करना होता है, और यही बिंदु है.",
-    "chat.translating": "चैट अनुवाद कर रहा है\\u2026"
+    "chat.translating": "चैट अनुवाद कर रहा है\\u2026",
+    "settings.title": "सेटिंग्स",
+    "settings.close": "बंद करें",
+    "settings.reportBug": "बग रिपोर्ट करें",
+    "settings.reportBlurb": "अपनी भाषा में लिखें। यह आपके द्वारा टाइप किया गया है और कभी भी अनुवादित नहीं होता है।",
+    "settings.reportPlaceholder": "क्या हुआ और आप क्या कर रहे थे जब यह हुआ?",
+    "settings.reportSend": "रिपोर्ट भेजें",
+    "settings.reportSending": "भेज रहे हैं…",
+    "settings.reportThanks": "रिपोर्ट भेज दी गई। संदर्भ {id}।",
+    "settings.reportAnother": "कुछ और रिपोर्ट करें",
+    "settings.reportEmpty": "पहले बताएं कि क्या हुआ।"
   },
   "zh": {
     "alliance.unaffiliated": "未附属",
@@ -4259,7 +4398,18 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "alliance.openJoin": "任何人可以加入无需申请",
     "base.storageCap": "基础存储容量 {amount} 每种资源。提高指挥中心提高容量并解锁其他地方的更高等级。",
     "map.hits": "{time} 内的命中次数",
-    "chat.translating": "正在翻译\\u2026"
+    "chat.translating": "正在翻译\\u2026",
+    "settings.title": "游戏设置",
+    "settings.close": "关闭",
+    "settings.reportBug": "报告错误",
+    "settings.reportBlurb": "您可以用您自己的语言写报告。报告将以您输入的方式存储，且不会在传输过程中进行翻译。",
+    "settings.reportPlaceholder": "发生了什么事？您在发生错误时正在做什么？",
+    "settings.reportSend": "发送报告",
+    "settings.reportSending": "发送中…",
+    "settings.reportThanks": "报告已发送。参考 {id}。",
+    "settings.reportAnother": "报告另一个问题",
+    "settings.reportEmpty": "首先描述发生了什么事。",
+    "settings.reportContext": "此报告中包含：您的呼号、您当前的屏幕和您的构建版本。"
   },
   "ja": {
     "alliance.unaffiliated": "非連盟",
@@ -4563,7 +4713,18 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "base.storageCap": "Storage cap {amount} per resource. Command Postを上げると、すべての場所でレベルが解除され、容量が増加します。",
     "map.setRendezvous": "ここで会合場所を設定",
     "crop.hint": "ドラッグで移動、スライダーでズーム",
-    "chat.translating": "翻訳中\\u2026"
+    "chat.translating": "翻訳中\\u2026",
+    "settings.title": "設定",
+    "settings.close": "閉じる",
+    "settings.reportBug": "バグを報告",
+    "settings.reportBlurb": "あなた自身の言語で書いてください。送信される際に翻訳されません。",
+    "settings.reportPlaceholder": "何が起こったのか、そして何をしているときに起こったのかを書いてください。",
+    "settings.reportSend": "報告を送信",
+    "settings.reportSending": "送信中…",
+    "settings.reportThanks": "報告が送信されました。参照 {id}。",
+    "settings.reportAnother": "別の問題を報告",
+    "settings.reportEmpty": "何が起こったのかを最初に説明してください。",
+    "settings.reportContext": "この報告とともに送信されたもの:あなたのコールサイン、現在の画面、そしてあなたのビルドバージョン。"
   },
   "ko": {
     "alliance.unaffiliated": "무맹",
@@ -4867,7 +5028,18 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "base.storageCap": "{amount}씩 각 자원에 대한 저장 용량. Command Post를 높이는 것은 용량을 높이고 다른 모든 곳에서 레벨을 해제합니다.",
     "map.setRendezvous": "여기에서 임시 기지 설정",
     "chat.translating": "전역 중\\u2026",
-    "map.hits": "{time} 동안의 공격"
+    "map.hits": "{time} 동안의 공격",
+    "settings.title": "설정",
+    "settings.close": "닫기",
+    "settings.reportBug": "버그 신고",
+    "settings.reportBlurb": "자신의 언어로 작성하세요. 입력 시 정확하게 저장되고 번역되지 않습니다.",
+    "settings.reportPlaceholder": "무엇이 발생했으며, 그 때 무엇을 하고 있었습니까?",
+    "settings.reportSend": "신고 전송",
+    "settings.reportSending": "전송 중…",
+    "settings.reportThanks": "신고가 성공적으로 전송되었습니다. 참조 {id}.",
+    "settings.reportAnother": "다른 문제 신고",
+    "settings.reportEmpty": "먼저 무슨 일이 일어났는지 설명하세요.",
+    "settings.reportContext": "이 신고와 함께 전송된 내용: 호출명, 현재 화면, 빌드 버전"
   },
   "vi": {
     "alliance.unaffiliated": "Không thuộc bất kỳ liên minh nào",
@@ -5171,7 +5343,18 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "squads.assetAway": "đi cùng với {squad}",
     "squads.hint": "Nhấn vào một khe để bổ sung. Lift là giới hạn: tài sản nặng hơn sẽ tốn nhiều hơn, và ngân sách đến từ Motor Pool, Sân bay và Trại quân đội - vì vậy ban đầu một đội phải được trộn lẫn, và đó là mục tiêu.",
     "alliance.applied": "Được áp dụng cho {alliances}. Chờ sự chấp thuận của một sĩ quan.",
-    "chat.translating": "Đang dịch\\u2026"
+    "chat.translating": "Đang dịch\\u2026",
+    "settings.title": "Cài đặt",
+    "settings.close": "Đóng",
+    "settings.reportBug": "Báo cáo lỗi",
+    "settings.reportBlurb": "Viết theo ngôn ngữ của bạn. Nó được lưu trữ chính xác như bạn gõ và không bao giờ được dịch trên đường vào.",
+    "settings.reportPlaceholder": "Cái gì đã xảy ra, và bạn đang làm gì khi nó xảy ra?",
+    "settings.reportSend": "Gửi báo cáo",
+    "settings.reportSending": "Đang gửi…",
+    "settings.reportThanks": "Báo cáo đã gửi. Tham chiếu {id}.",
+    "settings.reportAnother": "Báo cáo một điều gì đó khác",
+    "settings.reportEmpty": "Mô tả cái gì đã xảy ra trước tiên.",
+    "settings.reportContext": "Được gửi cùng với báo cáo này: tên gọi của bạn, màn hình bạn đang ở, và phiên bản xây dựng của bạn."
   },
   "th": {
     "alliance.unaffiliated": "ไม่มีสมาคม",
@@ -5473,7 +5656,8 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "squads.awayHint": "ทีมที่ออกไปไม่สามารถเปลี่ยนแปลงได้ และไม่สามารถเปลี่ยนแปลงทรัพยากรที่อยู่ในมันได้",
     "squads.assetAway": "ออกไปพร้อมกับ {squad}",
     "squads.hint": "คลิกที่ช่องว่างเพื่อเติมมัน  Lift คือการจำกัดความสามารถในการยกของทีม: สิ่งของที่มีน้ำหนักมากต้องใช้เงินมากขึ้น และงบประมาณมาจาก Motor Pool, Airfield และ Barracks — ดังนั้นในระยะแรกทีมจะต้องมีการผสมผสาน และนั่นเป็นจุดประสงค์",
-    "chat.translating": "กำลังแปล\\u2026"
+    "chat.translating": "กำลังแปล\\u2026",
+    "settings.reportContext": "ส่งไปพร้อมรายงาน: ชื่อเรียกที่คุณใช้, หน้าจอของคุณที่นั่ง และเวอร์ชั่นของเกมที่คุณเล่น"
   },
   "id": {
     "alliance.unaffiliated": "Tidak Terafiliasi",
@@ -5777,6 +5961,17 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     "battles.looted": "{amount} loot ditemukan",
     "squads.slot": "{squad} · slot {slot}",
     "squads.liftFree": "{amount} lift gratis tersedia",
-    "chat.translating": "Menerjemahkan\\u2026"
+    "chat.translating": "Menerjemahkan\\u2026",
+    "settings.title": "Pengaturan",
+    "settings.close": "Tutup",
+    "settings.reportBug": "Laporkan Bug",
+    "settings.reportBlurb": "Tulis dalam bahasa Anda sendiri. Ini disimpan tepat seperti Anda mengetiknya dan tidak pernah diterjemahkan saat masuk.",
+    "settings.reportPlaceholder": "Apa yang terjadi, dan apa yang Anda lakukan ketika itu terjadi?",
+    "settings.reportSend": "Kirim laporan",
+    "settings.reportSending": "Mengirim…",
+    "settings.reportThanks": "Laporan terkirim. Referensi {id}.",
+    "settings.reportAnother": "Laporkan sesuatu yang lain",
+    "settings.reportEmpty": "Deskripsikan apa yang terjadi terlebih dahulu.",
+    "settings.reportContext": "Dikirim bersama laporan ini: panggilan Anda, layar yang Anda gunakan, dan versi bangun Anda."
   }
 };

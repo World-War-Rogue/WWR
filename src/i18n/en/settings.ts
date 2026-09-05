@@ -5,8 +5,7 @@ export const SETTINGS = {
 
   // Bug reports
   'settings.reportBug': 'Report a bug',
-  'settings.reportBlurb':
-    'Write in your own language. It is stored exactly as you type it and never translated on the way in.',
+  'settings.reportBlurb': 'Write in your own language. It is stored exactly as you type it and never translated on the way in.',
   'settings.reportPlaceholder': 'What happened, and what were you doing when it happened?',
   'settings.reportSend': 'Send report',
   'settings.reportSending': 'Sending…',
