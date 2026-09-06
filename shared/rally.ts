@@ -11,12 +11,17 @@
  * How long a player must wait between rallies.
  *
  * Rallying is free - a player who cannot afford to answer their general is a
- * player who stops being asked - so a cooldown is the only brake on it. Thirty
- * minutes is long enough that RV cannot be used to dodge every incoming attack
- * once combat exists, and short enough that a real operation can re-form after
- * one goes wrong.
+ * player who stops being asked - so a cooldown is the only brake on it.
+ *
+ * Five minutes, cut from thirty on 2026-09-06. Thirty was set against the worry
+ * that RV would be used to dodge every incoming attack once combat exists, and
+ * it turned out to be the wrong worry to optimise for: an alliance that answers
+ * a call, finds it has gone wrong and wants to re-form is doing the thing the
+ * marker exists for, and half an hour is long enough to end the operation
+ * instead. Five still costs something in the middle of a fight - a march is
+ * measured in minutes - without punishing the coordination.
  */
-export const RALLY_COOLDOWN_MS = 30 * 60 * 1000;
+export const RALLY_COOLDOWN_MS = 5 * 60 * 1000;
 
 /**
  * How far out the search for a free plot is allowed to spiral.

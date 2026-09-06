@@ -1351,16 +1351,6 @@ export default function WorldMap({
           things that are, and the right is where the eye goes last.
         */}
         <div className="flex flex-col items-end gap-2 justify-self-end">
-          {/*
-            The clock. Above the world card because it is the one thing here
-            that changes on its own, and because war windows are published in
-            RST - a player working out whether they can make 20:00 should not
-            have to leave the map to find out what time it is in the game.
-          */}
-          <div className="pointer-events-auto rounded border border-neutral-800 bg-black/70 px-3 py-1 text-right text-xs backdrop-blur">
-            <GameClock />
-          </div>
-
           <div className="pointer-events-auto rounded border border-neutral-800 bg-black/70 px-3 py-2 text-right backdrop-blur">
           <p className="text-[10px] uppercase tracking-[0.25em] text-orange-500">
             {view?.world.kind === 'event' ? t('map.battleTheatre') : t('map.homeWorld')}
@@ -1376,6 +1366,16 @@ export default function WorldMap({
             {view?.you.plot
               ? t('map.youAt', {x: view.you.plot.x, y: view.you.plot.y})
               : t('map.unplaced')}
+          </p>
+          {/*
+            The clock, inside the world card rather than floating above it.
+            It belongs with the server it is the clock FOR - war windows are
+            published in RST, and a player working out whether they can make
+            20:00 should find the answer next to the world's name rather than
+            in a box of its own.
+          */}
+          <p className="mt-1 border-t border-neutral-800 pt-1 text-[11px]">
+            <GameClock />
           </p>
           </div>
 

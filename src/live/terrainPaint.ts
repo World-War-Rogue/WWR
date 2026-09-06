@@ -182,6 +182,22 @@ let lastBuild = 0;
  */
 const REBUILD_MS = 110;
 
+/**
+ * How far past the viewport the buffer is painted, in pixels each side.
+ *
+ * The buffer holds only what was on screen when it was built. Stretch it to
+ * follow a camera that has moved and the edge it moved TOWARD has no pixels
+ * behind it - which is the black band that appeared down the leading side of a
+ * fast pan. A margin gives the stretch something to reveal.
+ *
+ * 160px is about a fifth of a phone screen, which covers a normal drag inside
+ * the 110ms rebuild window. It costs (w + 320)(h + 320) / (w * h) more pixels
+ * per rebuild - roughly a third more on a phone - and that is the trade: a
+ * third more work on the rebuilds, in exchange for the frames between them
+ * being right.
+ */
+const OVERSCAN = 160;
+
 function keyOf(s: GroundSpec): string {
   // Occupancy folded in cheaply. Bases move rarely, so this almost never
   // invalidates - but when one does move, the prop under it has to reappear.
@@ -401,12 +417,18 @@ export function paintGround(ctx: CanvasRenderingContext2D, s: GroundSpec): boole
   if (s.w === 0 || s.h === 0) return false;
   ensureAtlas();
 
+  // The buffer is the viewport plus a margin all round, painted for the same
+  // camera centre - so an enlarged width and height extend it symmetrically and
+  // nothing else about the arithmetic changes.
+  const bw = s.w + OVERSCAN * 2;
+  const bh = s.h + OVERSCAN * 2;
+
   const key = keyOf(s);
-  const fits = buffer !== null && buffer.width === s.w && buffer.height === s.h;
+  const fits = buffer !== null && buffer.width === bw && buffer.height === bh;
   const now = performance.now();
 
   if (fits && bufferKey === key) {
-    ctx.drawImage(buffer as HTMLCanvasElement, 0, 0);
+    ctx.drawImage(buffer as HTMLCanvasElement, -OVERSCAN, -OVERSCAN);
     return false;
   }
 
@@ -419,31 +441,36 @@ export function paintGround(ctx: CanvasRenderingContext2D, s: GroundSpec): boole
     // offset is the buffer camera's displacement from the current one - drawn
     // at the ratio of the two zooms.
     const scale = s.zoom / bufferCam.zoom;
-    const dx = s.w / 2 + (bufferCam.cx - s.cx) * s.zoom - (s.w / 2) * scale;
-    const dy = s.h / 2 + (bufferCam.cy - s.cy) * s.zoom - (s.h / 2) * scale;
-    ctx.save();
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(
-      buffer as HTMLCanvasElement,
-      dx,
-      dy,
-      s.w * scale,
-      s.h * scale,
-    );
-    ctx.restore();
-    return true;
+    const dw = bw * scale;
+    const dh = bh * scale;
+    const dx = s.w / 2 + (bufferCam.cx - s.cx) * s.zoom - (bw / 2) * scale;
+    const dy = s.h / 2 + (bufferCam.cy - s.cy) * s.zoom - (bh / 2) * scale;
+
+    // Only if it still covers the screen. Past the margin - a drag faster than
+    // the margin is wide, or a zoom out far enough that the buffer shrinks
+    // inside the viewport - there are no pixels for the uncovered strip and
+    // stretching would paint the void colour down the leading edge. Falling
+    // through to a rebuild costs a frame; the alternative is a black band, and
+    // a stutter is much easier to forgive than a hole.
+    if (dx <= 0 && dy <= 0 && dx + dw >= s.w && dy + dh >= s.h) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(buffer as HTMLCanvasElement, dx, dy, dw, dh);
+      ctx.restore();
+      return true;
+    }
   }
 
   if (!buffer) buffer = document.createElement('canvas');
-  buffer.width = s.w;
-  buffer.height = s.h;
+  buffer.width = bw;
+  buffer.height = bh;
   const bctx = buffer.getContext('2d');
   if (!bctx) return false;
-  paintInto(bctx, s);
+  paintInto(bctx, {...s, w: bw, h: bh});
   bufferKey = key;
   bufferCam = {cx: s.cx, cy: s.cy, zoom: s.zoom};
   lastBuild = performance.now();
-  ctx.drawImage(buffer, 0, 0);
+  ctx.drawImage(buffer, -OVERSCAN, -OVERSCAN);
   return false;
 }
 

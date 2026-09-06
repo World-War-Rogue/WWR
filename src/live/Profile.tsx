@@ -18,6 +18,7 @@ import {
 } from '../../shared/portraits';
 import {PORTRAIT_ACCEPT, PORTRAIT_MAX_SOURCE_BYTES} from '../../shared/portraits';
 import {ApiError, type Profile as ProfileData, api, formatNumber} from '../net/api';
+import {GameClock} from './GameClock';
 import PortraitCrop from './PortraitCrop';
 import {LANGUAGES} from '../../shared/chat';
 import {nameFor} from './countries';
@@ -187,13 +188,28 @@ export default function Profile({
           </p>
           <h1 className="text-xl font-semibold text-neutral-100">{profile?.username ?? username}</h1>
         </div>
-        <button
-          onClick={onClose}
-          className="shrink-0 rounded border border-neutral-700 px-3 py-2 text-sm text-neutral-300 hover:border-orange-600"
-        >
-          {editable ? t('profile.done') : t('nav.close')}
-        </button>
+        <div className="flex shrink-0 items-center gap-3">
+          {/*
+            Rogue Standard Time. Here because the profile is where a player
+            reads their own standing, and every scheduled thing in the game -
+            war windows, daily rollover, the weekly grant - is stated in it.
+          */}
+          <span className="hidden text-xs sm:block">
+            <GameClock />
+          </span>
+          <button
+            onClick={onClose}
+            className="rounded border border-neutral-700 px-3 py-2 text-sm text-neutral-300 hover:border-orange-600"
+          >
+            {editable ? t('profile.done') : t('nav.close')}
+          </button>
+        </div>
       </header>
+
+      {/* Narrow screens have no room for it in the header row. */}
+      <p className="mt-2 text-xs sm:hidden">
+        <GameClock />
+      </p>
 
       {error && (
         <p className="mt-6 rounded border border-red-900 bg-red-950/60 px-3 py-2 text-sm text-red-300">
