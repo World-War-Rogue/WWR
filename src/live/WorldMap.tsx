@@ -1303,20 +1303,13 @@ export default function WorldMap({
       <canvas ref={canvasRef} className="h-full w-full touch-none" style={{width: w, height: h}} />
 
       {/*
-        My base sits dead centre, where World map sits on the base screen, so
-        the two are the same target and toggling between them is one thumb
-        landing in the same place twice. The world card keeps the left, and the
-        right is deliberately empty rather than balanced - putting anything
-        there would give the eye a second thing to check before pressing the
-        one control that matters.
+        Task Forces left, My base right - the same two corners the base screen
+        uses for Task Forces and World map, so toggling between the two screens
+        is one thumb landing in the same place twice. The world card is the
+        wide strip between them: server, where you are, and the clock, on one
+        line, because it is a readout and a readout should be short.
       */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-40 grid grid-cols-[1fr_auto_1fr] items-start gap-3 p-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
-        {/*
-          Squads sits where it sits on the base screen, and My base sits where
-          World map sits there. The two screens are now the same three targets
-          in the same three places, so moving between them never asks a thumb
-          to go looking.
-        */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-40 grid grid-cols-[auto_1fr_auto] items-start gap-2 p-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
         <button
           onClick={onOpenSquads}
           className="pointer-events-auto flex items-center gap-2 justify-self-start rounded border border-neutral-700 bg-black/70 px-3 py-2 text-sm font-medium text-neutral-200 backdrop-blur transition hover:border-orange-500 hover:text-orange-200"
@@ -1336,51 +1329,33 @@ export default function WorldMap({
             <rect x="3" y="14" width="7" height="7" rx="1" />
             <rect x="14" y="14" width="7" height="7" rx="1" />
           </svg>
-          {t('nav.squads')}
+          <span className="hidden sm:inline">{t('nav.squads')}</span>
         </button>
 
-        <button
-          onClick={onOpenBase}
-          className="pointer-events-auto justify-self-center rounded bg-neutral-800 px-3 py-2 text-sm font-medium text-neutral-100 backdrop-blur transition hover:bg-neutral-700"
-        >
-          {t('nav.myBase')}
-        </button>
-
-        {/*
-          Where you are, on the right. It is a readout rather than a control -
-          nothing here is pressed - so it belongs out of the way of the two
-          things that are, and the right is where the eye goes last.
-        */}
-        <div className="flex flex-col items-end gap-2 justify-self-end">
-          <div className="pointer-events-auto rounded border border-neutral-800 bg-black/70 px-3 py-2 text-right backdrop-blur">
-          <p className="text-[10px] uppercase tracking-[0.25em] text-orange-500">
-            {view?.world.kind === 'event' ? t('map.battleTheatre') : t('map.homeWorld')}
-          </p>
-          <p className="text-sm font-semibold text-neutral-100">
+        <div className="pointer-events-auto flex min-w-0 items-center justify-center gap-x-2 rounded border border-neutral-800 bg-black/70 px-3 py-1.5 text-center backdrop-blur">
+          <span className="truncate text-xs font-semibold text-neutral-100">
+            <span className="mr-1 text-[9px] uppercase tracking-[0.2em] text-orange-500">
+              {view?.world.kind === 'event' ? t('map.battleTheatre') : t('map.homeWorld')}
+            </span>
             #{view?.world.id} {view?.world.name}
-          </p>
-          {/*
-            Where you are. The base count that used to sit here came out: it
-            changed every time the camera moved, answered a question nobody
-            asks, and was the only moving number on a card that is otherwise
-            about identity.
-          */}
-          <p className="text-[11px] text-neutral-500">
+          </span>
+          <span className="hidden text-[11px] text-neutral-500 sm:inline">
             {view?.you.plot
               ? t('map.youAt', {x: view.you.plot.x, y: view.you.plot.y})
               : t('map.unplaced')}
-          </p>
-          {/*
-            The clock, inside the world card rather than floating above it.
-            It belongs with the server it is the clock FOR - war windows are
-            published in RST, and a player working out whether they can make
-            20:00 should find the answer next to the world's name rather than
-            in a box of its own.
-          */}
-          <p className="mt-1 border-t border-neutral-800 pt-1 text-[11px]">
+          </span>
+          <span className="shrink-0 border-l border-neutral-800 pl-2 text-[11px]">
             <GameClock />
-          </p>
-          </div>
+          </span>
+        </div>
+
+        <div className="flex flex-col items-end gap-2 justify-self-end">
+          <button
+            onClick={onOpenBase}
+            className="pointer-events-auto rounded bg-neutral-800 px-3 py-2 text-sm font-medium text-neutral-100 backdrop-blur transition hover:bg-neutral-700"
+          >
+            {t('nav.myBase')}
+          </button>
 
           {/*
             Where the squads are.

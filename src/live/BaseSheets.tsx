@@ -81,18 +81,22 @@ export function CommandCenterSheet({
   pending,
   onUpgrade,
   onClose,
+  profile,
 }: {
   base: BaseView;
   pending: string | null;
   onUpgrade: (kind: string) => void;
   onClose: () => void;
+  /** The player panel - who you are and the doors you walk through. */
+  profile: ReactNode;
 }) {
-  const [tab, setTab] = useState<'departments' | 'events' | 'wars'>('departments');
+  const [tab, setTab] = useState<'departments' | 'events' | 'wars' | 'profile'>('departments');
   const cc = base.buildings.find((b) => b.kind === 'command_post');
   const tabs = [
     {key: 'departments', label: t('cc.departments')},
     {key: 'events', label: t('cc.events')},
     {key: 'wars', label: t('cc.wars')},
+    {key: 'profile', label: t('cc.profile')},
   ] as const;
 
   return (
@@ -105,6 +109,7 @@ export function CommandCenterSheet({
     >
       {tab === 'events' && <Soon text={t('cc.eventsSoon')} />}
       {tab === 'wars' && <Soon text={t('cc.warsSoon')} />}
+      {tab === 'profile' && profile}
       {tab === 'departments' && (
         <>
           {base.job && (

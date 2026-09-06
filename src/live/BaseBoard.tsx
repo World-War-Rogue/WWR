@@ -33,9 +33,11 @@ import {
   BOARD_H,
   BOARD_IMAGE,
   BOARD_W,
+  BUILDING_WIDTH,
   type BoardBuilding,
   type BuildingEntry,
   CENTRE_PAD,
+  FOOT_DROP,
   PADS,
   type Placement,
 } from '../../shared/base';
@@ -43,14 +45,22 @@ import {clockSynced, formatClock, useServerClock} from './serverClock';
 
 /** A second tap after this is a new selection, not an open. */
 const DOUBLE_TAP_MS = 650;
-/** Width of a building's art as a fraction of the board width. Pads are ~0.2. */
-const BUILDING_W = 0.26;
+
 /**
- * How far above the pad centre the art's bottom edge sits. The pads are
- * painted in perspective, so a building anchored exactly on the centre reads
- * as standing on the pad's far edge; this pulls it forward onto the slab.
+ * How the painting fills the viewport. A phone is taller than the board's
+ * 9:16, so the board is scaled to the height and the sides are cropped a
+ * little - the outermost pads sit at x 0.10 and 0.90, which survives. A
+ * desktop window is wider than the board, so the board is scaled to the
+ * height and letterboxed; cropping the top and bottom compounds off a wide
+ * screen would lose six pads.
  */
-const FOOT_LIFT = 0.84;
+function fitBoard(vw: number, vh: number): {w: number; h: number; left: number; top: number} {
+  const portrait = vw / vh < BOARD_W / BOARD_H;
+  const scale = portrait ? Math.max(vw / BOARD_W, vh / BOARD_H) : vh / BOARD_H;
+  const w = BOARD_W * scale;
+  const h = BOARD_H * scale;
+  return {w, h, left: (vw - w) / 2, top: (vh - h) / 2};
+}
 
 function buildingName(b: BoardBuilding): string {
   return t(`building.${b.id}` as MessageKey) || b.name;
@@ -66,7 +76,7 @@ export default function BaseBoard({
   onPlacements: (placements: Placement[]) => void;
 }) {
   const box = useRef<HTMLDivElement | null>(null);
-  const [width, setWidth] = useState(360);
+  const [view, setView] = useState({w: 360, h: 640});
   const [selected, setSelected] = useState<string | null>(null);
   const [arranging, setArranging] = useState(false);
   const [moving, setMoving] = useState<string | null>(null);
@@ -83,11 +93,13 @@ export default function BaseBoard({
   useEffect(() => {
     const el = box.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setWidth(el.clientWidth));
+    const ro = new ResizeObserver(() => setView({w: el.clientWidth, h: el.clientHeight}));
     ro.observe(el);
-    setWidth(el.clientWidth);
+    setView({w: el.clientWidth, h: el.clientHeight});
     return () => ro.disconnect();
   }, []);
+  const fit = fitBoard(view.w, view.h);
+  const width = fit.w;
 
   const padOf = useMemo(() => {
     const m = new Map<string, string>();
@@ -204,9 +216,13 @@ export default function BaseBoard({
     .sort((p, q) => p.pad.y - q.pad.y);
 
   return (
-    <div className="select-none">
-      <div className="mb-2 flex items-center justify-between gap-2 px-1">
-        <p className="min-h-[1.25rem] text-xs text-neutral-400">
+    <div ref={box} className="absolute inset-0 select-none overflow-hidden bg-[#0a0906]">
+      {/* Arrange lives at the top right under the header, over the painting. */}
+      <div
+        className="pointer-events-none absolute inset-x-0 z-30 flex items-start justify-between gap-2 px-3"
+        style={{top: 'calc(env(safe-area-inset-top) + 3.75rem)'}}
+      >
+        <p className="min-h-[1.25rem] max-w-[65%] rounded bg-black/60 px-2 py-1 text-xs text-neutral-200 empty:hidden">
           {arranging ? note ?? t('board.arranging') : note ?? ''}
         </p>
         <button
@@ -217,10 +233,10 @@ export default function BaseBoard({
             setSelected(null);
             setNote(null);
           }}
-          className={`shrink-0 rounded border px-3 py-1 text-xs font-medium ${
+          className={`pointer-events-auto shrink-0 rounded border px-3 py-1 text-xs font-medium shadow ${
             arranging
-              ? 'border-orange-500 bg-orange-950/40 text-orange-200'
-              : 'border-neutral-700 text-neutral-300 hover:border-orange-500'
+              ? 'border-orange-500 bg-orange-950/80 text-orange-200'
+              : 'border-neutral-600 bg-black/60 text-neutral-200 hover:border-orange-500'
           }`}
         >
           {arranging ? t('board.arrangeDone') : t('board.arrange')}
@@ -228,11 +244,12 @@ export default function BaseBoard({
       </div>
 
       <div
-        ref={box}
-        className="relative mx-auto w-full overflow-hidden rounded-lg border border-neutral-800 bg-[#c9bfae]"
+        className="absolute"
         style={{
-          aspectRatio: `${BOARD_W} / ${BOARD_H}`,
-          maxWidth: `calc((100vh - 15rem) * ${BOARD_W} / ${BOARD_H})`,
+          width: fit.w,
+          height: fit.h,
+          left: fit.left,
+          top: fit.top,
           touchAction: 'manipulation',
         }}
         onPointerDown={(e) => {
@@ -269,8 +286,8 @@ export default function BaseBoard({
               style={{
                 left: `${pad.x * 100}%`,
                 top: `${pad.y * 100}%`,
-                width: '21%',
-                height: '7%',
+                width: `${18 * pad.scale}%`,
+                height: `${5.5 * pad.scale}%`,
                 transform: 'translate(-50%, -50%)',
                 zIndex: 5,
               }}
@@ -287,9 +304,9 @@ export default function BaseBoard({
               className="absolute"
               style={{
                 left: `${pad.x * 100}%`,
-                top: `${pad.y * 100}%`,
-                width: `${BUILDING_W * 100}%`,
-                transform: `translate(-50%, -${FOOT_LIFT * 100}%)`,
+                width: `${BUILDING_WIDTH * pad.scale * b.size * 100}%`,
+                top: `${(pad.y + FOOT_DROP * pad.scale) * 100}%`,
+                transform: 'translate(-50%, -100%)',
                 zIndex: lifted ? 30 : 10 + Math.round(pad.y * 10),
               }}
             >

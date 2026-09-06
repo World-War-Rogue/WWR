@@ -30,6 +30,7 @@ export const BASE = {
   'cc.events': 'Events',
   'cc.wars': 'Wars',
   'cc.departments': 'Departments',
+  'cc.profile': 'Profile',
   'cc.eventsSoon': 'Season operations, daily objectives and event rewards will run from here.',
   'cc.warsSoon': 'War windows, alliance assaults and objective control will be commanded from here.',
   'cc.capNote': 'Nothing in the base can be raised above the Command Center. Raise it first.',

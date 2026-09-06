@@ -6,7 +6,7 @@
  * keeps running whether or not this tab is open. The tactical UI in App.tsx
  * gets wired to these same endpoints once the foundation is trusted.
  */
-import {type FormEvent, useCallback, useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useState} from 'react';
 import {setLanguage, t} from '../i18n';
 import Alliance from './Alliance';
 import Assets from './Assets';
@@ -18,7 +18,6 @@ import Chat from './Chat';
 import Customize from './Customize';
 import Profile, {Portrait} from './Profile';
 import Gate from './Gate';
-import {GameClock} from './GameClock';
 import {noteServerTime, serverNow} from './serverClock';
 import Settings from './Settings';
 import {installErrorTap} from './recentErrors';
@@ -28,10 +27,7 @@ import {
   type BaseView,
   type Player,
   type Profile as ProfileData,
-  RESOURCE_LABEL,
-  RESOURCE_ORDER,
   api,
-  formatNumber,
 } from '../net/api';
 import type {BuildingEntry} from '../../shared/base';
 import type {AssetCategory} from '../../shared/assets';
@@ -57,43 +53,15 @@ function useServerClock(base: BaseView | null) {
   return serverNow;
 }
 
-function ResourceBar({base}: {base: BaseView}) {
-  return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      {RESOURCE_ORDER.map((kind) => {
-        const value = base.resources[kind];
-        const rate = base.productionPerHour[kind];
-        const pct = Math.min(100, (value / base.storageCap) * 100);
-        return (
-          <div key={kind} className="rounded border border-neutral-800 bg-neutral-900/60 p-3">
-            <div className="flex items-baseline justify-between">
-              <span className="text-xs uppercase tracking-widest text-neutral-500">{RESOURCE_LABEL[kind]}</span>
-              {rate > 0 && <span className="text-xs text-emerald-400">+{formatNumber(rate)}/h</span>}
-            </div>
-            <div className="mt-1 font-mono text-lg text-neutral-100">{formatNumber(value)}</div>
-            <div className="mt-2 h-1 w-full rounded bg-neutral-800">
-              <div className="h-1 rounded bg-orange-600" style={{width: `${pct}%`}} />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 /**
- * The player tab, top right.
+ * The player panel: who you are and the doors you walk through.
  *
- * A menu rather than a screen, because everything in it is either a fact you
- * glance at or a door you walk through, and neither is worth losing the base
- * you were looking at. The portrait is the button: it is the one thing on this
- * bar that is unmistakably yours, and it is already how a player is identified
- * everywhere else in the game.
- *
- * Sign out lives at the bottom behind its own divider, away from the two
- * things above it that people press constantly.
+ * It was a dropdown behind a portrait button in the base header. The header
+ * now floats over the painting and holds two things, so this became a tab
+ * inside the Command Center - the building that is the player's seat anyway.
+ * Loaded when first shown, not on every render of the base.
  */
-function PlayerMenu({
+export function PlayerPanel({
   player,
   onOpenProfile,
   onOpenCustomize,
@@ -108,15 +76,9 @@ function PlayerMenu({
   onOpenSettings: () => void;
   onSignOut: () => Promise<void>;
 }) {
-  const [open, setOpen] = useState(false);
   const [profile, setProfile] = useState<ProfileData | null>(null);
-  const box = useRef<HTMLDivElement | null>(null);
 
-  // Loaded when the menu is first opened, not on every render of the page.
-  // Nothing in here changes while it is shut, and the header should not cost a
-  // request on a screen that has not been asked for.
   useEffect(() => {
-    if (!open || profile) return;
     let live = true;
     api
       .profile(player.username)
@@ -127,146 +89,58 @@ function PlayerMenu({
     return () => {
       live = false;
     };
-  }, [open, profile, player.username]);
+  }, [player.username]);
 
-  // Close on a click anywhere else, and on Escape. A menu that only closes by
-  // pressing the thing that opened it is a menu people leave open.
-  useEffect(() => {
-    if (!open) return;
-    const away = (e: MouseEvent) => {
-      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
-    };
-    const esc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', away);
-    document.addEventListener('keydown', esc);
-    return () => {
-      document.removeEventListener('mousedown', away);
-      document.removeEventListener('keydown', esc);
-    };
-  }, [open]);
-
+  const item = 'block w-full px-3 py-2.5 text-left text-sm text-neutral-200 hover:bg-neutral-900';
   return (
-    <div ref={box} className="relative">
-      {/*
-        Sized to match Squads on the other side of the header.
-
-        It used to be px-2 py-1.5 around a 26px portrait with the name hidden
-        below the sm breakpoint - so on a phone it was a small circle and a
-        caret, with nothing on it that said what it was. The two ends of the
-        header are the same kind of target and should be the same size; a
-        smaller one reads as less important rather than as more compact.
-
-        The name is always shown now. It is what makes this legible as "you"
-        rather than as an unlabelled icon, and it truncates rather than
-        wrapping - a long callsign narrows this button, it does not break the
-        row.
-      */}
-      <button
-        onClick={() => setOpen((v) => !v)}
-        aria-label={`${player.username} — profile and settings`}
-        aria-expanded={open}
-        className={`flex items-center gap-2 rounded border px-3 py-2 text-sm font-medium transition ${
-          open
-            ? 'border-fuchsia-500 text-fuchsia-200'
-            : 'border-neutral-700 text-neutral-300 hover:border-fuchsia-500 hover:text-fuchsia-200'
-        }`}
-      >
+    <div className="overflow-hidden rounded border border-neutral-800 bg-neutral-950">
+      <div className="flex items-center gap-3 border-b border-neutral-800 px-3 py-3">
         <Portrait
           glyph={profile?.portrait.glyph ?? 'star'}
           tint={profile?.portrait.tint ?? 'ash'}
           src={`/api/portrait?name=${encodeURIComponent(player.username)}`}
-          size={28}
+          size={40}
         />
-        <span className="max-w-[5.5rem] truncate sm:max-w-[10rem]">{player.username}</span>
-        <span aria-hidden="true" className="text-[10px] text-neutral-500">
-          ▾
-        </span>
-      </button>
-
-      {open && (
-        <div className="absolute right-0 z-50 mt-2 w-64 overflow-hidden rounded border border-neutral-700 bg-neutral-950 shadow-xl">
-          <div className="flex items-center gap-3 border-b border-neutral-800 px-3 py-3">
-            <Portrait
-              glyph={profile?.portrait.glyph ?? 'star'}
-              tint={profile?.portrait.tint ?? 'ash'}
-              src={`/api/portrait?name=${encodeURIComponent(player.username)}`}
-              size={40}
-            />
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-neutral-100">{player.username}</p>
-              <p className="truncate text-[11px] text-neutral-500">
-                {profile?.alliance ? `[${profile.alliance.tag}] ${profile.alliance.name}` : t('menu.noAlliance')}
-              </p>
-            </div>
-          </div>
-
-          <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 border-b border-neutral-800 px-3 py-3 text-[11px]">
-            <dt className="text-neutral-500">{t('menu.power')}</dt>
-            <dd className="text-right font-mono text-neutral-200">
-              {profile ? profile.power.toLocaleString() : '—'}
-            </dd>
-            <dt className="text-neutral-500">{t('menu.commandPost')}</dt>
-            <dd className="text-right font-mono text-neutral-200">{profile?.commandPost ?? '—'}</dd>
-            <dt className="text-neutral-500">{t('menu.server')}</dt>
-            <dd className="text-right font-mono text-neutral-200">{profile?.homeWorldId ?? '—'}</dd>
-          </dl>
-
-          <button
-            onClick={() => {
-              setOpen(false);
-              onOpenProfile();
-            }}
-            className="block w-full px-3 py-2.5 text-left text-sm text-neutral-200 hover:bg-neutral-900"
-          >
-            {t('menu.viewProfile')}
-          </button>
-          <button
-            onClick={() => {
-              setOpen(false);
-              onOpenCustomize();
-            }}
-            className="block w-full px-3 py-2.5 text-left text-sm text-neutral-200 hover:bg-neutral-900"
-          >
-            {t('menu.customise')}
-          </button>
-          <button
-            onClick={() => {
-              setOpen(false);
-              onOpenAlliance();
-            }}
-            className="block w-full px-3 py-2.5 text-left text-sm text-neutral-200 hover:bg-neutral-900"
-          >
-            {t('nav.alliance')}
-          </button>
-          {player.role === 'owner' && (
-            <a
-              href="/api/access/requests"
-              className="block w-full px-3 py-2.5 text-left text-sm text-orange-400 hover:bg-neutral-900"
-            >
-              {t('menu.accessRequests')}
-            </a>
-          )}
-
-          <button
-            onClick={() => {
-              setOpen(false);
-              onOpenSettings();
-            }}
-            className="block w-full border-t border-neutral-800 px-3 py-2.5 text-left text-sm text-neutral-200 hover:bg-neutral-900"
-          >
-            {t('settings.title')}
-          </button>
-
-          <button
-            onClick={() => void onSignOut()}
-            className="block w-full border-t border-neutral-800 px-3 py-2.5 text-left text-sm text-neutral-500 hover:bg-neutral-900 hover:text-red-300"
-          >
-            {t('menu.signOut')}
-          </button>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-neutral-100">{player.username}</p>
+          <p className="truncate text-[11px] text-neutral-500">
+            {profile?.alliance ? `[${profile.alliance.tag}] ${profile.alliance.name}` : t('menu.noAlliance')}
+          </p>
         </div>
+      </div>
+
+      <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 border-b border-neutral-800 px-3 py-3 text-[11px]">
+        <dt className="text-neutral-500">{t('menu.power')}</dt>
+        <dd className="text-right font-mono text-neutral-200">{profile ? profile.power.toLocaleString() : '—'}</dd>
+        <dt className="text-neutral-500">{t('menu.commandPost')}</dt>
+        <dd className="text-right font-mono text-neutral-200">{profile?.commandPost ?? '—'}</dd>
+        <dt className="text-neutral-500">{t('menu.server')}</dt>
+        <dd className="text-right font-mono text-neutral-200">{profile?.homeWorldId ?? '—'}</dd>
+      </dl>
+
+      <button onClick={onOpenProfile} className={item}>
+        {t('menu.viewProfile')}
+      </button>
+      <button onClick={onOpenCustomize} className={item}>
+        {t('menu.customise')}
+      </button>
+      <button onClick={onOpenAlliance} className={item}>
+        {t('nav.alliance')}
+      </button>
+      {player.role === 'owner' && (
+        <a href="/api/access/requests" className={`${item} text-orange-400`}>
+          {t('menu.accessRequests')}
+        </a>
       )}
+      <button onClick={onOpenSettings} className={`${item} border-t border-neutral-800`}>
+        {t('settings.title')}
+      </button>
+      <button
+        onClick={() => void onSignOut()}
+        className="block w-full border-t border-neutral-800 px-3 py-2.5 text-left text-sm text-neutral-500 hover:bg-neutral-900 hover:text-red-300"
+      >
+        {t('menu.signOut')}
+      </button>
     </div>
   );
 }
@@ -516,20 +390,35 @@ export default function LiveApp() {
     );
   }
 
+  // The base owns the whole viewport, like the map: the painting fills the
+  // screen and two buttons float over it - Task Forces left, World map right,
+  // the same two corners the map uses. Everything about the player lives
+  // inside the Command Center now.
   return (
     <>
-    <div className="mx-auto max-w-3xl px-5 pb-24 pt-8">
-      {/*
-        Three things, in the three places a thumb reaches: alliance left, map
-        centre, you on the right. The base's own name came out because the
-        screen it sits on is already the base - a title that repeats where you
-        are is a line of furniture, and everything it said is inside the
-        profile panel where it can be read on purpose.
-      */}
-      <header className="flex items-center justify-between gap-3">
+    <div className="fixed inset-0 bg-[#0a0906] text-neutral-200">
+      {base && (
+        <BaseBoard
+          base={base}
+          onPlacements={(placements) => setBase((b) => (b ? {...b, placements} : b))}
+          onOpen={(entry: BuildingEntry) => {
+            if (entry.kind === 'assets') {
+              setAssetOnly(entry.category);
+              setScreen('assets');
+            } else {
+              setSheet(entry.kind);
+            }
+          }}
+        />
+      )}
+
+      <header
+        className="pointer-events-none absolute inset-x-0 top-0 z-40 flex items-start justify-between gap-3 px-3"
+        style={{paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)'}}
+      >
         <button
           onClick={() => setScreen('squads')}
-          className="flex items-center gap-2 rounded border border-neutral-700 px-3 py-2 text-sm font-medium text-neutral-300 transition hover:border-orange-500 hover:text-orange-200"
+          className="pointer-events-auto flex items-center gap-2 rounded border border-neutral-600 bg-black/70 px-3 py-2 text-sm font-medium text-neutral-200 shadow backdrop-blur transition hover:border-orange-500 hover:text-orange-200"
         >
           <svg
             viewBox="0 0 24 24"
@@ -551,80 +440,58 @@ export default function LiveApp() {
 
         <button
           onClick={() => setScreen('world')}
-          className="rounded bg-neutral-800 px-3 py-2 text-sm font-medium text-neutral-100 transition hover:bg-neutral-700"
+          className="pointer-events-auto rounded bg-neutral-800/90 px-3 py-2 text-sm font-medium text-neutral-100 shadow backdrop-blur transition hover:bg-neutral-700"
         >
           {t('nav.worldMap')}
         </button>
-
-        <PlayerMenu
-          player={player}
-          onOpenProfile={() => {
-            setViewing(null);
-            setScreen('profile');
-          }}
-          onOpenCustomize={() => setScreen('customize')}
-          onOpenAlliance={() => setScreen('alliance')}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onSignOut={async () => {
-            await api.logout();
-            setPlayer(null);
-            setBase(null);
-          }}
-        />
       </header>
 
-      {/*
-        The clock, on its own line rather than as a fourth thing in the header.
-        Three targets across a phone header is already the limit, and a readout
-        wedged between two buttons is a readout that gets pressed.
-      */}
-      <p className="mt-3 text-right text-xs">
-        <GameClock />
-      </p>
-
       {error && (
-        <p className="mt-6 rounded border border-red-900 bg-red-950/60 px-3 py-2 text-sm text-red-300">{error}</p>
+        <p className="absolute inset-x-3 top-32 z-40 rounded border border-red-900 bg-red-950/90 px-3 py-2 text-sm text-red-300">
+          {error}
+        </p>
       )}
 
-      {base && (
-        <>
-          <div className="mt-6">
-            <ResourceBar base={base} />
-          </div>
-
-          <div className="mt-4">
-            <BaseBoard
-              base={base}
-              onPlacements={(placements) => setBase((b) => (b ? {...b, placements} : b))}
-              onOpen={(entry: BuildingEntry) => {
-                if (entry.kind === 'assets') {
-                  setAssetOnly(entry.category);
-                  setScreen('assets');
-                } else {
-                  setSheet(entry.kind);
-                }
+      {base && sheet === 'command_center' && (
+        <CommandCenterSheet
+          base={base}
+          pending={pending}
+          onUpgrade={(kind) => void upgrade(kind)}
+          onClose={() => setSheet(null)}
+          profile={
+            <PlayerPanel
+              player={player}
+              onOpenProfile={() => {
+                setViewing(null);
+                setSheet(null);
+                setScreen('profile');
               }}
-            />
-          </div>
-
-          {sheet === 'command_center' && (
-            <CommandCenterSheet
-              base={base}
-              pending={pending}
-              onUpgrade={(kind) => void upgrade(kind)}
-              onClose={() => setSheet(null)}
-            />
-          )}
-          {sheet === 'depot' && (
-            <DepotSheet
-              onClose={() => setSheet(null)}
-              onCustomise={() => {
+              onOpenCustomize={() => {
                 setSheet(null);
                 setScreen('customize');
               }}
+              onOpenAlliance={() => {
+                setSheet(null);
+                setScreen('alliance');
+              }}
+              onOpenSettings={() => setSettingsOpen(true)}
+              onSignOut={async () => {
+                await api.logout();
+                setPlayer(null);
+                setBase(null);
+              }}
             />
-          )}
-        </>
+          }
+        />
+      )}
+      {sheet === 'depot' && (
+        <DepotSheet
+          onClose={() => setSheet(null)}
+          onCustomise={() => {
+            setSheet(null);
+            setScreen('customize');
+          }}
+        />
       )}
     </div>
     {chat}
