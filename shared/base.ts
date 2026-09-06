@@ -21,7 +21,7 @@
  */
 import type {AssetCategory} from './assets';
 
-export const BOARD_IMAGE = '/base/board-v4.webp';
+export const BOARD_IMAGE = '/base/board-v5.webp';
 /** Source pixels of the board painting; the aspect ratio is what matters. */
 export const BOARD_W = 1080;
 export const BOARD_H = 1920;
@@ -31,10 +31,15 @@ export const PAD_W = 190 / BOARD_W;
 export const PAD_H = 120 / BOARD_H;
 
 /**
- * Building art is exported so its pedestal spans 0.94 of the canvas width;
- * drawn at this width, the pedestal is exactly one pad wide.
+ * Pedestal buildings are exported so the pedestal spans 0.94 of the canvas
+ * width; drawn at this width, the pedestal is exactly one pad wide.
  */
 export const ART_W = PAD_W / 0.94;
+/**
+ * Vehicles on the runway have no pedestal: top-down art, centred on the bay
+ * and a quarter wider than it, the way a parked jet overhangs its spot.
+ */
+export const VEHICLE_W = PAD_W * 1.25;
 
 export type PadZone =
   /** A general department pad. */
@@ -75,10 +80,13 @@ export const PADS: readonly Pad[] = [
 
 export const PAD_BY_ID: Record<string, Pad> = Object.fromEntries(PADS.map((p) => [p.id, p]));
 
-/** May a building be dropped here? The Task Force line is not a building pad. */
+/**
+ * May a building be dropped here? Only general pads. The runway belongs to
+ * the five fixed asset buildings and the Task Force line is not a building
+ * pad at all.
+ */
 export function padTakesBuildings(padId: string): boolean {
-  const pad = PAD_BY_ID[padId];
-  return !!pad && pad.zone !== 'taskforce';
+  return PAD_BY_ID[padId]?.zone === 'pad';
 }
 
 /** The Task Force line, in order: which pad shows which Task Force. */
@@ -116,10 +124,18 @@ export interface BoardBuilding {
   /** English name; the string table carries translations keyed on the id. */
   name: string;
   /**
-   * Runtime art: 512 wide, transparent, bottom-centre anchored, pedestal at
-   * 0.94 of the width. Any height. Nothing is rotated or scaled per pad.
+   * Runtime art, transparent, any height. Nothing is rotated or scaled per
+   * pad. 'pedestal': bottom-anchored on the pad, pedestal 0.94 of the width.
+   * 'vehicle': top-down, no pedestal, centred on the bay at VEHICLE_W.
    */
   art: string;
+  draw: 'pedestal' | 'vehicle';
+  /**
+   * Fixed buildings stand where they are put and cannot be lifted. The five
+   * asset buildings live on the runway in a set order, as decided: from the
+   * bottom up, drone, helicopter, aircraft, missile, tank.
+   */
+  fixed: boolean;
   /** Where it stands until the player moves it. Every default is distinct. */
   defaultPad: string;
   entry: BuildingEntry;
@@ -139,41 +155,53 @@ export const BOARD_BUILDINGS: readonly BoardBuilding[] = [
     id: 'depot',
     name: 'Depot',
     art: '/base/maintenance-depot.webp',
+    draw: 'pedestal',
+    fixed: false,
     defaultPad: 'lower_02',
     entry: {kind: 'depot'},
   },
   {
     id: 'armour_hub',
     name: 'Armour Building',
-    art: '/base/building-armour.webp',
+    art: '/base/vehicle-armour.webp',
+    draw: 'vehicle',
+    fixed: true,
     defaultPad: 'right_01',
     entry: {kind: 'assets', category: 'armour'},
   },
   {
     id: 'artillery_hub',
     name: 'Missile Building',
-    art: '/base/building-artillery.webp',
+    art: '/base/vehicle-artillery.webp',
+    draw: 'vehicle',
+    fixed: true,
     defaultPad: 'right_02',
     entry: {kind: 'assets', category: 'artillery'},
   },
   {
     id: 'rotary_hub',
     name: 'Helicopter Building',
-    art: '/base/building-rotary.webp',
-    defaultPad: 'right_03',
+    art: '/base/vehicle-rotary.webp',
+    draw: 'vehicle',
+    fixed: true,
+    defaultPad: 'right_04',
     entry: {kind: 'assets', category: 'rotary'},
   },
   {
     id: 'fixed_wing_hub',
     name: 'Fixed-Wing Building',
-    art: '/base/building-fixed-wing.webp',
-    defaultPad: 'right_04',
+    art: '/base/vehicle-fixed-wing.webp',
+    draw: 'vehicle',
+    fixed: true,
+    defaultPad: 'right_03',
     entry: {kind: 'assets', category: 'fixed_wing'},
   },
   {
     id: 'drone_hub',
     name: 'Drone Building',
-    art: '/base/building-drone.webp',
+    art: '/base/vehicle-drone.webp',
+    draw: 'vehicle',
+    fixed: true,
     defaultPad: 'right_05',
     entry: {kind: 'assets', category: 'drone'},
   },
@@ -211,7 +239,7 @@ export function resolvePlacements(stored: readonly Placement[]): Placement[] {
   const taken = new Set(byBuilding.values());
   const out: Placement[] = [];
   for (const b of BOARD_BUILDINGS) {
-    let pad = byBuilding.get(b.id);
+    let pad = b.fixed ? b.defaultPad : byBuilding.get(b.id);
     if (pad === undefined) {
       pad = taken.has(b.defaultPad)
         ? PADS.find((p) => padTakesBuildings(p.id) && !taken.has(p.id))?.id ?? b.defaultPad
@@ -229,7 +257,8 @@ export function auditBoard(): string[] {
   const pads = new Set<string>();
   for (const b of BOARD_BUILDINGS) {
     if (!PAD_BY_ID[b.defaultPad]) faults.push(`${b.id}: default pad ${b.defaultPad} does not exist`);
-    if (!padTakesBuildings(b.defaultPad)) faults.push(`${b.id}: default pad ${b.defaultPad} takes no buildings`);
+    if (!b.fixed && !padTakesBuildings(b.defaultPad)) faults.push(`${b.id}: default pad ${b.defaultPad} takes no buildings`);
+    if (b.fixed && PAD_BY_ID[b.defaultPad]?.zone !== 'runway') faults.push(`${b.id}: fixed building off the runway`);
     if (pads.has(b.defaultPad)) faults.push(`${b.id}: default pad ${b.defaultPad} used twice`);
     pads.add(b.defaultPad);
   }

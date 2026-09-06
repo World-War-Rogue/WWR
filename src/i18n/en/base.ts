@@ -13,6 +13,7 @@ export const BASE = {
   'board.level': 'Level {level}',
   'board.fixed': 'The Command Center stays where it is.',
   'board.tfLine': 'That is the Task Force line.',
+  'board.fixedRunway': 'The asset buildings stay on the runway.',
   'board.tfHome': 'Home',
   'board.tfOut': 'Out',
   'board.tfEmpty': 'Empty',

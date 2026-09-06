@@ -45,6 +45,7 @@ import {
   PAD_H,
   PAD_W,
   PADS,
+  VEHICLE_W,
   type BoardBuilding,
   type BuildingEntry,
   type Placement,
@@ -200,7 +201,7 @@ export default function BaseBoard({
   function onDown(e: ReactPointerEvent, id: string | null) {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     const b = id ? BOARD_BUILDING_BY_ID[id] ?? null : null;
-    const fixed = id === COMMAND_CENTER_ID;
+    const fixed = id === COMMAND_CENTER_ID || !!b?.fixed;
     const p: NonNullable<typeof press.current> = {
       id,
       startX: e.clientX,
@@ -213,7 +214,7 @@ export default function BaseBoard({
     };
     press.current = p;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    if (b) {
+    if (b && !b.fixed) {
       p.timer = window.setTimeout(() => {
         if (press.current === p && p.mode === 'undecided') {
           p.mode = 'lift';
@@ -225,7 +226,9 @@ export default function BaseBoard({
       }, HOLD_MS);
     } else if (fixed) {
       p.timer = window.setTimeout(() => {
-        if (press.current === p && p.mode === 'undecided') setNote(t('board.fixed'));
+        if (press.current === p && p.mode === 'undecided') {
+          setNote(b ? t('board.fixedRunway') : t('board.fixed'));
+        }
       }, HOLD_MS);
     }
   }
@@ -424,8 +427,9 @@ export default function BaseBoard({
         {drawn.map(({b, pad}) => {
           const isSel = selected === b.id;
           const isLifted = lifted?.id === b.id;
+          const vehicle = b.draw === 'vehicle';
           const x = isLifted ? lifted.x : pad.x;
-          const y = (isLifted ? lifted.y : pad.y) + PAD_H / 2;
+          const y = (isLifted ? lifted.y : pad.y) + (vehicle ? 0 : PAD_H / 2);
           return (
             <div
               key={b.id}
@@ -433,8 +437,8 @@ export default function BaseBoard({
               style={{
                 left: `${x * 100}%`,
                 top: `${y * 100}%`,
-                width: `${ART_W * 100}%`,
-                transform: 'translate(-50%, -100%)',
+                width: `${(vehicle ? VEHICLE_W : ART_W) * 100}%`,
+                transform: vehicle ? 'translate(-50%, -50%)' : 'translate(-50%, -100%)',
                 zIndex: isLifted ? 30 : 10 + Math.round(pad.y * 10),
               }}
             >

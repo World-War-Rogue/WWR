@@ -43,8 +43,9 @@ export async function arrange(
 ): Promise<ArrangeResult> {
   const building = BOARD_BUILDING_BY_ID[buildingId];
   if (!building) return {ok: false, error: 'No such building.'};
+  if (building.fixed) return {ok: false, error: `${building.name} stays on the runway.`};
   if (!PAD_BY_ID[padId]) return {ok: false, error: 'No such pad.'};
-  if (!padTakesBuildings(padId)) return {ok: false, error: 'That is the Task Force line, not a building pad.'};
+  if (!padTakesBuildings(padId)) return {ok: false, error: 'That pad is not for buildings.'};
 
   // Materialise the defaults for anything not yet stored, so the swap below
   // can reason about every building by row. INSERT OR IGNORE keeps rows the
