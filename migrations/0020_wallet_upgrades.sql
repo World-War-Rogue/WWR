@@ -8,10 +8,17 @@
 -- Design rules carried forward from 0001: the server is the only authority, and
 -- anything that must not race is decided by the DATABASE - a constraint or a
 -- conditional update - and never by a check followed by a write.
+--
+-- Line comments only, throughout - no C-style block comments anywhere in this
+-- file, not even inside a comment. Wrangler splits a migration on ';' and
+-- refuses any chunk that holds no statement, so a block-comment banner sitting
+-- between two statements fails the WHOLE file with "SQL code did not contain a
+-- statement [code: 7500]". That is what the first two attempts at this file did,
+-- and no other migration in this directory uses them.
 
-/* -------------------------------------------------------------------------- */
-/* Wallets                                                                    */
-/* -------------------------------------------------------------------------- */
+-- --------------------------------------------------------------------------
+-- Wallets
+-- --------------------------------------------------------------------------
 
 -- Command Credits are earned; Tokens are bought. Both spend on the same things
 -- and the player chooses the split. Balances live on the player rather than in
@@ -63,9 +70,9 @@ CREATE TABLE IF NOT EXISTS wallet_ledger (
 
 CREATE INDEX IF NOT EXISTS idx_wallet_ledger_player ON wallet_ledger(player_id, created_at);
 
-/* -------------------------------------------------------------------------- */
-/* Packages                                                                   */
-/* -------------------------------------------------------------------------- */
+-- --------------------------------------------------------------------------
+-- Packages
+-- --------------------------------------------------------------------------
 
 -- player_assets is rebuilt rather than ALTERed, because the constraint that
 -- matters is a TABLE-level one across two columns:
@@ -129,9 +136,9 @@ CREATE TABLE IF NOT EXISTS player_materials (
   CHECK (amount >= 0)
 );
 
-/* -------------------------------------------------------------------------- */
-/* Terrain seeds                                                              */
-/* -------------------------------------------------------------------------- */
+-- --------------------------------------------------------------------------
+-- Terrain seeds
+-- --------------------------------------------------------------------------
 
 -- shared/terrain.ts has documented these since the terrain rewrite and they
 -- were never actually added, which made the comment a lie and left every world
