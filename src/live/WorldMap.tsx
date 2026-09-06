@@ -21,7 +21,9 @@ import {
   api,
 } from '../net/api';
 import {EffectLayer, type EffectSource} from './effects';
-import {DEFAULT_SEASON, seasonSpec, terrainAt} from './terrain';
+import {DEFAULT_SEASON, seasonSpec} from './terrain';
+import {terrainAt} from '../../shared/terrain';
+import {onPropsLoaded, paintGround} from './terrainPaint';
 import {normaliseLoadout} from '../../shared/cosmetics';
 import {ALLEGIANCE, allegianceOf, drawAllegianceMarker} from './allegiance';
 import {artPending, onArtLoaded, skinIsAnimated} from './skinArt';
@@ -606,6 +608,15 @@ export default function WorldMap({
     return map;
   }, [view]);
 
+  /**
+   * Plots holding a base.
+   *
+   * Terrain props never draw on one. That is what keeps the art off a player
+   * who was already standing where a rock shelf would have grown, and it means
+   * no existing base is invalidated by terrain arriving underneath it.
+   */
+  const occupiedPlots = useMemo(() => new Set(basesByPlot.keys()), [basesByPlot]);
+
   const load = useCallback(async (cam: Camera, width: number, height: number) => {
     if (width === 0 || height === 0) return;
     const plotsW = Math.ceil(width / cam.zoom) + FETCH_MARGIN * 2;
@@ -754,53 +765,56 @@ export default function WorldMap({
 
     const extent = view?.world.extent ?? 200;
 
-    // Ground. Terrain is generated per plot rather than stored, so the season
-    // costs nothing in the database and nothing over the wire.
+    // Ground.
+    //
+    // Painted from a cached buffer rather than one filled rectangle per plot.
+    // The old loop sampled `terrainAt` once at each plot's integer coordinate
+    // and painted a hard square with shade reduced to a single bit, which is
+    // what made the map read as a grid: all the detail the noise already
+    // contained was thrown away before it reached a pixel, and biome edges
+    // snapped to plot corners. See src/live/terrainPaint.ts.
     const season = seasonSpec(DEFAULT_SEASON);
-    const showGrid = zoom > 26;
     const worldId = view?.world.id ?? 1001;
 
-    for (let py = firstY; py <= lastY; py += 1) {
-      for (let px = firstX; px <= lastX; px += 1) {
-        const sx = toScreenX(px);
-        const sy = toScreenY(py);
+    paintGround(ctx, {
+      worldId,
+      season: season.id,
+      extent,
+      cx,
+      cy,
+      zoom,
+      w,
+      h,
+      occupied: occupiedPlots,
+    });
 
-        if (Math.abs(px) > extent || Math.abs(py) > extent) {
-          ctx.fillStyle = season.voidColor;
-          ctx.fillRect(sx, sy, zoom + 1, zoom + 1);
-          continue;
-        }
-
-        const cell = terrainAt(worldId, season.id, extent, px, py);
-        const colours = season.biomes[cell.biome];
-        ctx.fillStyle = cell.shade > 0.5 ? colours.fill : colours.alt;
-        ctx.fillRect(sx, sy, zoom + 1, zoom + 1);
-
-        if (cell.feature === 'oasis') {
-          ctx.fillStyle = season.biomes.forest.fill;
-          ctx.beginPath();
-          ctx.arc(sx + zoom / 2, sy + zoom / 2, zoom * 0.44, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = colours.detail;
-          ctx.beginPath();
-          ctx.arc(sx + zoom / 2, sy + zoom / 2, zoom * 0.26, 0, Math.PI * 2);
-          ctx.fill();
-        } else if (cell.feature === 'wreck' && zoom > 20) {
-          // A freighter left stranded when the sea dried, canted over.
+    // The freighter the sea left behind.
+    //
+    // The one thing allowed to stand on the salt pan - the flats are meant to
+    // read empty, and this is the landmark that explains what the basin used to
+    // be. Everything else out there is deliberately nothing.
+    if (zoom > 20) {
+      for (let py = firstY; py <= lastY; py += 1) {
+        for (let px = firstX; px <= lastX; px += 1) {
+          if (Math.abs(px) > extent || Math.abs(py) > extent) continue;
+          const cell = terrainAt(worldId, season.id, extent, px, py);
+          if (cell.feature !== 'wreck') continue;
+          const wx = toScreenX(px);
+          const wy = toScreenY(py);
           ctx.save();
-          ctx.translate(sx + zoom / 2, sy + zoom / 2);
+          ctx.translate(wx + zoom / 2, wy + zoom / 2);
           ctx.rotate(cell.shade * 1.2 - 0.6);
-          ctx.fillStyle = '#4a4038';
-          ctx.fillRect(-zoom * 0.34, -zoom * 0.12, zoom * 0.68, zoom * 0.24);
-          ctx.fillStyle = '#6b5c4d';
-          ctx.fillRect(-zoom * 0.06, -zoom * 0.24, zoom * 0.18, zoom * 0.16);
+          ctx.fillStyle = 'rgba(60,45,28,0.26)';
+          ctx.beginPath();
+          ctx.ellipse(zoom * 0.06, zoom * 0.16, zoom * 0.42, zoom * 0.1, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#6b5a49';
+          ctx.fillRect(-zoom * 0.34, -zoom * 0.12, zoom * 0.68, zoom * 0.2);
+          ctx.fillStyle = '#8a7660';
+          ctx.fillRect(-zoom * 0.08, -zoom * 0.26, zoom * 0.2, zoom * 0.16);
+          ctx.fillStyle = '#4e4136';
+          ctx.fillRect(-zoom * 0.34, zoom * 0.05, zoom * 0.68, zoom * 0.05);
           ctx.restore();
-        }
-
-        if (showGrid) {
-          ctx.strokeStyle = 'rgba(0,0,0,0.10)';
-          ctx.lineWidth = 1;
-          ctx.strokeRect(sx + 0.5, sy + 0.5, zoom, zoom);
         }
       }
     }
@@ -965,6 +979,11 @@ export default function WorldMap({
   // A skin with a single still and no motion never starts the loop, so the
   // frame its art lands on has to be asked for explicitly.
   useEffect(() => onArtLoaded(() => forceDraw((n) => (n + 1) % 1_000_000)), []);
+
+  // The prop atlas is one image for the whole map. It arrives after the first
+  // paint, so the map draws complete without it and gains its props when it
+  // lands - the same bargain the skin atlases already make.
+  useEffect(() => onPropsLoaded(() => forceDraw((n) => (n + 1) % 1_000_000)), []);
 
   // Until combat exists, effects can be exercised from the console:
   //   wwrBurn(x, y)  - set a plot alight
