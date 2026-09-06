@@ -52,7 +52,6 @@ import {
   TASK_FORCE_PADS,
   padTakesBuildings,
 } from '../../shared/base';
-import {taskForceName} from './taskForce';
 
 /** A second tap after this is a new selection, not an open. */
 const DOUBLE_TAP_MS = 650;
@@ -418,7 +417,7 @@ export default function BaseBoard({
                 zIndex: 8,
               }}
             >
-              <span className="whitespace-nowrap font-semibold text-neutral-800/90">{taskForceName(squad)}</span>
+              <span className="whitespace-nowrap font-semibold uppercase tracking-wider text-neutral-800/90">{squad}</span>
               <span className={`mt-0.5 rounded bg-black/70 px-1.5 text-[0.85em] font-semibold ${tint}`}>{state}</span>
             </div>
           );
