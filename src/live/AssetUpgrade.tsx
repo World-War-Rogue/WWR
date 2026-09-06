@@ -17,7 +17,7 @@
  * the two ever disagree the server wins and says so.
  */
 import {useState} from 'react';
-import {assetArtUrl, nextVisualStage, visualStage} from '../../shared/assetVisuals';
+import {assetArtUrl, assetStageArtUrl, nextVisualStage, visualStage} from '../../shared/assetVisuals';
 
 import {
   type Asset,
@@ -272,12 +272,18 @@ export default function AssetUpgrade({
                       &rarr;
                     </span>
                     <div className="flex flex-col items-center">
-                      <img
-                        src={assetArtUrl(asset.id, next)!}
-                        alt=""
-                        decoding="async"
-                        className="h-28 w-28 object-contain"
-                      />
+                      {assetStageArtUrl(asset.id, next) ? (
+                        <img
+                          src={assetStageArtUrl(asset.id, next)!}
+                          alt=""
+                          decoding="async"
+                          className="h-28 w-28 object-contain"
+                        />
+                      ) : (
+                        <div className="flex h-28 w-28 items-center justify-center rounded border border-dashed border-neutral-700 text-[10px] uppercase tracking-[0.2em] text-neutral-600">
+                          Classified
+                        </div>
+                      )}
                       <p className="mt-1 text-xs text-neutral-200">
                         Stage {STAGE_LABEL[next]} of 6
                       </p>
