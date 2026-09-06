@@ -248,24 +248,49 @@ export default function AssetUpgrade({
           picture is the reason to rank up that no number on this sheet gives:
           at 10, 20, 30, 40 and 50 the machine visibly becomes more.
         */}
-        {assetArtUrl(asset.id, held.level) && (
-          <div className="mt-3 flex items-center gap-3 rounded border border-neutral-800 bg-neutral-900/40 p-2">
-            <img
-              src={assetArtUrl(asset.id, held.level)!}
-              alt=""
-              decoding="async"
-              className="h-28 w-28 shrink-0 object-contain"
-            />
-            <div className="min-w-0 text-xs text-neutral-400">
-              <p className="text-neutral-200">
-                Stage {STAGE_LABEL[visualStage(held.level)]} of 6
-              </p>
-              <p className="mt-1">
-                {nextVisualStage(held.level)
-                  ? `New look at Service Rank ${nextVisualStage(held.level)}.`
-                  : 'Final form.'}
-              </p>
-              <div className="mt-2 flex gap-1">
+        {assetArtUrl(asset.id, held.level) && (() => {
+          const now = visualStage(held.level);
+          const next = nextVisualStage(held.level);
+          return (
+            <div className="mt-3 rounded border border-neutral-800 bg-neutral-900/40 p-2">
+              <div className="flex items-center justify-around gap-2">
+                <div className="flex flex-col items-center">
+                  <img
+                    src={assetArtUrl(asset.id, now)!}
+                    alt=""
+                    decoding="async"
+                    className="h-28 w-28 object-contain"
+                  />
+                  <p className="mt-1 text-xs text-neutral-200">
+                    Stage {STAGE_LABEL[now]} of 6
+                  </p>
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-500">Now</p>
+                </div>
+                {next ? (
+                  <>
+                    <span className="text-2xl text-neutral-600" aria-hidden>
+                      &rarr;
+                    </span>
+                    <div className="flex flex-col items-center">
+                      <img
+                        src={assetArtUrl(asset.id, next)!}
+                        alt=""
+                        decoding="async"
+                        className="h-28 w-28 object-contain opacity-70 saturate-50"
+                      />
+                      <p className="mt-1 text-xs text-neutral-200">
+                        Stage {STAGE_LABEL[next]} of 6
+                      </p>
+                      <p className="text-[10px] uppercase tracking-[0.2em] text-orange-400">
+                        At Service Rank {next}
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-xs text-neutral-400">Final form.</p>
+                )}
+              </div>
+              <div className="mt-2 flex justify-center gap-1">
                 {([1, 10, 20, 30, 40, 50] as const).map((r) => (
                   <span
                     key={r}
@@ -276,8 +301,8 @@ export default function AssetUpgrade({
                 ))}
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         <div className="mt-3 flex items-center justify-between rounded border border-neutral-800 bg-neutral-900/50 px-3 py-2">
           <span className="text-[10px] uppercase tracking-[0.2em] text-neutral-600">Wallet</span>
