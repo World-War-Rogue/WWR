@@ -77,7 +77,7 @@ function Slot({
     >
       {asset ? (
         <span className="flex items-center gap-1.5">
-          <AssetIcon asset={asset} size={26} />
+          <AssetIcon asset={asset} size={26} level={level} />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-xs font-semibold text-neutral-100">
               {asset.name}
@@ -458,7 +458,7 @@ export default function Squads({
               return (
                 <>
                   <div className="flex items-center gap-2">
-                    <AssetIcon asset={held} size={32} />
+                    <AssetIcon asset={held} size={32} level={levels.get(held.id) ?? 1} />
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-neutral-100">
                         {held.name}
@@ -600,7 +600,7 @@ export default function Squads({
                             : 'border-neutral-900 bg-neutral-950/50 opacity-40'
                         }`}
                       >
-                        <AssetIcon asset={asset} size={28} />
+                        <AssetIcon asset={asset} size={28} level={levels.get(asset.id) ?? 1} />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-xs font-semibold text-neutral-100">
                             {asset.name}

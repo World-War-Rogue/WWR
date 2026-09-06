@@ -276,7 +276,7 @@ export default function AssetUpgrade({
                         src={assetArtUrl(asset.id, next)!}
                         alt=""
                         decoding="async"
-                        className="h-28 w-28 object-contain opacity-70 saturate-50"
+                        className="h-28 w-28 object-contain"
                       />
                       <p className="mt-1 text-xs text-neutral-200">
                         Stage {STAGE_LABEL[next]} of 6

@@ -17,6 +17,7 @@ import {
   ROLE_MARK,
 } from '../../shared/assetArt';
 import type {Asset} from '../../shared/assets';
+import {assetArtUrl} from '../../shared/assetVisuals';
 
 export default function AssetIcon({
   asset,
@@ -24,6 +25,7 @@ export default function AssetIcon({
   tint,
   heading = 0,
   showRole = true,
+  level,
 }: {
   asset: Asset;
   size?: number;
@@ -32,7 +34,26 @@ export default function AssetIcon({
   /** Degrees clockwise from north. The map turns these; screens leave them. */
   heading?: number;
   showRole?: boolean;
+  /**
+   * Service Rank, when the caller knows it: an asset with stage art draws
+   * that stage instead of the silhouette. Left out (or no art yet), the
+   * silhouette draws. The map never passes it - tokens stay vector.
+   */
+  level?: number;
 }) {
+  const art = level === undefined ? null : assetArtUrl(asset.id, level);
+  if (art && !tint && !heading) {
+    return (
+      <img
+        src={art}
+        alt={`${asset.name}, ${asset.category}`}
+        width={size}
+        height={size}
+        decoding="async"
+        style={{display: 'block', width: size, height: size, objectFit: 'contain'}}
+      />
+    );
+  }
   const colour = tint ?? CATEGORY_COLOUR[asset.category];
   // Below about twenty pixels the role mark stops being a shape and becomes
   // three dark pixels in the middle of the silhouette, which reads as damage

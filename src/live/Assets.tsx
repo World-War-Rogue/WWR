@@ -31,7 +31,6 @@ import {
 } from '../../shared/assets';
 import {counterWeb} from '../../shared/combat';
 import {PACKAGE_KEYS} from '../../shared/upgrades';
-import {assetArtUrl} from '../../shared/assetVisuals';
 
 const CATEGORIES: AssetCategory[] = [
   'armour',
@@ -115,19 +114,7 @@ function Card({
           is where the picture gets room.
         */}
         <span className="mt-0.5 shrink-0">
-          {assetArtUrl(asset.id, held?.level ?? 1) ? (
-            <img
-              src={assetArtUrl(asset.id, held?.level ?? 1)!}
-              alt=""
-              width={56}
-              height={56}
-              decoding="async"
-              loading="lazy"
-              className="h-14 w-14 object-contain"
-            />
-          ) : (
-            <AssetIcon asset={asset} size={34} />
-          )}
+          <AssetIcon asset={asset} size={held ? 56 : 34} level={held?.level ?? 1} />
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-neutral-100">{asset.name}</p>
