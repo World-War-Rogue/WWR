@@ -254,6 +254,24 @@ The UI must expose all five asset stats, every multiplier stage, HP, damage deal
 
 ## 7. Economy
 
+### Time-for-money progression contract
+
+WORLD WAR ROGUE intentionally supports two routes to meaningful progression. A player who spends Tokens may reach a legal progression target with much less active play time by funding the same published resource, Command Credit, module, queue, and acceleration shortfalls. A player who does not spend may reach that same legal target through substantially more server-verified activity: Daily Operations, map exercises, neutral contracts, alliance operations, production collection, and event participation.
+
+Paid progression is therefore valuable time compression, not an unreachable stat. Every combat-affecting resource, module, modifier, package, asset, and legal upgrade target sold for Tokens must expose at least one earned route. The earned route is intentionally slower and requires sustained active play; both routes retain the Season cap, Command Center cap, weekly limits, and minimum absolute timer floor.
+
+| Configuration key | Provisional value | Rule |
+|---|---:|---|
+| `TIME_FOR_MONEY_PARITY_ACTIVE_TIME_MULTIPLIER` | 4.0 | Target active-play time required by a fully engaged free route versus a Token-funded ordinary-shortfall route to the same legal progression target. Tune from live telemetry, never from client claims. |
+| `FREE_ROUTE_DAILY_ACTIVITY_TARGET` | server configured | Complete Daily Operations, map exercises, neutral/event contracts, and eligible alliance activity needed for the modelled active route. |
+| `TOKEN_ROUTE_EXCLUSIVE_COMBAT_STAT` | false | No combat stat, modifier, or asset power may exist only behind Token payment. |
+| `TOKEN_ROUTE_RESPECTS_MIN_TIMER_FLOOR` | true | Tokens may reduce eligible remaining time only to the published server timer floor. |
+| `PROGRESSION_ROUTE_DISCLOSURE_REQUIRED` | true | Every Store progression product shows the Token route and the available earn route/source. |
+
+For each progression target, the server balance tool must store `expectedFreeActiveMinutes`, `expectedFreeCalendarDays`, `expectedTokenActiveMinutes`, `requiredResources`, `earnedSources`, `tokenSources`, and `minimumTimerFloor`. The target passes validation only when it has both an earned route and a Token route where sold, and its measured time ratio is within the configurable parity band around `TIME_FOR_MONEY_PARITY_ACTIVE_TIME_MULTIPLIER`.
+
+The design outcome is deliberate: a high-time free player can keep building toward the same power, while a low-time spender can remain competitive by paying to compress the grind. A spender is not required to play every activity; an active free player is not permanently blocked by payment.
+
 ### Upgrade curves
 
 Rank and package currency cost for target level L:
@@ -398,6 +416,13 @@ Run 10,000 battles per assertion cell over at least 20 stable seeds. Fail CI whe
     "readinessRankCaps": [2,3,4,5,6,7,8,9,10,10],
     "tokenPerDollar": 10,
     "weeklyTokenCap": 10000
+  },
+  "timeForMoneyParity": {
+    "activeTimeMultiplier": 4.0,
+    "tokenRouteExclusiveCombatStat": false,
+    "tokenRouteRespectsMinimumTimerFloor": true,
+    "progressionRouteDisclosureRequired": true,
+    "freeRouteDailyActivityTarget": "server_configured"
   },
   "attributes": {
     "rankGrowth": 1.045,
@@ -615,7 +640,7 @@ Run 10,000 battles per assertion cell over at least 20 stable seeds. Fail CI whe
 
 | Decision | Options | Recommendation |
 |---|---|---|
-| Season-1 asset access | All 60 non-naval; staged release; starter subset | All 60 non-naval assets at launch; variety needs options. |
+| Season-1 asset access | All 60 non-naval; staged release; starter subset | Approved: six owned starter assets at signup, then six buildable blueprints at each Monday reset in Weeks 2–10. Use the fixed catalogue in `season-1-asset-unlock-schedule-v2.md`. |
 | Second queue | Permanent purchase; season rental; event reward | Permanent CC-or-Token speed purchase at Engineer level 10. |
 | Cosmetic Detection bonuses | Attack/defence only; all stats; category only | Allow small Detection and Mobility values, report every item. |
 | Raid severity | 25%, 50%, or 75% of unprotected stock | 50%, with Warehouse protection from this spec. |
