@@ -1,84 +1,105 @@
 /**
  * The base board.
  *
- * The inside of a base is a fixed painting of a salt-basin installation with
- * fifteen concrete pads. Buildings are art placed on pads; where a
- * building stands is the player's choice and changes nothing about what it
- * does. Placement is visual organisation only.
+ * The inside of a base is a fixed painting of a salt-basin installation -
+ * board v4 - with nineteen identical concrete pads. Buildings are art placed
+ * on pads; where a building stands is the player's choice and changes nothing
+ * about what it does. Placement is visual organisation only.
  *
- * Shared because the Worker validates a move (does that pad exist, is it the
- * reserved one, is that building movable) and the client draws the result,
- * and a board that the two sides describe differently is the Ravenkeep bug
+ * Shared because the Worker validates a move (does that pad exist, may a
+ * building stand on it, is that building movable) and the client draws the
+ * result, and a board the two sides describe differently is the Ravenkeep bug
  * again with pads instead of skins.
  *
- * Pad centres are normalised to the board image - x and y in 0..1 of its width
- * and height - taken from the designer's manifest. They are anchors, never
- * drawn.
+ * Every pad is the same size and faces the camera, so every building is drawn
+ * at the same width with no rotation and no per-pad scale. That is what makes
+ * "any building on any pad" true rather than approximately true, and it is
+ * why v1's tilted, perspective pads were replaced.
+ *
+ * Pad centres are the designer's v4 manifest, checked against the painting
+ * (every one lands on its slab). Fractions of the board's width and height.
  */
 import type {AssetCategory} from './assets';
 
-export const BOARD_IMAGE = '/base/board-salt-basin.webp';
+export const BOARD_IMAGE = '/base/board-v4.webp';
 /** Source pixels of the board painting; the aspect ratio is what matters. */
-export const BOARD_W = 941;
-export const BOARD_H = 1672;
+export const BOARD_W = 1080;
+export const BOARD_H = 1920;
 
-/** The one pad that is never offered: the Command Center's. */
-export const CENTRE_PAD = 'cc_01';
+/** Every pad is this size, as a fraction of the board. 190 x 120 px. */
+export const PAD_W = 190 / BOARD_W;
+export const PAD_H = 120 / BOARD_H;
+
+/**
+ * Building art is exported so its pedestal spans 0.94 of the canvas width;
+ * drawn at this width, the pedestal is exactly one pad wide.
+ */
+export const ART_W = PAD_W / 0.94;
+
+export type PadZone =
+  /** A general department pad. */
+  | 'pad'
+  /** The east flight line: five pads, the asset buildings' home by default. */
+  | 'runway'
+  /** The Task Force line outside the southern gate. Not a building pad. */
+  | 'taskforce';
 
 export interface Pad {
   id: string;
-  /** Centre of the slab, as a fraction of the board's width and height. */
   x: number;
   y: number;
-  /**
-   * Perspective. The painting is a raking three-quarter view, so a slab at the
-   * bottom of the board is drawn larger than one at the top; a building on it
-   * scales the same way or it reads as a toy. 1.0 is the centre island.
-   */
-  scale: number;
-  /**
-   * Degrees the slab is turned in the painting. The west compound is angled
-   * one way and the east compound the other; a building drawn square on an
-   * angled slab looks parked across it. Applied about the art's bottom centre.
-   */
-  tilt: number;
+  zone: PadZone;
 }
 
-/**
- * Measured from the painting, not copied from the manifest. The manifest's
- * fourteen coordinates put the centre pad on the wadi and every other pad on
- * a fence; these were found by detecting the slabs' concrete in the image.
- * The painting also has FIFTEEN slabs - the east compound holds five - so
- * there is one more pad than the manifest promised. It is naval's, later.
- */
 export const PADS: readonly Pad[] = [
-  {id: 'cc_01', x: 0.495, y: 0.409, scale: 1.0, tilt: 0},
-  {id: 'upper_01', x: 0.399, y: 0.13, scale: 0.8, tilt: 0},
-  {id: 'upper_02', x: 0.504, y: 0.116, scale: 0.8, tilt: 0},
-  {id: 'left_01', x: 0.241, y: 0.274, scale: 0.85, tilt: -7},
-  {id: 'left_02', x: 0.186, y: 0.338, scale: 0.9, tilt: -7},
-  {id: 'left_03', x: 0.147, y: 0.412, scale: 0.95, tilt: -7},
-  {id: 'left_04', x: 0.098, y: 0.503, scale: 1.0, tilt: -7},
-  {id: 'right_01', x: 0.789, y: 0.252, scale: 0.85, tilt: 7},
-  {id: 'right_02', x: 0.834, y: 0.312, scale: 0.9, tilt: 7},
-  {id: 'right_03', x: 0.865, y: 0.384, scale: 0.95, tilt: 7},
-  {id: 'right_04', x: 0.894, y: 0.47, scale: 1.0, tilt: 7},
-  {id: 'right_05', x: 0.905, y: 0.572, scale: 1.05, tilt: 7},
-  {id: 'lower_01', x: 0.246, y: 0.777, scale: 1.15, tilt: -3},
-  {id: 'lower_02', x: 0.479, y: 0.743, scale: 1.15, tilt: 0},
-  {id: 'lower_03', x: 0.709, y: 0.783, scale: 1.15, tilt: 3},
+  {id: 'upper_01', x: 0.25, y: 0.119792, zone: 'pad'},
+  {id: 'upper_02', x: 0.75, y: 0.119792, zone: 'pad'},
+  {id: 'left_01', x: 0.160185, y: 0.280208, zone: 'pad'},
+  {id: 'left_02', x: 0.160185, y: 0.4, zone: 'pad'},
+  {id: 'left_03', x: 0.160185, y: 0.519792, zone: 'pad'},
+  {id: 'left_04', x: 0.160185, y: 0.640104, zone: 'pad'},
+  {id: 'right_01', x: 0.839815, y: 0.2, zone: 'runway'},
+  {id: 'right_02', x: 0.839815, y: 0.319792, zone: 'runway'},
+  {id: 'right_03', x: 0.839815, y: 0.440104, zone: 'runway'},
+  {id: 'right_04', x: 0.839815, y: 0.559896, zone: 'runway'},
+  {id: 'right_05', x: 0.839815, y: 0.680208, zone: 'runway'},
+  {id: 'lower_01', x: 0.2, y: 0.759896, zone: 'pad'},
+  {id: 'lower_02', x: 0.4, y: 0.759896, zone: 'pad'},
+  {id: 'lower_03', x: 0.6, y: 0.759896, zone: 'pad'},
+  {id: 'lower_04', x: 0.8, y: 0.759896, zone: 'pad'},
+  {id: 'tf_01', x: 0.2, y: 0.940104, zone: 'taskforce'},
+  {id: 'tf_02', x: 0.4, y: 0.940104, zone: 'taskforce'},
+  {id: 'tf_03', x: 0.6, y: 0.940104, zone: 'taskforce'},
+  {id: 'tf_04', x: 0.8, y: 0.940104, zone: 'taskforce'},
 ] as const;
 
-/** Width of a building's art at scale 1, as a fraction of the board width. */
-export const BUILDING_WIDTH = 0.24;
-/**
- * The art's bottom edge sits this far below the slab's centre (fraction of
- * board height, before the pad's scale), so a building stands on the front
- * of its slab rather than on its far edge.
- */
-export const FOOT_DROP = 0.038;
-
 export const PAD_BY_ID: Record<string, Pad> = Object.fromEntries(PADS.map((p) => [p.id, p]));
+
+/** May a building be dropped here? The Task Force line is not a building pad. */
+export function padTakesBuildings(padId: string): boolean {
+  const pad = PAD_BY_ID[padId];
+  return !!pad && pad.zone !== 'taskforce';
+}
+
+/** The Task Force line, in order: which pad shows which Task Force. */
+export const TASK_FORCE_PADS: readonly {padId: string; squad: string}[] = [
+  {padId: 'tf_01', squad: 'Alpha'},
+  {padId: 'tf_02', squad: 'Bravo'},
+  {padId: 'tf_03', squad: 'Charlie'},
+  {padId: 'tf_04', squad: 'Delta'},
+];
+
+/**
+ * The Command Center is painted INTO the board at the top centre. It is not
+ * on a pad and has no art of its own; this is where it is, so it can be
+ * tapped and named like everything else. Fractions of the board.
+ */
+export const COMMAND_CENTER_BOX = {
+  x: 375 / BOARD_W,
+  y: 7 / BOARD_H,
+  w: 330 / BOARD_W,
+  h: 330 / BOARD_H,
+};
 
 /**
  * What double-tapping a building opens. A closed set on purpose: the client
@@ -95,97 +116,65 @@ export interface BoardBuilding {
   /** English name; the string table carries translations keyed on the id. */
   name: string;
   /**
-   * Runtime art: 512x720, transparent, bottom-centre anchored, with every
-   * building's own slab scaled to the same width - so any building fits any
-   * pad, and a tall one (missile tubes, a rotor mast) simply rises higher.
+   * Runtime art: 512 wide, transparent, bottom-centre anchored, pedestal at
+   * 0.94 of the width. Any height. Nothing is rotated or scaled per pad.
    */
   art: string;
-  movable: boolean;
-  /** Art width relative to BUILDING_WIDTH. The Command Center is the big one. */
-  size: number;
-  /** Vertical stretch of the art, about its base. 1 leaves it as drawn. */
-  stretch: number;
   /** Where it stands until the player moves it. Every default is distinct. */
   defaultPad: string;
   entry: BuildingEntry;
 }
 
+export const COMMAND_CENTER_ID = 'command_center';
+export const COMMAND_CENTER_ENTRY: BuildingEntry = {kind: 'command_center'};
+
 /**
- * The buildings that exist today. Seven of fourteen pads. The rest of the
- * installation - fuel, steel, munitions, alloy, storage, the operations centre,
- * the trading post - arrives as its art and its design do, one row each.
- *
- * Naval has no building until there is water on the map.
+ * The movable buildings that exist today: the Depot and the five asset
+ * buildings. The rest of the installation - fuel, steel, munitions, alloy,
+ * storage, the operations centre, the trading post - arrives as its art and
+ * its design do, one row each. Naval has no building until there is water.
  */
 export const BOARD_BUILDINGS: readonly BoardBuilding[] = [
-  {
-    id: 'command_center',
-    name: 'Command Center',
-    art: '/base/command-center.webp',
-    movable: false,
-    size: 1.25,
-    stretch: 1.1,
-    defaultPad: CENTRE_PAD,
-    entry: {kind: 'command_center'},
-  },
   {
     id: 'depot',
     name: 'Depot',
     art: '/base/maintenance-depot.webp',
-    movable: true,
-    size: 1,
-    stretch: 1,
     defaultPad: 'lower_02',
     entry: {kind: 'depot'},
   },
   {
     id: 'armour_hub',
-    name: 'Armour Command Tank',
+    name: 'Armour Building',
     art: '/base/building-armour.webp',
-    movable: true,
-    size: 0.85,
-    stretch: 1,
-    defaultPad: 'left_02',
+    defaultPad: 'right_01',
     entry: {kind: 'assets', category: 'armour'},
   },
   {
     id: 'artillery_hub',
-    name: 'Artillery Command Platform',
+    name: 'Missile Building',
     art: '/base/building-artillery.webp',
-    movable: true,
-    size: 0.85,
-    stretch: 1,
-    defaultPad: 'left_03',
+    defaultPad: 'right_02',
     entry: {kind: 'assets', category: 'artillery'},
   },
   {
     id: 'rotary_hub',
-    name: 'Rotary Wing Command Helicopter',
+    name: 'Helicopter Building',
     art: '/base/building-rotary.webp',
-    movable: true,
-    size: 0.85,
-    stretch: 1,
-    defaultPad: 'right_02',
+    defaultPad: 'right_03',
     entry: {kind: 'assets', category: 'rotary'},
   },
   {
     id: 'fixed_wing_hub',
-    name: 'Fixed Wing Command Jet',
+    name: 'Fixed-Wing Building',
     art: '/base/building-fixed-wing.webp',
-    movable: true,
-    size: 0.85,
-    stretch: 1,
-    defaultPad: 'right_03',
+    defaultPad: 'right_04',
     entry: {kind: 'assets', category: 'fixed_wing'},
   },
   {
     id: 'drone_hub',
-    name: 'Drone Operations Aircraft',
+    name: 'Drone Building',
     art: '/base/building-drone.webp',
-    movable: true,
-    size: 0.85,
-    stretch: 1,
-    defaultPad: 'upper_01',
+    defaultPad: 'right_05',
     entry: {kind: 'assets', category: 'drone'},
   },
 ] as const;
@@ -205,21 +194,27 @@ export function defaultPlacements(): Placement[] {
 }
 
 /**
- * Stored rows over the defaults. A building added after a player last
- * arranged their base has no row, and takes its default pad - unless a moved
- * building already stands there, in which case it takes the first free pad,
- * so two buildings never draw on top of each other whatever the history.
+ * Stored rows over the defaults. Rows for buildings that no longer exist (the
+ * v1 board stored the Command Center on a pad) and rows on pads that no
+ * longer take buildings are ignored. A building with no usable row takes its
+ * default pad - unless something already stands there, in which case it takes
+ * the first free pad, so two buildings never draw on top of each other
+ * whatever the history.
  */
 export function resolvePlacements(stored: readonly Placement[]): Placement[] {
-  const byBuilding = new Map(stored.map((p) => [p.buildingId, p.padId]));
+  const byBuilding = new Map<string, string>();
+  for (const p of stored) {
+    if (BOARD_BUILDING_BY_ID[p.buildingId] && padTakesBuildings(p.padId)) {
+      byBuilding.set(p.buildingId, p.padId);
+    }
+  }
   const taken = new Set(byBuilding.values());
   const out: Placement[] = [];
   for (const b of BOARD_BUILDINGS) {
     let pad = byBuilding.get(b.id);
-    if (!b.movable) pad = b.defaultPad;
     if (pad === undefined) {
       pad = taken.has(b.defaultPad)
-        ? PADS.find((p) => p.id !== CENTRE_PAD && !taken.has(p.id))?.id ?? b.defaultPad
+        ? PADS.find((p) => padTakesBuildings(p.id) && !taken.has(p.id))?.id ?? b.defaultPad
         : b.defaultPad;
       taken.add(pad);
     }
@@ -234,11 +229,14 @@ export function auditBoard(): string[] {
   const pads = new Set<string>();
   for (const b of BOARD_BUILDINGS) {
     if (!PAD_BY_ID[b.defaultPad]) faults.push(`${b.id}: default pad ${b.defaultPad} does not exist`);
+    if (!padTakesBuildings(b.defaultPad)) faults.push(`${b.id}: default pad ${b.defaultPad} takes no buildings`);
     if (pads.has(b.defaultPad)) faults.push(`${b.id}: default pad ${b.defaultPad} used twice`);
     pads.add(b.defaultPad);
-    if (b.movable && b.defaultPad === CENTRE_PAD) faults.push(`${b.id}: movable building on the centre pad`);
-    if (!b.movable && b.defaultPad !== CENTRE_PAD) faults.push(`${b.id}: fixed building off the centre pad`);
   }
-  if (PADS.length !== 15) faults.push(`expected 15 pads, found ${PADS.length}`);
+  if (PADS.length !== 19) faults.push(`expected 19 pads, found ${PADS.length}`);
+  if (PADS.filter((p) => p.zone === 'taskforce').length !== 4) faults.push('expected 4 Task Force pads');
+  for (const tf of TASK_FORCE_PADS) {
+    if (PAD_BY_ID[tf.padId]?.zone !== 'taskforce') faults.push(`${tf.padId} is not a Task Force pad`);
+  }
   return faults;
 }

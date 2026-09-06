@@ -3,15 +3,19 @@ export const BASE = {
   // Building names, keyed on the ids in shared/base.ts
   'building.command_center': 'Command Center',
   'building.depot': 'Depot',
-  'building.armour_hub': 'Armour Command Tank',
-  'building.artillery_hub': 'Artillery Command Platform',
-  'building.rotary_hub': 'Rotary Wing Command Helicopter',
-  'building.fixed_wing_hub': 'Fixed Wing Command Jet',
-  'building.drone_hub': 'Drone Operations Aircraft',
+  'building.armour_hub': 'Armour Building',
+  'building.artillery_hub': 'Missile Building',
+  'building.rotary_hub': 'Helicopter Building',
+  'building.fixed_wing_hub': 'Fixed-Wing Building',
+  'building.drone_hub': 'Drone Building',
 
   // The board
   'board.level': 'Level {level}',
   'board.fixed': 'The Command Center stays where it is.',
+  'board.tfLine': 'That is the Task Force line.',
+  'board.tfHome': 'Home',
+  'board.tfOut': 'Out',
+  'board.tfEmpty': 'Empty',
   'board.openHint': 'Tap again to open · hold to move',
   'board.clockUnknown': 'RST --:--',
 

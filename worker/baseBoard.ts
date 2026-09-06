@@ -13,11 +13,11 @@ import {
   BOARD_BUILDING_BY_ID,
   BOARD_H,
   BOARD_W,
-  CENTRE_PAD,
   PADS,
   PAD_BY_ID,
   type Placement,
   defaultPlacements,
+  padTakesBuildings,
   resolvePlacements,
 } from '../shared/base';
 
@@ -43,9 +43,8 @@ export async function arrange(
 ): Promise<ArrangeResult> {
   const building = BOARD_BUILDING_BY_ID[buildingId];
   if (!building) return {ok: false, error: 'No such building.'};
-  if (!building.movable) return {ok: false, error: `${building.name} cannot be moved.`};
   if (!PAD_BY_ID[padId]) return {ok: false, error: 'No such pad.'};
-  if (padId === CENTRE_PAD) return {ok: false, error: 'That pad is reserved for the Command Center.'};
+  if (!padTakesBuildings(padId)) return {ok: false, error: 'That is the Task Force line, not a building pad.'};
 
   // Materialise the defaults for anything not yet stored, so the swap below
   // can reason about every building by row. INSERT OR IGNORE keeps rows the
@@ -73,9 +72,6 @@ export async function arrange(
   if (occupant === null) {
     await move(buildingId, padId).run();
   } else {
-    if (!BOARD_BUILDING_BY_ID[occupant]?.movable) {
-      return {ok: false, error: 'That building cannot be moved.'};
-    }
     // Where the occupant goes: the nearest pad nobody stands on, measured
     // from the pad it is losing. The mover's old pad is free by then, so a
     // drop onto a neighbour is a plain swap and a drop across the base sends
@@ -85,7 +81,7 @@ export async function arrange(
     let to = from;
     let best = Infinity;
     for (const pad of PADS) {
-      if (pad.id === CENTRE_PAD || pad.id === padId || taken.has(pad.id)) continue;
+      if (!padTakesBuildings(pad.id) || pad.id === padId || taken.has(pad.id)) continue;
       const d = Math.hypot((pad.x - target.x) * BOARD_W, (pad.y - target.y) * BOARD_H);
       if (d < best) {
         best = d;

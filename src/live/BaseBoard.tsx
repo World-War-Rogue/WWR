@@ -31,21 +31,27 @@ import {
   useState,
 } from 'react';
 import {type MessageKey, t} from '../i18n';
-import {type BaseView, ApiError, api} from '../net/api';
+import {type BaseView, type SquadView, ApiError, api} from '../net/api';
 import {
+  ART_W,
   BOARD_BUILDINGS,
   BOARD_BUILDING_BY_ID,
   BOARD_H,
   BOARD_IMAGE,
   BOARD_W,
-  BUILDING_WIDTH,
+  COMMAND_CENTER_BOX,
+  COMMAND_CENTER_ENTRY,
+  COMMAND_CENTER_ID,
+  PAD_H,
+  PAD_W,
+  PADS,
   type BoardBuilding,
   type BuildingEntry,
-  CENTRE_PAD,
-  FOOT_DROP,
-  PADS,
   type Placement,
+  TASK_FORCE_PADS,
+  padTakesBuildings,
 } from '../../shared/base';
+import {taskForceName} from './taskForce';
 
 /** A second tap after this is a new selection, not an open. */
 const DOUBLE_TAP_MS = 650;
@@ -56,9 +62,10 @@ const SLOP_PX = 10;
 /** A drop lands on the nearest pad if it is within this fraction of board width. */
 const DROP_REACH = 0.14;
 
-function buildingName(b: BoardBuilding): string {
+function buildingName(b: BoardBuilding | {id: string; name: string}): string {
   return t(`building.${b.id}` as MessageKey) || b.name;
 }
+const COMMAND_CENTER = {id: COMMAND_CENTER_ID, name: 'Command Center'};
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
@@ -86,7 +93,21 @@ export default function BaseBoard({
   const [selected, setSelected] = useState<string | null>(null);
   const [lifted, setLifted] = useState<{id: string; x: number; y: number} | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [forces, setForces] = useState<SquadView | null>(null);
   const lastTap = useRef<{id: string; at: number}>({id: '', at: 0});
+
+  // The Task Force line: which of Alpha-Delta are home. Read when the base
+  // opens; a march launched from the map is a screen away and refreshes it.
+  useEffect(() => {
+    let live = true;
+    api
+      .squads()
+      .then((v) => live && setForces(v))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [base.serverTime]);
 
   useEffect(() => {
     const el = box.current;
@@ -125,13 +146,13 @@ export default function BaseBoard({
   }
 
   function tapBuilding(id: string) {
-    const b = BOARD_BUILDING_BY_ID[id];
-    if (!b) return;
+    const entry = id === COMMAND_CENTER_ID ? COMMAND_CENTER_ENTRY : BOARD_BUILDING_BY_ID[id]?.entry;
+    if (!entry) return;
     const at = Date.now();
     const prev = lastTap.current;
     lastTap.current = {id, at};
     if (selected === id && prev.id === id && at - prev.at < DOUBLE_TAP_MS) {
-      onOpen(b.entry);
+      onOpen(entry);
       return;
     }
     setSelected(id);
@@ -149,7 +170,7 @@ export default function BaseBoard({
     let best: string | null = null;
     let bestD = DROP_REACH;
     for (const p of PADS) {
-      if (p.id === CENTRE_PAD) continue;
+      if (!padTakesBuildings(p.id)) continue;
       const d = Math.hypot(p.x - x, (p.y - y) * (BOARD_H / BOARD_W));
       if (d < bestD) {
         bestD = d;
@@ -178,7 +199,8 @@ export default function BaseBoard({
 
   function onDown(e: ReactPointerEvent, id: string | null) {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
-    const b = id ? BOARD_BUILDING_BY_ID[id] : null;
+    const b = id ? BOARD_BUILDING_BY_ID[id] ?? null : null;
+    const fixed = id === COMMAND_CENTER_ID;
     const p: NonNullable<typeof press.current> = {
       id,
       startX: e.clientX,
@@ -191,7 +213,7 @@ export default function BaseBoard({
     };
     press.current = p;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    if (b?.movable) {
+    if (b) {
       p.timer = window.setTimeout(() => {
         if (press.current === p && p.mode === 'undecided') {
           p.mode = 'lift';
@@ -201,7 +223,7 @@ export default function BaseBoard({
           if (navigator.vibrate) navigator.vibrate(12);
         }
       }, HOLD_MS);
-    } else if (b && !b.movable) {
+    } else if (fixed) {
       p.timer = window.setTimeout(() => {
         if (press.current === p && p.mode === 'undecided') setNote(t('board.fixed'));
       }, HOLD_MS);
@@ -257,6 +279,7 @@ export default function BaseBoard({
   const drawn = [...BOARD_BUILDINGS]
     .map((b) => ({b, pad: PADS.find((p) => p.id === (padOf.get(b.id) ?? b.defaultPad))!}))
     .sort((p, q) => p.pad.y - q.pad.y);
+  const ccSel = selected === COMMAND_CENTER_ID;
 
   const targetPad = lifted ? nearestPad(lifted.x, lifted.y) : null;
 
@@ -304,7 +327,7 @@ export default function BaseBoard({
 
         {/* Pads light up only while something is lifted. */}
         {lifted &&
-          PADS.filter((p) => p.id !== CENTRE_PAD).map((pad) => (
+          PADS.filter((p) => padTakesBuildings(p.id)).map((pad) => (
             <div
               key={pad.id}
               className={`pointer-events-none absolute rounded-md border-2 border-dashed transition ${
@@ -315,19 +338,94 @@ export default function BaseBoard({
               style={{
                 left: `${pad.x * 100}%`,
                 top: `${pad.y * 100}%`,
-                width: `${18 * pad.scale}%`,
-                height: `${5.5 * pad.scale}%`,
+                width: `${PAD_W * 100}%`,
+                height: `${PAD_H * 100}%`,
                 transform: 'translate(-50%, -50%)',
                 zIndex: 5,
               }}
             />
           ))}
 
+        {/*
+          The Command Center is painted into the board, so this is a hit box
+          over the painting - tap to name it, tap again to open, hold to be
+          told it stays put - with the label drawn where a roof would be.
+        */}
+        <div
+          className="absolute"
+          style={{
+            left: `${COMMAND_CENTER_BOX.x * 100}%`,
+            top: `${COMMAND_CENTER_BOX.y * 100}%`,
+            width: `${COMMAND_CENTER_BOX.w * 100}%`,
+            height: `${COMMAND_CENTER_BOX.h * 100}%`,
+            zIndex: 12,
+            touchAction: 'none',
+          }}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            onDown(e, COMMAND_CENTER_ID);
+          }}
+          onPointerMove={onMove}
+          onPointerUp={onUp}
+          onPointerCancel={onCancel}
+          onDoubleClick={() => onOpen(COMMAND_CENTER_ENTRY)}
+        >
+          {ccSel && !lifted && (
+            <div
+              className="pointer-events-none absolute inset-x-0 top-[62%] z-20 flex flex-col items-center"
+              style={{fontSize: labelPx}}
+            >
+              <span className="whitespace-nowrap rounded bg-black/80 px-2 py-0.5 font-semibold text-neutral-50 shadow">
+                {buildingName(COMMAND_CENTER)}
+                <span className="text-orange-300"> · {t('board.level', {level: ccLevel})}</span>
+              </span>
+              <span className="mt-0.5 rounded bg-black/60 px-1.5 text-[0.8em] text-neutral-300">
+                {t('board.openHint')}
+              </span>
+            </div>
+          )}
+          {ccSel && !lifted && (
+            <div className="pointer-events-none absolute inset-[6%] rounded-lg ring-2 ring-white/70" />
+          )}
+        </div>
+
+        {/*
+          The Task Force line. Four fixed slabs outside the southern gate, one
+          per Task Force, saying whether it is home. Not building pads: nothing
+          drops here, and the label is the only thing drawn until there is art
+          for a parked Task Force.
+        */}
+        {TASK_FORCE_PADS.map(({padId, squad}) => {
+          const pad = PADS.find((p) => p.id === padId)!;
+          const filled = (forces?.squads[squad] ?? []).filter(Boolean).length;
+          const out = forces?.away.includes(squad) ?? false;
+          const state = !forces ? '' : out ? t('board.tfOut') : filled === 0 ? t('board.tfEmpty') : t('board.tfHome');
+          const tint = out ? 'text-orange-300' : filled === 0 ? 'text-neutral-500' : 'text-emerald-300';
+          return (
+            <div
+              key={padId}
+              className="pointer-events-none absolute flex flex-col items-center justify-center text-center"
+              style={{
+                left: `${pad.x * 100}%`,
+                top: `${pad.y * 100}%`,
+                width: `${PAD_W * 100}%`,
+                height: `${PAD_H * 100}%`,
+                transform: 'translate(-50%, -50%)',
+                fontSize: labelPx * 0.85,
+                zIndex: 8,
+              }}
+            >
+              <span className="whitespace-nowrap font-semibold text-neutral-800/90">{taskForceName(squad)}</span>
+              <span className={`mt-0.5 rounded bg-black/70 px-1.5 text-[0.85em] font-semibold ${tint}`}>{state}</span>
+            </div>
+          );
+        })}
+
         {drawn.map(({b, pad}) => {
           const isSel = selected === b.id;
           const isLifted = lifted?.id === b.id;
           const x = isLifted ? lifted.x : pad.x;
-          const y = isLifted ? lifted.y + FOOT_DROP * pad.scale : pad.y + FOOT_DROP * pad.scale;
+          const y = (isLifted ? lifted.y : pad.y) + PAD_H / 2;
           return (
             <div
               key={b.id}
@@ -335,7 +433,7 @@ export default function BaseBoard({
               style={{
                 left: `${x * 100}%`,
                 top: `${y * 100}%`,
-                width: `${BUILDING_WIDTH * pad.scale * b.size * 100}%`,
+                width: `${ART_W * 100}%`,
                 transform: 'translate(-50%, -100%)',
                 zIndex: isLifted ? 30 : 10 + Math.round(pad.y * 10),
               }}
@@ -347,9 +445,6 @@ export default function BaseBoard({
                 >
                   <span className="whitespace-nowrap rounded bg-black/80 px-2 py-0.5 font-semibold text-neutral-50 shadow">
                     {buildingName(b)}
-                    {b.id === 'command_center' && (
-                      <span className="text-orange-300"> · {t('board.level', {level: ccLevel})}</span>
-                    )}
                   </span>
                   <span className="mt-0.5 rounded bg-black/60 px-1.5 text-[0.8em] text-neutral-300">
                     {t('board.openHint')}
@@ -372,11 +467,7 @@ export default function BaseBoard({
                 className={`block w-full cursor-pointer ${
                   isLifted ? 'brightness-110 drop-shadow-[0_0_14px_rgba(251,191,36,0.9)]' : ''
                 } ${isSel && !lifted ? 'drop-shadow-[0_0_10px_rgba(255,255,255,0.7)]' : ''}`}
-                style={{
-                  touchAction: 'none',
-                  transformOrigin: '50% 100%',
-                  transform: `rotate(${isLifted ? 0 : pad.tilt}deg) scaleY(${b.stretch})${isLifted ? ' scale(1.05)' : ''}`,
-                }}
+                style={{touchAction: 'none', transform: isLifted ? 'scale(1.05)' : undefined}}
               />
             </div>
           );
