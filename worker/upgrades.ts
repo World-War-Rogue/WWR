@@ -364,7 +364,18 @@ export async function packageUp(
           WHERE player_id = ?1 AND asset_id = ?3 AND ${column} = ?4 AND ?2 <= level
             AND EXISTS (SELECT 1 FROM players WHERE id = ?1 AND wallet_rev = ?5)`,
       )
-      .bind(playerId, target, assetId, current, wallet.rev + 1, chosen.credits),
+      // The WHOLE cost, however it was paid. Tokens spent on a package convert
+      // to Command Credits when it is stripped - Matt's call, 2026-09-06,
+      // replacing "Tokens are not refunded" from decision 13.
+      //
+      // It resolves the thing that rule was protecting against without the side
+      // that was unfair: a paid currency never comes back as paid currency, so
+      // nothing is laundered, but a player who bought with Tokens does not lose
+      // the value either. The consequence to keep an eye on is that fit-then-
+      // strip is now a 1:1 Token-to-Credit conversion, and therefore sets that
+      // exchange rate by accident. A haircut on the Token-paid share closes it
+      // if that is ever unwanted.
+      .bind(playerId, target, assetId, current, wallet.rev + 1, chosen.credits + chosen.tokens),
     ledger(
       db,
       playerId,
@@ -403,6 +414,8 @@ export async function resetPackages(
     (k) => (asset[PACKAGE_COLUMN[k] as keyof AssetRow] as number) > 1,
   );
   if (!fitted) return {ok: false, error: 'Nothing fitted to strip.'};
+  // `pkg_credits` holds the whole cost of the fittings whatever it was paid in,
+  // so a strip refunds in Command Credits either way.
 
   const refund = asset.pkg_credits;
   const wallet = await settleWallet(db, playerId, now);

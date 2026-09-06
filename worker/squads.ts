@@ -1,10 +1,29 @@
 /**
  * Rosters and squads.
  *
- * Two server rules carry this file. An asset may sit in exactly one squad, and
- * a squad may not exceed its lift budget. Both are checked here and neither is
- * trusted from the browser: a client that decides what fits is a client that
- * fields six Abrams.
+ * One server rule carries this file: an asset may sit in exactly one squad. It
+ * is enforced by a unique index rather than by a check, because two drags in the
+ * same instant would both read the asset as free and both write it.
+ *
+ * ── The lift budget is gone ───────────────────────────────────────────────
+ *
+ * A squad used to be capped by the total lift of its assets, so six Abrams did
+ * not fit. Removed on Matt's call, 2026-09-06: any six assets, in any squad, in
+ * any combination.
+ *
+ * What that gives up is worth writing down, because the argument will come back.
+ * Lift was the thing that made squad-building a decision rather than a ranking -
+ * with it gone, nothing stops the strongest six being the answer every time. The
+ * pressure toward mixing is now entirely combat-side: the counter ring, and the
+ * band-exposure penalty that punishes a squad with no answer to a band. Six
+ * tanks is all close-band, so it pays that penalty - but that penalty was tuned
+ * as one of two constraints and is now the only one.
+ *
+ * The other cost is that Motor Pool, Airfield and Barracks no longer affect
+ * squads at all. Raising the lift budget was their entire purpose.
+ *
+ * `lift` itself stays on the asset. It still sets each asset's attribute point
+ * budget, which is the whole reason bigger assets have bigger numbers.
  */
 import {
   ASSET_BY_ID,
@@ -12,7 +31,6 @@ import {
   SQUAD_NAMES,
   SQUAD_SLOTS,
   type SquadName,
-  squadLiftBudget,
 } from '../shared/assets';
 import {type Packages, assetPowerWith, packagesFromRow} from '../shared/upgrades';
 
@@ -103,14 +121,6 @@ export async function readSquads(db: D1Database, playerId: string): Promise<Squa
   return board;
 }
 
-/** Lift already committed to a squad, ignoring one slot being changed. */
-function liftOfSquad(board: SquadBoard, squad: SquadName, ignoreSlot: number): number {
-  return board[squad].reduce<number>((sum, id, index) => {
-    if (index === ignoreSlot || !id) return sum;
-    return sum + (ASSET_BY_ID[id]?.lift ?? 0);
-  }, 0);
-}
-
 export type AssignResult = {ok: true} | {ok: false; error: string};
 
 /**
@@ -138,7 +148,6 @@ export async function assignSlot(
   squad: SquadName,
   slot: number,
   assetId: string | null,
-  buildingLevels: {motor_pool: number; airfield: number; barracks: number},
   away: Set<string>,
 ): Promise<AssignResult> {
   if (slot < 0 || slot >= SQUAD_SLOTS) return {ok: false, error: 'No such slot.'};
@@ -169,15 +178,6 @@ export async function assignSlot(
     if (away.has(name) && board[name].includes(assetId)) {
       return {ok: false, error: `${asset.name} is out with ${name}.`};
     }
-  }
-
-  const budget = squadLiftBudget(buildingLevels);
-  const wouldUse = liftOfSquad(board, squad, slot) + asset.lift;
-  if (wouldUse > budget) {
-    return {
-      ok: false,
-      error: `${asset.name} needs ${asset.lift} lift and ${squad} has ${budget - liftOfSquad(board, squad, slot)} left. Raise the Motor Pool, Airfield or Barracks.`,
-    };
   }
 
   // Two writes, one batch: take the asset out of wherever it was, then put it
@@ -220,6 +220,12 @@ export function squadPower(
   }, 0);
 }
 
+/**
+ * Total lift standing in a squad.
+ *
+ * Nothing is refused for exceeding anything any more - this is a readout, kept
+ * because the weight of a squad is still worth seeing.
+ */
 export function squadLiftUsed(board: SquadBoard, squad: SquadName): number {
   return board[squad].reduce<number>(
     (sum, id) => sum + (id ? ASSET_BY_ID[id]?.lift ?? 0 : 0),
@@ -246,7 +252,6 @@ export async function moveSlot(
   playerId: string,
   from: {squad: SquadName; slot: number},
   to: {squad: SquadName; slot: number},
-  buildingLevels: {motor_pool: number; airfield: number; barracks: number},
   away: Set<string>,
 ): Promise<AssignResult> {
   if (from.slot < 0 || from.slot >= SQUAD_SLOTS) return {ok: false, error: 'No such slot.'};
@@ -262,23 +267,6 @@ export async function moveSlot(
   const moving = board[from.squad]?.[from.slot] ?? null;
   if (!moving) return {ok: false, error: 'Nothing to move.'};
   const displaced = board[to.squad]?.[to.slot] ?? null;
-
-  // Within one squad a swap changes nothing about its lift, so only a move
-  // between squads needs checking - and then both ends do.
-  if (from.squad !== to.squad) {
-    const budget = squadLiftBudget(buildingLevels);
-    const movingLift = ASSET_BY_ID[moving]?.lift ?? 0;
-    const displacedLift = displaced ? ASSET_BY_ID[displaced]?.lift ?? 0 : 0;
-
-    const toAfter = squadLiftUsed(board, to.squad) - displacedLift + movingLift;
-    if (toAfter > budget) {
-      return {ok: false, error: `${to.squad} cannot carry that. ${toAfter} of ${budget} lift.`};
-    }
-    const fromAfter = squadLiftUsed(board, from.squad) - movingLift + displacedLift;
-    if (fromAfter > budget) {
-      return {ok: false, error: `${from.squad} cannot carry that. ${fromAfter} of ${budget} lift.`};
-    }
-  }
 
   // Clear both rows first, then write both. The unique index on
   // (player_id, asset_id) means an asset cannot briefly exist in two slots, so

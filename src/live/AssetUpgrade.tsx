@@ -18,13 +18,23 @@
  */
 import {useState} from 'react';
 
-import {type Asset, ASSET_MAX_LEVEL, ATTRIBUTE_MAX, maxRankForSeason} from '../../shared/assets';
+import {
+  type Asset,
+  ASSET_MAX_LEVEL,
+  ATTRIBUTE_MAX,
+  SEASON_GAIN,
+  attributeAtLevel,
+  maxRankForSeason,
+} from '../../shared/assets';
 import {packageCost, rankCost} from '../../shared/economy';
 import {
   type PackageKey,
+  INTEGRATION_MAX_POINTS,
+  INTEGRATION_POINTS_PER_RANK,
   PACKAGE_ATTRIBUTE,
   PACKAGE_KEYS,
   PACKAGE_LABEL,
+  PACKAGE_POINTS_PER_RANK,
   assetPowerWith,
   attributesWith,
   packageCeiling,
@@ -56,9 +66,13 @@ function Money({tokens, credits}: Wallet) {
 /**
  * One buyable track.
  *
- * `ceiling` is what stops it, and saying WHY it stopped is the whole job of
- * this row - a disabled button with no reason is a bug as far as a player is
- * concerned, which is the same rule the squad chooser already follows.
+ * `reason` is what stops it, and saying WHY it stopped is the whole job of this
+ * row - a disabled button with no reason is a bug as far as a player is
+ * concerned, which is the same rule the squad chooser follows.
+ *
+ * `explain` is the (i): what the track does and what this particular purchase
+ * is worth, in the player's own numbers rather than in the abstract. Collapsed
+ * by default, because five open explanations is a wall of text on a phone.
  */
 function Track({
   label,
@@ -70,6 +84,7 @@ function Track({
   busy,
   onBuy,
   note,
+  explain,
 }: {
   label: string;
   rank: number;
@@ -80,24 +95,49 @@ function Track({
   busy: boolean;
   onBuy: () => void;
   note?: string;
+  explain: {what: string; gain: string};
 }) {
+  const [open, setOpen] = useState(false);
   return (
-    <div className="flex items-center gap-3 border-t border-neutral-900 py-2">
-      <div className="min-w-0 flex-1">
-        <p className="text-sm text-neutral-200">
-          {label} <span className="font-mono text-neutral-500">{rank}</span>
-          <span className="font-mono text-neutral-700"> / {ceiling}</span>
-        </p>
-        {note && <p className="text-[10px] text-neutral-600">{note}</p>}
-        {reason && <p className="text-[10px] text-amber-500/80">{reason}</p>}
+    <div className="border-t border-neutral-900 py-2">
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-1.5 text-sm text-neutral-200">
+            {label} <span className="font-mono text-neutral-500">{rank}</span>
+            <span className="font-mono text-neutral-700">/ {ceiling}</span>
+            <button
+              onClick={() => setOpen((v) => !v)}
+              aria-label={`What ${label} does`}
+              aria-expanded={open}
+              className={`ml-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold leading-none transition ${
+                open
+                  ? 'border-orange-600 bg-orange-950/50 text-orange-300'
+                  : 'border-neutral-700 text-neutral-500 hover:border-orange-600 hover:text-orange-300'
+              }`}
+            >
+              i
+            </button>
+          </p>
+          {note && <p className="text-[10px] text-neutral-600">{note}</p>}
+          {reason && <p className="text-[10px] text-amber-500/80">{reason}</p>}
+        </div>
+        <button
+          onClick={onBuy}
+          disabled={busy || !!reason || !affordable}
+          className="shrink-0 rounded border border-neutral-700 px-3 py-1.5 text-xs font-semibold text-neutral-200 transition hover:border-orange-500 hover:text-orange-200 disabled:border-neutral-900 disabled:text-neutral-700 disabled:hover:border-neutral-900"
+        >
+          {reason ? '—' : `+1 · ${cost.toLocaleString()}`}
+        </button>
       </div>
-      <button
-        onClick={onBuy}
-        disabled={busy || !!reason || !affordable}
-        className="shrink-0 rounded border border-neutral-700 px-3 py-1.5 text-xs font-semibold text-neutral-200 transition hover:border-orange-500 hover:text-orange-200 disabled:border-neutral-900 disabled:text-neutral-700 disabled:hover:border-neutral-900"
-      >
-        {reason ? '—' : `+1 · ${cost.toLocaleString()}`}
-      </button>
+
+      {open && (
+        <div className="mt-1.5 rounded border border-neutral-800 bg-neutral-900/40 px-2.5 py-2">
+          <p className="text-[11px] leading-snug text-neutral-400">{explain.what}</p>
+          <p className="mt-1 text-[11px] font-semibold leading-snug text-emerald-400">
+            {explain.gain}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -122,6 +162,31 @@ export default function AssetUpgrade({
   const now = attributesWith(asset, held.level, held.packages);
   const power = assetPowerWith(asset, held.level, held.packages);
   const integration = systemIntegration(held.packages);
+
+  /**
+   * The most any attribute can reach this season: the catalogue maximum taken
+   * to the season rank cap, plus a maxed package, plus full integration. The
+   * bars are drawn against this so they have somewhere to grow.
+   */
+  const ceiling =
+    attributeAtLevel(ATTRIBUTE_MAX, cap) +
+    (cap - 1) * PACKAGE_POINTS_PER_RANK +
+    INTEGRATION_MAX_POINTS;
+
+  /** The lowest fitted package. System Integration is measured off this one. */
+  const lowestPackage = Math.min(...PACKAGE_KEYS.map((k) => held.packages[k]));
+
+  /** What one more rank is worth on this asset, in points across all five. */
+  const rankGain =
+    held.level >= cap
+      ? 0
+      : (['firepower', 'armour', 'mobility', 'range', 'detection'] as const).reduce(
+          (sum, k) =>
+            sum +
+            (attributeAtLevel(asset.attributes[k], held.level + 1) -
+              attributeAtLevel(asset.attributes[k], held.level)),
+          0,
+        );
 
   async function run(fn: () => Promise<{wallet: Wallet; asset: Record<string, number | string>}>) {
     setBusy(true);
@@ -185,6 +250,17 @@ export default function AssetUpgrade({
           packages fitted rather than as the catalogue values, because an
           upgrade whose effect is invisible is an upgrade a player stops buying.
         */}
+        {/*
+          Two segments: what the asset came with, and what has been bought on
+          top. The bar used to be drawn from the CATALOGUE value, so buying an
+          upgrade moved the number on the right and left the bar exactly where
+          it was - which reads as the purchase not working.
+
+          Scaled against the most any attribute can reach this season rather
+          than against ATTRIBUTE_MAX, because a ranked asset passes 10 and a bar
+          that pinned at full would go back to telling you nothing. It starts
+          around a third full and fills as you buy, which is the point.
+        */}
         <div className="mt-3 space-y-1">
           {(['firepower', 'armour', 'mobility', 'range', 'detection'] as const).map((key) => {
             const base = asset.attributes[key];
@@ -195,10 +271,14 @@ export default function AssetUpgrade({
                 <span className="w-16 shrink-0 text-[10px] uppercase tracking-wider text-neutral-600">
                   {ATTR_LABEL[key]}
                 </span>
-                <span className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-neutral-900">
+                <span className="flex h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-neutral-900">
                   <span
-                    className="block h-full rounded-full bg-neutral-500"
-                    style={{width: `${Math.min(100, (base / ATTRIBUTE_MAX) * 100)}%`}}
+                    className="block h-full bg-neutral-500"
+                    style={{width: `${Math.min(100, (base / ceiling) * 100)}%`}}
+                  />
+                  <span
+                    className="block h-full bg-emerald-500"
+                    style={{width: `${Math.min(100, (Math.max(0, gained) / ceiling) * 100)}%`}}
                   />
                 </span>
                 <span className="w-16 shrink-0 text-right font-mono text-[10px] text-neutral-400">
@@ -236,13 +316,28 @@ export default function AssetUpgrade({
                 : null
           }
           note="Permanent, and the ceiling every package is measured against"
+          explain={{
+            what:
+              `Raises all five attributes at once, by the same proportion — a ranked ` +
+              `${asset.name} is a better ${asset.name}, never a different one. It is also ` +
+              `the ceiling: no package can be fitted above the Service Rank, so this is ` +
+              `what unlocks the four below. Permanent, and the one thing a strip cannot ` +
+              `undo. A full season of ranks is worth ${SEASON_GAIN}x.`,
+            gain:
+              held.level >= cap
+                ? `At the Season ${SEASON} cap.`
+                : `+${rankGain.toFixed(1)} points across all five, and raises every package ` +
+                  `ceiling to ${held.level + 1}.`,
+          }}
           busy={busy}
           onBuy={() => void run(() => api.rankUp(held.assetId, held.level + 1))}
         />
 
         {PACKAGE_KEYS.map((key: PackageKey) => {
           const rank = held.packages[key];
-          const ceiling = packageCeiling(held.level);
+          // Not `ceiling` - that name is taken by the attribute scale above, and
+          // the shadowing would compile into the wrong number in the bar.
+          const ceilingFor = packageCeiling(held.level);
           const cost = packageCost(rank, rank + 1);
           return (
             // The key goes on a wrapper, not on Track. Without @types/react,
@@ -253,17 +348,34 @@ export default function AssetUpgrade({
             <Track
               label={PACKAGE_LABEL[key]}
               rank={rank}
-              ceiling={ceiling}
+              ceiling={ceilingFor}
               cost={cost}
               affordable={canAfford(cost)}
               reason={
-                rank >= ceiling
+                rank >= ceilingFor
                   ? `Raise Service Rank past ${held.level} first`
                   : !canAfford(cost)
                     ? 'Not enough to cover that'
                     : null
               }
               note={ATTR_LABEL[PACKAGE_ATTRIBUTE[key]]}
+              explain={{
+                what:
+                  `Specialises this asset: ${PACKAGE_LABEL[key]} adds to ` +
+                  `${ATTR_LABEL[PACKAGE_ATTRIBUTE[key]]} and nothing else. Added on top of ` +
+                  `the Service Rank rather than multiplied by it, so a point here is worth ` +
+                  `the same on a rank 1 asset as on a rank 10 one. Can be stripped later ` +
+                  `for a full refund in Command Credits.`,
+                gain:
+                  rank >= ceilingFor
+                    ? `Blocked at Service Rank ${held.level}.`
+                    : `+${PACKAGE_POINTS_PER_RANK.toFixed(1)} ` +
+                      `${ATTR_LABEL[PACKAGE_ATTRIBUTE[key]].toLowerCase()}` +
+                      (rank + 1 > lowestPackage
+                        ? '.'
+                        : `, and +${INTEGRATION_POINTS_PER_RANK.toFixed(1)} to all five ` +
+                          `from System Integration.`),
+              }}
               busy={busy}
               onBuy={() => void run(() => api.fitPackage(held.assetId, key, rank + 1))}
             />
@@ -271,16 +383,19 @@ export default function AssetUpgrade({
           );
         })}
 
-        <div className="mt-3 flex items-center justify-between rounded border border-neutral-800 bg-neutral-900/40 px-3 py-2">
-          <div className="min-w-0">
+        <div className="mt-3 rounded border border-neutral-800 bg-neutral-900/40 px-3 py-2">
+          <div className="flex items-center justify-between gap-3">
             <p className="text-xs text-neutral-300">System Integration</p>
-            <p className="text-[10px] text-neutral-600">
-              From your lowest package. Everything up, or nothing.
-            </p>
+            <span className="shrink-0 font-mono text-xs text-neutral-300">
+              {integration > 0 ? `+${integration.toFixed(1)} all` : '—'}
+            </span>
           </div>
-          <span className="shrink-0 font-mono text-xs text-neutral-300">
-            {integration > 0 ? `+${integration.toFixed(1)} all` : '—'}
-          </span>
+          <p className="mt-0.5 text-[10px] leading-snug text-neutral-600">
+            Free, and not bought. Measured off your <em>lowest</em> package, currently{' '}
+            {lowestPackage} — so raising your best one pays nothing here and raising your
+            worst one pays on all five attributes at once. Caps at{' '}
+            +{INTEGRATION_MAX_POINTS.toFixed(1)}.
+          </p>
         </div>
 
         <button
@@ -288,9 +403,12 @@ export default function AssetUpgrade({
           disabled={busy || held.packageCredits === 0}
           className="mt-3 w-full rounded border border-neutral-800 px-3 py-2 text-xs text-neutral-400 transition hover:border-red-800 hover:text-red-300 disabled:border-neutral-900 disabled:text-neutral-700 disabled:hover:border-neutral-900"
         >
-          Strip packages · refunds {held.packageCredits.toLocaleString()} cr
+          {held.packageCredits === 0
+            ? 'Strip packages · nothing fitted yet'
+            : `Strip packages · refunds ${held.packageCredits.toLocaleString()} cr`}
           <span className="block text-[10px] text-neutral-700">
-            Service Rank is not refunded, and Tokens are not refunded
+            Takes all four back to 1 and refunds the whole cost in Command Credits, whatever
+            you paid in. Service Rank is untouched.
           </span>
         </button>
       </div>

@@ -18,7 +18,7 @@ import {
   recall,
   settleArrivals,
 } from './march';
-import {SQUAD_NAMES, isSquadName, squadLiftBudget} from '../shared/assets';
+import {SQUAD_NAMES, isSquadName} from '../shared/assets';
 import {RALLY_COOLDOWN_MS, maySetRally, rallyCooldownLeft} from '../shared/rally';
 import {listBattles, readBattle} from './battles';
 import {REPORT_RETENTION_DAYS} from '../shared/battles';
@@ -1044,7 +1044,6 @@ async function handleSquads(env: Env, player: PlayerRow): Promise<Response> {
   ]);
 
   const roster = new Map(owned.map((o) => [o.assetId, o]));
-  const budget = squadLiftBudget(state.levels);
   const wallet = await settleWallet(env.DB, player.id, now);
 
   return json({
@@ -1054,8 +1053,9 @@ async function handleSquads(env: Env, player: PlayerRow): Promise<Response> {
     // is a second request for nothing.
     wallet: {tokens: wallet.tokens, credits: wallet.credits},
     squads: board,
+    // Weight standing in each squad. A readout now, not a budget - the lift cap
+    // was removed on 2026-09-06 and any six assets fit in any squad.
     lift: {
-      budget,
       used: Object.fromEntries(
         SQUAD_NAMES.map((name) => [name, squadLiftUsed(board, name)]),
       ),
@@ -1063,8 +1063,8 @@ async function handleSquads(env: Env, player: PlayerRow): Promise<Response> {
     power: Object.fromEntries(
       SQUAD_NAMES.map((name) => [name, squadPower(board, roster, name)]),
     ),
-    // Echoed so the squad screen can explain where the budget came from
-    // without asking for the base separately.
+    // Echoed so the squad screen can show them without asking for the base
+    // separately. They no longer affect what fits in a squad.
     buildings: {
       motor_pool: state.levels.motor_pool,
       airfield: state.levels.airfield,
@@ -1279,7 +1279,6 @@ async function handleMove2(request: Request, env: Env, player: PlayerRow): Promi
     player.id,
     {squad: from.squad, slot: Number(from.slot)},
     {squad: to.squad, slot: Number(to.slot)},
-    state.levels,
     await marchingSquads(env.DB, player.id),
   );
   if (!result.ok) return fail(409, result.error);
@@ -1308,7 +1307,6 @@ async function handleAssign(request: Request, env: Env, player: PlayerRow): Prom
     squad,
     slot,
     assetId,
-    state.levels,
     await marchingSquads(env.DB, player.id),
   );
   if (!result.ok) return fail(409, result.error);

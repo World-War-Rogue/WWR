@@ -6,9 +6,13 @@
  * taps rather than a drag, because this has to work on a phone and dragging a
  * card across a scrolling list with a thumb is how people lose their place.
  *
- * Every rule is the server's. This screen shows the lift budget and greys what
- * will not fit, but the refusal comes from the Worker - the greying is a
- * courtesy, not the check.
+ * Every rule is the server's. The one rule left is that an asset sits in
+ * exactly one squad, and the database enforces it.
+ *
+ * The lift BUDGET is gone as of 2026-09-06 - any six assets, in any squad, in
+ * any combination. Lift is still shown, because the weight of a squad is worth
+ * seeing and lift is still what sets each asset's attribute points, but nothing
+ * is refused for it any more and nothing here greys out because of it.
  */
 import {type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
@@ -270,18 +274,18 @@ export default function Squads({
     }
   }
 
-  const budget = view?.lift.budget ?? 0;
-  const remaining = picking ? budget - (view?.lift.used[picking.squad] ?? 0) : 0;
+
   const slotHolds = picking ? view?.squads[picking.squad]?.[picking.slot] ?? null : null;
-  const freed = slotHolds ? ASSET_BY_ID[slotHolds]?.lift ?? 0 : 0;
 
   /**
-   * What the chooser offers. Everything held, filtered, and ordered so what
-   * fits comes first - a list whose top half is greyed out reads as broken.
+   * What the chooser offers. Everything held, filtered.
+   *
+   * Nothing is ordered by what fits any more, because everything fits. Heaviest
+   * first within a category, which puts the assets a player is most likely to
+   * be looking for at the top of each group.
    */
   const choices = useMemo(() => {
     const q = pickQuery.trim().toLowerCase();
-    const room = remaining + freed;
     return (view?.owned ?? [])
       .map((o) => ASSET_BY_ID[o.assetId])
       .filter((a): a is Asset => !!a)
@@ -293,17 +297,13 @@ export default function Squads({
           a.code.toLowerCase().includes(q) ||
           a.operator.toLowerCase().includes(q),
       )
-      .sort((a, b) => {
-        const aFits = a.lift <= room ? 0 : 1;
-        const bFits = b.lift <= room ? 0 : 1;
-        return (
-          aFits - bFits ||
+      .sort(
+        (a, b) =>
           a.category.localeCompare(b.category) ||
           b.lift - a.lift ||
-          a.name.localeCompare(b.name)
-        );
-      });
-  }, [view, pickCategory, pickQuery, remaining, freed]);
+          a.name.localeCompare(b.name),
+      );
+  }, [view, pickCategory, pickQuery]);
 
   return (
     // `relative` so the chooser overlay below can pin itself to this screen
@@ -319,12 +319,7 @@ export default function Squads({
         <ForcesTabs active="squads" onChange={(tab) => tab === 'assets' && onShowAssets()} />
         {view && (
           <span className="ml-auto text-[11px] text-neutral-500">
-            Lift budget <span className="font-mono text-neutral-300">{budget}</span> per squad
-            <span className="text-neutral-700">
-              {' '}
-              · Motor Pool {view.buildings.motor_pool} · Airfield {view.buildings.airfield} ·
-              Barracks {view.buildings.barracks}
-            </span>
+            Any six assets, any squad
           </span>
         )}
       </div>
@@ -343,7 +338,7 @@ export default function Squads({
             <div className="grid gap-3 lg:grid-cols-2">
               {SQUAD_NAMES.map((name) => {
                 const used = view.lift.used[name] ?? 0;
-                const over = used > budget;
+                const filled = (view.squads[name] ?? []).filter(Boolean).length;
                 const out = away.has(name);
                 return (
                   <section
@@ -367,17 +362,19 @@ export default function Squads({
                           {(view.power[name] ?? 0).toLocaleString()}
                         </span>
                         <span className="text-neutral-700"> · </span>
-                        lift{' '}
-                        <span className={`font-mono ${over ? 'text-red-400' : 'text-neutral-300'}`}>
-                          {used}/{budget}
-                        </span>
+                        lift <span className="font-mono text-neutral-300">{used}</span>
                       </span>
                     </div>
 
+                    {/*
+                      Slots filled, not lift used. Lift no longer caps anything,
+                      so a bar drawn against it would be a bar against nothing -
+                      six of six is the only limit left.
+                    */}
                     <span className="mt-2 block h-1 overflow-hidden rounded-full bg-neutral-900">
                       <span
-                        className={`block h-full rounded-full ${over ? 'bg-red-600' : 'bg-neutral-500'}`}
-                        style={{width: `${Math.min(100, (used / Math.max(1, budget)) * 100)}%`}}
+                        className="block h-full rounded-full bg-neutral-500"
+                        style={{width: `${(filled / SQUAD_SLOTS) * 100}%`}}
                       />
                     </span>
 
@@ -524,9 +521,7 @@ export default function Squads({
               <h3 className="text-sm font-semibold text-neutral-100">
                 {t('squads.slot', {squad: picking.squad, slot: picking.slot + 1})}
               </h3>
-              <span className="text-[11px] text-neutral-500">
-                {t('squads.liftFree', {amount: remaining + freed})}
-              </span>
+
               {slotHolds && (
                 <button
                   onClick={() => void assign(picking.squad, picking.slot, null)}
@@ -576,25 +571,17 @@ export default function Squads({
                 they think is failing. This is the FIRST thing a new player
                 meets: two tanks fill a level-zero squad exactly.
               */}
-              {choices.length > 0 && choices.every((a) => a.lift > remaining + freed) && (
-                <div className="mb-3 rounded border border-amber-900 bg-amber-950/40 px-3 py-2">
-                  <p className="text-xs font-semibold text-amber-200">
-                    {t('squads.nothingFits', {amount: remaining + freed})}
-                  </p>
-                  <p className="mt-0.5 text-[11px] text-amber-300/70">
-                    {t('squads.nothingFitsHint')}
-                  </p>
-                </div>
-              )}
-
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {choices.map((asset) => {
                   const where = placedIn.get(asset.id);
                   // An asset sits in exactly one squad, so one that is in the
                   // field cannot be taken - assigning it here would pull it out
                   // of a squad that is at that moment attacking somebody.
+                  // The only reason an asset cannot be taken: it is out with a
+                  // squad in the field, and assigning it here would pull it out
+                  // of that squad from the other end of the screen.
+                  const fits = !assetAway.get(asset.id);
                   const out = assetAway.get(asset.id);
-                  const fits = !out && asset.lift <= remaining + freed;
                   return (
                     <div key={asset.id}>
                       <button
