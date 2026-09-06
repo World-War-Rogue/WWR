@@ -79,7 +79,8 @@ export async function readBase(db: D1Database, playerId: string, now: number): P
     .all<{building: string; level: number}>();
   const levels: BuildingLevels = {...NO_BUILDINGS};
   for (const r of rows.results ?? []) {
-    if (isLevelledBuilding(r.building)) levels[r.building] = r.level;
+    // A row below the start level is a legacy zero; every building begins at 1.
+    if (isLevelledBuilding(r.building)) levels[r.building] = Math.max(NO_BUILDINGS[r.building], r.level);
   }
   return {levels, job};
 }

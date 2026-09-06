@@ -50,8 +50,13 @@ export function isLevelledBuilding(id: string): id is LevelledBuilding {
   return (LEVELLED_BUILDINGS as readonly string[]).includes(id);
 }
 
-/** Per level, on every attribute of the category. Level 10 = x1.218994. */
+/**
+ * Per level above the first, on every attribute of the category. Every
+ * building starts at level 1 like every asset, so level 1 is x1 and level 10
+ * is x1.02^9 = x1.195.
+ */
 export const BUILDING_STEP = 1.02;
+export const BUILDING_START_LEVEL = 1;
 
 /** Ten levels a season: 10, 20, 30, 40, 50. */
 export const BUILDING_LEVELS_PER_SEASON = 10;
@@ -63,12 +68,13 @@ export function buildingCapForSeason(season: number): number {
 
 /** The multiplier a category's assets get from its building at this level. */
 export function buildingBoost(level: number): number {
-  return BUILDING_STEP ** Math.max(0, Math.floor(level));
+  return BUILDING_STEP ** Math.max(0, Math.floor(level) - BUILDING_START_LEVEL);
 }
 
 /**
  * What it costs to reach a level, and how long it takes. Indexed by the level
- * being built (1..10 for Season 1). Beyond ten the last row repeats with the
+ * being built (2..10 for Season 1; row 1 is the level everything starts at
+ * and is never bought). Beyond ten the last row repeats with the
  * same ratio as the last step, until a later season's table replaces it.
  */
 const ASSET_BUILDING_TABLE: ReadonlyArray<{cost: number; minutes: number}> = [
@@ -118,13 +124,14 @@ export interface BuildingLevels {
   drone_hub: number;
 }
 
+/** A fresh base: everything at level 1, like every asset. */
 export const NO_BUILDINGS: BuildingLevels = {
-  command_center: 0,
-  armour_hub: 0,
-  artillery_hub: 0,
-  fixed_wing_hub: 0,
-  rotary_hub: 0,
-  drone_hub: 0,
+  command_center: 1,
+  armour_hub: 1,
+  artillery_hub: 1,
+  fixed_wing_hub: 1,
+  rotary_hub: 1,
+  drone_hub: 1,
 };
 
 /** The boost a category's assets get, given the base's building levels. */
@@ -156,9 +163,8 @@ export function buildingBlock(
 
 /**
  * The ceiling the Command Center puts on a Service Rank. A rank may not stand
- * above the Command Center's level; at level 0 a fresh base still holds its
- * starters at rank 1.
+ * above the Command Center's level.
  */
 export function rankCeiling(levels: BuildingLevels): number {
-  return Math.max(1, levels.command_center);
+  return Math.max(BUILDING_START_LEVEL, levels.command_center);
 }

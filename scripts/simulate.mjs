@@ -806,9 +806,10 @@ if (wanted('buildings')) {
   const bare = attributesWith(tank, 20, NO_PACKAGES, 1);
   const lifted = attributesWith(tank, 20, NO_PACKAGES, buildingBoost(10));
   const ratios = ['firepower', 'armour', 'mobility', 'range', 'detection'].map((k) => lifted[k] / bare[k]);
-  const ratioOk = ratios.every((r) => Math.abs(r - 1.218994) < 0.002);
+  const expected = 1.02 ** 9; // level 1 is the start, so nine steps to 10
+  const ratioOk = ratios.every((r) => Math.abs(r - expected) < 0.002);
   console.log(`  level 10 boost: ${buildingBoost(10).toFixed(6)}x  (per-attribute ${ratios.map((r) => r.toFixed(3)).join(' ')})`);
-  assert('buildings.curve', ratioOk, `attributes off the 1.218994 multiplier: ${ratios.join(',')}`);
+  assert('buildings.curve', ratioOk, `attributes off the ${expected.toFixed(6)} multiplier: ${ratios.join(',')}`);
 
   // 2/3. Ten ranks beat ten building levels, at both bands the doc names.
   for (const [low, high] of [[20, 30], [40, 50]]) {
@@ -832,7 +833,7 @@ if (wanted('buildings')) {
   let monotone = true;
   for (const b of LEVELLED_BUILDINGS) {
     let prev = {cost: 0, ms: 0};
-    for (let l = 1; l <= 10; l += 1) {
+    for (let l = 2; l <= 10; l += 1) {
       const step = buildingStep(b, l);
       if (step.cost <= prev.cost || step.ms <= prev.ms) monotone = false;
       prev = step;

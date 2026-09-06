@@ -81,6 +81,7 @@ For the other four buildings, replace `Tank Building` and `Armour` with the matc
 ## Owner's rulings on this document (2026-09-06)
 
 - **§3 price.** One price, payable in any mix of Tokens and Command Credits, like every other purchase. The 4× Credit column is not used; the 4× is time (earn rate), not price. Resource costs per building are coming in BUILDING RESOURCES v1 and will replace this table's cost column.
+- **Start level.** Every building starts at level 1 like every asset; the first upgrade is level 2, and the boost counts from level 1 (level 10 = ×1.02⁹ = +19.5%).
 - **§4 Command Center gate.** Kept, and widened: the Command Center is the ceiling for everything. It must finish level N before any building, Service Rank or package may start level N. The Command Center's own cost table is the asset-building table ×1.5 until the designer publishes one.
 - **§4 second queue.** Not the 7-day rental. The Second Engineer Team is a permanent purchase gated at Engineer Support Yard 10, as already decided.
 - **§6 drone cap.** Waits for DRONE RULES v1.

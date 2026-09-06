@@ -117,7 +117,7 @@ export default function BuildingPanel({
         {category
           ? `All ${CATEGORY_LABEL[category]} assets: +${pct}% Firepower, Armour, Mobility, Range and Detection per level.`
           : 'The ceiling for everything. No building, Service Rank or package can stand above this level.'}
-        {category && level > 0 && (
+        {category && total > 0 && (
           <span className="text-neutral-500"> Now +{total}%.</span>
         )}
       </p>

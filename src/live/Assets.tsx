@@ -16,7 +16,7 @@ import AssetUpgrade from './AssetUpgrade';
 import ForcesTabs from './ForcesTabs';
 import {type BaseLevelsView, type OwnedAsset, type Wallet, api} from '../net/api';
 import BuildingPanel from './BuildingPanel';
-import {HUB_OF_CATEGORY, categoryBoost} from '../../shared/buildings';
+import {HUB_OF_CATEGORY, categoryBoost, rankCeiling} from '../../shared/buildings';
 import {t} from '../i18n';
 import {taskForceName} from './taskForce';
 import {
@@ -343,7 +343,7 @@ export default function Assets({
           held={roster.get(upgrading)!}
           wallet={wallet}
           boost={base ? categoryBoost(base.levels, ASSET_BY_ID[upgrading].category) : 1}
-          rankCeiling={base ? Math.max(1, base.levels.command_center) : undefined}
+          rankCeiling={base ? rankCeiling(base.levels) : undefined}
           onClose={() => setUpgrading(null)}
           onChanged={(nextWallet, nextHeld) => {
             setWallet(nextWallet);
