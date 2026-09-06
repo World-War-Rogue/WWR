@@ -621,3 +621,19 @@ Run 10,000 battles per assertion cell over at least 20 stable seeds. Fail CI whe
 | Raid severity | 25%, 50%, or 75% of unprotected stock | 50%, with Warehouse protection from this spec. |
 | Season reset | Full reset; partial reset; carry progression | Reset season standings/resources; retain cosmetics, owned assets, and account unlocks. |
 | Naval release | Season 2; Season 3; later | Season 2 only after six naval assets and counter tests are ready. Do not offer Naval cosmetics first. |
+
+---
+
+## Decisions on the open questions (Matt, 2026-09-06)
+
+| Question | Decision |
+| :--- | :--- |
+| Season-1 asset access | A starter subset, with more assets unlocking by week. The subset and schedule are still to be designed. |
+| Second queue | Permanent purchase (Credits or Tokens), unlocked at Engineer Support Yard 10. |
+| Cosmetic stat scope | All five stats allowed, small values, every item itemised in reports. |
+| Raid severity | About 5% of unprotected stock per successful attack. |
+| Season end | An offseason with events, letting other servers catch up; then server transfers (a scoring mechanism is needed); then 10-30 minutes offline and a new season loads on a different visual map. Everything earned carries over. |
+| Naval release | Season 3. |
+| Live-ops "Intel" and "module fragments" | Not added. Rewards pay in existing things: Credits for intel-type rewards, whole Modules for fragment-type rewards. |
+
+Resolver constants that replaced the spec's after simulation (see `shared/combat.ts`): DAMAGE_SCALE 2 (was 12), HP = 8 × (3 + 0.3 F + 0.25 A) (was 8 × (0.6 F + 1.2 A)), per-shot swing ±40% plus the 5% ×1.2 crit, per-battle side swing ±28%, mobility ties broken by the seeded roll. Exposure counts category bands and role bands both.
