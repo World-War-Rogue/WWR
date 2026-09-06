@@ -6,6 +6,26 @@
     color: #d1d5db;
     overflow-x: hidden;
   }
+
+  /*
+    Nothing in the game is text a player selects, and a long-press that pops a
+    selection handle or a callout in the middle of a map gesture reads as a
+    glitch. The chat input is the exception and opts back in.
+  */
+  body {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+
+  input,
+  textarea,
+  [contenteditable] {
+    -webkit-user-select: text;
+    user-select: text;
+  }
 }
 
 /* Frosted Glass Translucent Scrollbars */

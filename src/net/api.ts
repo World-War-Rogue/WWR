@@ -192,6 +192,8 @@ export interface WorldView {
   rally: RallyPoint | null;
   /** Squads in transit, so a defender can see what is coming. */
   marches: MarchView[];
+  /** The server's clock at the moment this was built. */
+  serverTime: number;
 }
 
 export interface MarchView {

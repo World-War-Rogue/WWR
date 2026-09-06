@@ -16,6 +16,8 @@ import Chat from './Chat';
 import Customize from './Customize';
 import Profile, {Portrait} from './Profile';
 import Gate from './Gate';
+import {GameClock} from './GameClock';
+import {noteServerTime, serverNow} from './serverClock';
 import Settings from './Settings';
 import {installErrorTap} from './recentErrors';
 import WorldMap from './WorldMap';
@@ -34,11 +36,14 @@ import {
 function useServerClock(base: BaseView | null) {
   // The countdown is drawn against the server's clock, not the browser's, so a
   // wrong system time shows the right remaining time.
-  const offsetRef = useRef(0);
+  //
+  // The offset itself moved to src/live/serverClock.ts, because the map corrects
+  // it far more often than this screen does and two components holding two
+  // copies of one session fact will drift. This is now just the tick.
   const [, force] = useState(0);
 
   useEffect(() => {
-    if (base) offsetRef.current = base.serverTime - Date.now();
+    if (base) noteServerTime(base.serverTime);
   }, [base]);
 
   useEffect(() => {
@@ -46,7 +51,7 @@ function useServerClock(base: BaseView | null) {
     return () => window.clearInterval(id);
   }, []);
 
-  return () => Date.now() + offsetRef.current;
+  return serverNow;
 }
 
 function ResourceBar({base}: {base: BaseView}) {
@@ -534,6 +539,15 @@ export default function LiveApp() {
           }}
         />
       </header>
+
+      {/*
+        The clock, on its own line rather than as a fourth thing in the header.
+        Three targets across a phone header is already the limit, and a readout
+        wedged between two buttons is a readout that gets pressed.
+      */}
+      <p className="mt-3 text-right text-xs">
+        <GameClock />
+      </p>
 
       {error && (
         <p className="mt-6 rounded border border-red-900 bg-red-950/60 px-3 py-2 text-sm text-red-300">{error}</p>

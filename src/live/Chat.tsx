@@ -31,6 +31,7 @@ import {
   api,
 } from '../net/api';
 import {type MessageKey, language, t} from '../i18n';
+import {formatClock} from './serverClock';
 import {Portrait} from './Profile';
 
 /**
@@ -123,8 +124,20 @@ function mergeMessages(current: ChatMessage[], incoming: ChatMessage[]): ChatMes
   return [...byId.values()].sort((a, b) => a.createdAt - b.createdAt).slice(-300);
 }
 
+/**
+ * Message timestamps, on the game clock.
+ *
+ * This used to be the reader's local time, which meant two players discussing
+ * "the message you sent at 9:32" were looking at two different numbers. Two
+ * clocks in one game is worse than one clock that is wrong for everybody
+ * equally, and the whole point of a fixed offset is that an hour means one
+ * thing when two players talk about it.
+ *
+ * No RST label here. The header carries the clock, and stamping every line in a
+ * conversation with the same three characters is noise.
+ */
 function timeOf(ms: number): string {
-  return new Date(ms).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+  return formatClock(ms);
 }
 
 export default function Chat({
@@ -396,7 +409,7 @@ export default function Chat({
     const newest = mentions[0];
 
     return (
-      <div className="fixed inset-x-0 bottom-0 z-40">
+      <div className="fixed inset-x-0 bottom-0 z-40 pb-[env(safe-area-inset-bottom)]">
         {newest && (
           <button
             onClick={() => goToMention(newest)}

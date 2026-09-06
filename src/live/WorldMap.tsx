@@ -23,6 +23,10 @@ import {
 import {EffectLayer, type EffectSource} from './effects';
 import {DEFAULT_SEASON, seasonSpec} from './terrain';
 import {terrainAt} from '../../shared/terrain';
+import {GameClock} from './GameClock';
+import {notePaint, perfEnabled} from './perf';
+import {PerfHud} from './PerfHud';
+import {noteServerTime} from './serverClock';
 import {onPropsLoaded, paintGround} from './terrainPaint';
 import {normaliseLoadout} from '../../shared/cosmetics';
 import {ALLEGIANCE, allegianceOf, drawAllegianceMarker} from './allegiance';
@@ -636,7 +640,12 @@ export default function WorldMap({
     const x = Math.floor(cam.cx - plotsW / 2);
     const y = Math.floor(cam.cy - plotsH / 2);
     try {
-      setView(await api.world(x, y, Math.min(80, plotsW), Math.min(80, plotsH)));
+      const next = await api.world(x, y, Math.min(80, plotsW), Math.min(80, plotsH));
+      // Correct the clock offset from whichever response landed last. The map
+      // refetches on every camera settle, so it does this far more often than
+      // any other screen.
+      noteServerTime(next.serverTime);
+      setView(next);
       setError(null);
       failuresRef.current = 0;
     } catch (err) {
@@ -669,24 +678,108 @@ export default function WorldMap({
     return () => window.clearTimeout(id);
   }, [camera, w, h, load, retry]);
 
-  // Pointer panning. Tracked in refs so a drag never re-renders per frame.
+  /**
+   * Pan, pinch, tap and double-tap. Tracked in refs so a gesture never
+   * re-renders per frame.
+   *
+   * The wheel is a desktop affordance and nothing else. On a phone there is no
+   * wheel, and the + and - buttons are a poor substitute for the one gesture
+   * every map on earth has taught people to expect - which is why testers on
+   * phones could pan around a map they could not zoom.
+   *
+   * Every zoom here is anchored: the world point under the fingers (or under
+   * the cursor, or under the tapped spot) is the point that does not move. An
+   * unanchored zoom that always works on the screen centre is the thing that
+   * makes a map feel like it is fighting you.
+   */
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    let dragging = false;
+
+    /** Every pointer currently down on the canvas, by id. */
+    const live = new Map<number, {x: number; y: number}>();
     let moved = 0;
     let lastX = 0;
     let lastY = 0;
+    /** Finger separation on the previous pinch frame. */
+    let pinchSpan = 0;
+    /** True once two fingers have been down, so the lift is not read as a tap. */
+    let pinched = false;
+    let lastTapAt = 0;
+    let lastTapX = 0;
+    let lastTapY = 0;
+
+    /** Zoom about a point in client coordinates, keeping the world under it still. */
+    const zoomAbout = (clientX: number, clientY: number, factor: number) => {
+      const rect = canvas.getBoundingClientRect();
+      const px = clientX - rect.left - rect.width / 2;
+      const py = clientY - rect.top - rect.height / 2;
+      setCamera((c) => {
+        const zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, c.zoom * factor));
+        if (zoom === c.zoom) return c;
+        // The world point under the anchor before the zoom, put back under it
+        // after. Solving for the new centre is the whole of it.
+        return {zoom, cx: c.cx + px / c.zoom - px / zoom, cy: c.cy + py / c.zoom - py / zoom};
+      });
+    };
+
+    const centreOf = () => {
+      let x = 0;
+      let y = 0;
+      for (const pt of live.values()) {
+        x += pt.x;
+        y += pt.y;
+      }
+      return {x: x / live.size, y: y / live.size};
+    };
+
+    const spanOf = () => {
+      const pts = [...live.values()];
+      if (pts.length < 2) return 0;
+      return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    };
 
     const down = (e: PointerEvent) => {
-      dragging = true;
-      moved = 0;
-      lastX = e.clientX;
-      lastY = e.clientY;
+      live.set(e.pointerId, {x: e.clientX, y: e.clientY});
       canvas.setPointerCapture(e.pointerId);
+      if (live.size === 1) {
+        moved = 0;
+        pinched = false;
+        lastX = e.clientX;
+        lastY = e.clientY;
+      } else {
+        // A second finger arrived. Whatever the first one was doing, this is a
+        // pinch now, and the anchor moves to the midpoint between them.
+        pinched = true;
+        pinchSpan = spanOf();
+        const mid = centreOf();
+        lastX = mid.x;
+        lastY = mid.y;
+      }
     };
+
     const move = (e: PointerEvent) => {
-      if (!dragging) return;
+      if (!live.has(e.pointerId)) return;
+      live.set(e.pointerId, {x: e.clientX, y: e.clientY});
+
+      if (live.size >= 2) {
+        const span = spanOf();
+        const mid = centreOf();
+        // Pan by the midpoint first, then scale about where the midpoint ended
+        // up. Doing both means two fingers can drag and zoom in one motion,
+        // which is how everybody actually uses a map.
+        const dx = mid.x - lastX;
+        const dy = mid.y - lastY;
+        lastX = mid.x;
+        lastY = mid.y;
+        if (dx !== 0 || dy !== 0) {
+          setCamera((c) => ({...c, cx: c.cx - dx / c.zoom, cy: c.cy - dy / c.zoom}));
+        }
+        if (pinchSpan > 0 && span > 0) zoomAbout(mid.x, mid.y, span / pinchSpan);
+        pinchSpan = span;
+        return;
+      }
+
       const dx = e.clientX - lastX;
       const dy = e.clientY - lastY;
       moved += Math.abs(dx) + Math.abs(dy);
@@ -694,24 +787,48 @@ export default function WorldMap({
       lastY = e.clientY;
       setCamera((c) => ({...c, cx: c.cx - dx / c.zoom, cy: c.cy - dy / c.zoom}));
     };
+
     const up = (e: PointerEvent) => {
-      if (!dragging) return;
-      dragging = false;
+      if (!live.has(e.pointerId)) return;
+      live.delete(e.pointerId);
       canvas.releasePointerCapture(e.pointerId);
-      // A drag is not a click. Only select when the pointer barely moved.
-      if (moved > 6) return;
+
+      if (live.size >= 1) {
+        // One finger of a pinch lifted. Re-anchor on what is left, or the map
+        // leaps by the distance between the two fingers on the next frame.
+        const mid = centreOf();
+        lastX = mid.x;
+        lastY = mid.y;
+        pinchSpan = spanOf();
+        return;
+      }
+
+      // A drag is not a tap, and neither is the end of a pinch.
+      if (pinched || moved > 8) return;
+
+      // Double-tap zooms in, the way it does on every other map. The window is
+      // generous because a thumb is not a mouse.
+      const now = e.timeStamp;
+      const near = Math.hypot(e.clientX - lastTapX, e.clientY - lastTapY) < 36;
+      if (now - lastTapAt < 320 && near) {
+        lastTapAt = 0;
+        zoomAbout(e.clientX, e.clientY, 1.9);
+        return;
+      }
+      lastTapAt = now;
+      lastTapX = e.clientX;
+      lastTapY = e.clientY;
+
       const rect = canvas.getBoundingClientRect();
       const cam = cameraRef.current;
       const plotX = Math.floor(cam.cx + (e.clientX - rect.left - rect.width / 2) / cam.zoom);
       const plotY = Math.floor(cam.cy + (e.clientY - rect.top - rect.height / 2) / cam.zoom);
       setSelected({x: plotX, y: plotY});
     };
+
     const wheel = (e: WheelEvent) => {
       e.preventDefault();
-      setCamera((c) => ({
-        ...c,
-        zoom: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, c.zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15))),
-      }));
+      zoomAbout(e.clientX, e.clientY, e.deltaY < 0 ? 1.15 : 1 / 1.15);
     };
 
     canvas.addEventListener('pointerdown', down);
@@ -962,6 +1079,11 @@ export default function WorldMap({
         Math.hypot(marker.x + 0.5 - camera.cx, marker.y + 0.5 - camera.cy),
       );
     }
+
+    // Everything above this line is one paint. `time` was taken at the top of
+    // it, so this is the whole cost of a frame including the terrain buffer,
+    // the props, the bases and the markers.
+    notePaint(performance.now() - time, time);
   }, [camera, view, w, h, selected, selectedBase, centred]);
 
   // Drives the animation loop only while something is actually moving. A map
@@ -1187,7 +1309,7 @@ export default function WorldMap({
         there would give the eye a second thing to check before pressing the
         one control that matters.
       */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-40 grid grid-cols-[1fr_auto_1fr] items-start gap-3 p-3">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-40 grid grid-cols-[1fr_auto_1fr] items-start gap-3 p-3 pt-[calc(0.75rem+env(safe-area-inset-top))]">
         {/*
           Squads sits where it sits on the base screen, and My base sits where
           World map sits there. The two screens are now the same three targets
@@ -1229,6 +1351,16 @@ export default function WorldMap({
           things that are, and the right is where the eye goes last.
         */}
         <div className="flex flex-col items-end gap-2 justify-self-end">
+          {/*
+            The clock. Above the world card because it is the one thing here
+            that changes on its own, and because war windows are published in
+            RST - a player working out whether they can make 20:00 should not
+            have to leave the map to find out what time it is in the game.
+          */}
+          <div className="pointer-events-auto rounded border border-neutral-800 bg-black/70 px-3 py-1 text-right text-xs backdrop-blur">
+            <GameClock />
+          </div>
+
           <div className="pointer-events-auto rounded border border-neutral-800 bg-black/70 px-3 py-2 text-right backdrop-blur">
           <p className="text-[10px] uppercase tracking-[0.25em] text-orange-500">
             {view?.world.kind === 'event' ? t('map.battleTheatre') : t('map.homeWorld')}
@@ -1286,27 +1418,36 @@ export default function WorldMap({
       </div>
 
       {/*
-        The allegiance key.
+        The left-hand readouts, stacked.
 
-        On the LEFT, because the right belongs to the world card and to Squads
-        out - and Squads out is where Recall lives. This sat on the right and
-        covered it, so a player could see that a squad was away and could not
-        press the one button that brought it home. A legend is a readout; it
-        never gets to sit on a control.
+        The allegiance key is on the LEFT because the right belongs to the world
+        card and to Squads out - and Squads out is where Recall lives. It sat on
+        the right and covered it, so a player could see that a squad was away
+        and could not press the one button that brought it home. A legend is a
+        readout; it never gets to sit on a control.
+
+        The frame-time readout is here for the same reason and appears only when
+        somebody has asked for it with ?perf=1.
       */}
-      {camera.zoom < IDENTITY_ZOOM && (
-        <div className="pointer-events-none absolute left-3 top-24 z-20 rounded border border-neutral-800 bg-black/70 px-3 py-2 backdrop-blur">
-          {(['you', 'ally', 'server', 'neutral', 'hostile'] as const).map((key) => (
-            <div key={key} className="flex items-center gap-2 py-0.5">
-              <span
-                className="inline-block h-3 w-3 rounded-sm"
-                style={{background: ALLEGIANCE[key].fill}}
-              />
-              <span className="text-[11px] text-neutral-300">{t(`allegiance.${key}` as never)}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      <div className="pointer-events-none absolute left-3 top-24 z-20 flex flex-col items-start gap-2">
+        {perfEnabled() && <PerfHud />}
+
+        {camera.zoom < IDENTITY_ZOOM && (
+          <div className="rounded border border-neutral-800 bg-black/70 px-3 py-2 backdrop-blur">
+            {(['you', 'ally', 'server', 'neutral', 'hostile'] as const).map((key) => (
+              <div key={key} className="flex items-center gap-2 py-0.5">
+                <span
+                  className="inline-block h-3 w-3 rounded-sm"
+                  style={{background: ALLEGIANCE[key].fill}}
+                />
+                <span className="text-[11px] text-neutral-300">
+                  {t(`allegiance.${key}` as never)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/*
         Everything pinned to the bottom of the map, in one column.
@@ -1323,7 +1464,7 @@ export default function WorldMap({
         The column is the fixed-controls layer, z-30: above anything anchored
         to the map, below the top nav and below any sheet.
       */}
-      <div className="pointer-events-none absolute inset-x-3 bottom-16 z-30 flex flex-col gap-2">
+      <div className="pointer-events-none absolute inset-x-3 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 flex flex-col gap-2">
         {error && (
           <div className="pointer-events-auto rounded border border-red-900 bg-red-950/80 px-3 py-2 text-sm text-red-200 backdrop-blur">
             {error}

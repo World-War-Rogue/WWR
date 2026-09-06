@@ -744,6 +744,10 @@ async function handleWorld(request: Request, env: Env, player: PlayerRow): Promi
     })),
     skins: SKINS,
     bases,
+    // The map refetches on every camera settle, which makes it the most
+    // frequent corrector of the client's clock offset. Everything with a
+    // countdown on it is drawn against this rather than against the device.
+    serverTime: now,
   });
 }
 

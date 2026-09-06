@@ -2,7 +2,21 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      viewport-fit=cover so the app paints under the notch and the home
+      indicator rather than being letterboxed in white; the safe-area insets in
+      index.css keep the controls out from under them.
+
+      user-scalable=no because the map does its own pinch-to-zoom. Without it a
+      pinch scales the entire page - buttons, chat and all - instead of the
+      terrain, and the player is left looking at a magnified interface with no
+      way back. This is a game, not a document; the accessibility argument for
+      browser zoom does not apply to a canvas that zooms itself.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
     <title>World War Rogue</title>
     <meta name="description" content="Tactical modern warfare strategy game featuring multi-server deployment, 100-member military alliances with strict Admiral/Colonel/Lieutenant command hierarchies, task/event war planning, survival base-building, and ballistic combat." />
     <meta property="og:title" content="World War Rogue" />
@@ -14,6 +28,14 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="WorldWarRogue" />
+    <!--
+      iOS ignores the manifest's icons entirely. Without this tag, Add to Home
+      Screen uses a screenshot of the page as the icon - which is how you end up
+      with a home screen full of tiny grey rectangles.
+    -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
   </head>
   <body>
     <div id="root"></div>
