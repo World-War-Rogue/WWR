@@ -36,6 +36,12 @@ export interface Pad {
    * scales the same way or it reads as a toy. 1.0 is the centre island.
    */
   scale: number;
+  /**
+   * Degrees the slab is turned in the painting. The west compound is angled
+   * one way and the east compound the other; a building drawn square on an
+   * angled slab looks parked across it. Applied about the art's bottom centre.
+   */
+  tilt: number;
 }
 
 /**
@@ -46,21 +52,21 @@ export interface Pad {
  * there is one more pad than the manifest promised. It is naval's, later.
  */
 export const PADS: readonly Pad[] = [
-  {id: 'cc_01', x: 0.495, y: 0.409, scale: 1.0},
-  {id: 'upper_01', x: 0.399, y: 0.13, scale: 0.8},
-  {id: 'upper_02', x: 0.504, y: 0.116, scale: 0.8},
-  {id: 'left_01', x: 0.241, y: 0.274, scale: 0.85},
-  {id: 'left_02', x: 0.186, y: 0.338, scale: 0.9},
-  {id: 'left_03', x: 0.147, y: 0.412, scale: 0.95},
-  {id: 'left_04', x: 0.098, y: 0.503, scale: 1.0},
-  {id: 'right_01', x: 0.789, y: 0.252, scale: 0.85},
-  {id: 'right_02', x: 0.834, y: 0.312, scale: 0.9},
-  {id: 'right_03', x: 0.865, y: 0.384, scale: 0.95},
-  {id: 'right_04', x: 0.894, y: 0.47, scale: 1.0},
-  {id: 'right_05', x: 0.905, y: 0.572, scale: 1.05},
-  {id: 'lower_01', x: 0.246, y: 0.777, scale: 1.15},
-  {id: 'lower_02', x: 0.479, y: 0.743, scale: 1.15},
-  {id: 'lower_03', x: 0.709, y: 0.783, scale: 1.15},
+  {id: 'cc_01', x: 0.495, y: 0.409, scale: 1.0, tilt: 0},
+  {id: 'upper_01', x: 0.399, y: 0.13, scale: 0.8, tilt: 0},
+  {id: 'upper_02', x: 0.504, y: 0.116, scale: 0.8, tilt: 0},
+  {id: 'left_01', x: 0.241, y: 0.274, scale: 0.85, tilt: -7},
+  {id: 'left_02', x: 0.186, y: 0.338, scale: 0.9, tilt: -7},
+  {id: 'left_03', x: 0.147, y: 0.412, scale: 0.95, tilt: -7},
+  {id: 'left_04', x: 0.098, y: 0.503, scale: 1.0, tilt: -7},
+  {id: 'right_01', x: 0.789, y: 0.252, scale: 0.85, tilt: 7},
+  {id: 'right_02', x: 0.834, y: 0.312, scale: 0.9, tilt: 7},
+  {id: 'right_03', x: 0.865, y: 0.384, scale: 0.95, tilt: 7},
+  {id: 'right_04', x: 0.894, y: 0.47, scale: 1.0, tilt: 7},
+  {id: 'right_05', x: 0.905, y: 0.572, scale: 1.05, tilt: 7},
+  {id: 'lower_01', x: 0.246, y: 0.777, scale: 1.15, tilt: -3},
+  {id: 'lower_02', x: 0.479, y: 0.743, scale: 1.15, tilt: 0},
+  {id: 'lower_03', x: 0.709, y: 0.783, scale: 1.15, tilt: 3},
 ] as const;
 
 /** Width of a building's art at scale 1, as a fraction of the board width. */
@@ -70,7 +76,7 @@ export const BUILDING_WIDTH = 0.24;
  * board height, before the pad's scale), so a building stands on the front
  * of its slab rather than on its far edge.
  */
-export const FOOT_DROP = 0.03;
+export const FOOT_DROP = 0.038;
 
 export const PAD_BY_ID: Record<string, Pad> = Object.fromEntries(PADS.map((p) => [p.id, p]));
 
@@ -97,6 +103,8 @@ export interface BoardBuilding {
   movable: boolean;
   /** Art width relative to BUILDING_WIDTH. The Command Center is the big one. */
   size: number;
+  /** Vertical stretch of the art, about its base. 1 leaves it as drawn. */
+  stretch: number;
   /** Where it stands until the player moves it. Every default is distinct. */
   defaultPad: string;
   entry: BuildingEntry;
@@ -116,6 +124,7 @@ export const BOARD_BUILDINGS: readonly BoardBuilding[] = [
     art: '/base/command-center.webp',
     movable: false,
     size: 1.25,
+    stretch: 1.1,
     defaultPad: CENTRE_PAD,
     entry: {kind: 'command_center'},
   },
@@ -125,6 +134,7 @@ export const BOARD_BUILDINGS: readonly BoardBuilding[] = [
     art: '/base/maintenance-depot.webp',
     movable: true,
     size: 1,
+    stretch: 1,
     defaultPad: 'lower_02',
     entry: {kind: 'depot'},
   },
@@ -133,7 +143,8 @@ export const BOARD_BUILDINGS: readonly BoardBuilding[] = [
     name: 'Armour Command Tank',
     art: '/base/building-armour.webp',
     movable: true,
-    size: 1,
+    size: 0.85,
+    stretch: 1,
     defaultPad: 'left_02',
     entry: {kind: 'assets', category: 'armour'},
   },
@@ -142,7 +153,8 @@ export const BOARD_BUILDINGS: readonly BoardBuilding[] = [
     name: 'Artillery Command Platform',
     art: '/base/building-artillery.webp',
     movable: true,
-    size: 1,
+    size: 0.85,
+    stretch: 1,
     defaultPad: 'left_03',
     entry: {kind: 'assets', category: 'artillery'},
   },
@@ -151,7 +163,8 @@ export const BOARD_BUILDINGS: readonly BoardBuilding[] = [
     name: 'Rotary Wing Command Helicopter',
     art: '/base/building-rotary.webp',
     movable: true,
-    size: 1,
+    size: 0.85,
+    stretch: 1,
     defaultPad: 'right_02',
     entry: {kind: 'assets', category: 'rotary'},
   },
@@ -160,7 +173,8 @@ export const BOARD_BUILDINGS: readonly BoardBuilding[] = [
     name: 'Fixed Wing Command Jet',
     art: '/base/building-fixed-wing.webp',
     movable: true,
-    size: 1,
+    size: 0.85,
+    stretch: 1,
     defaultPad: 'right_03',
     entry: {kind: 'assets', category: 'fixed_wing'},
   },
@@ -169,7 +183,8 @@ export const BOARD_BUILDINGS: readonly BoardBuilding[] = [
     name: 'Drone Operations Aircraft',
     art: '/base/building-drone.webp',
     movable: true,
-    size: 1,
+    size: 0.85,
+    stretch: 1,
     defaultPad: 'upper_01',
     entry: {kind: 'assets', category: 'drone'},
   },

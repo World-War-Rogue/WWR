@@ -18,6 +18,7 @@ import Chat from './Chat';
 import Customize from './Customize';
 import Profile, {Portrait} from './Profile';
 import Gate from './Gate';
+import {GameClock} from './GameClock';
 import {noteServerTime, serverNow} from './serverClock';
 import Settings from './Settings';
 import {installErrorTap} from './recentErrors';
@@ -413,7 +414,7 @@ export default function LiveApp() {
       )}
 
       <header
-        className="pointer-events-none absolute inset-x-0 top-0 z-40 flex items-start justify-between gap-3 px-3"
+        className="pointer-events-none absolute inset-x-0 top-0 z-40 flex items-center justify-between gap-2 px-3"
         style={{paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)'}}
       >
         <button
@@ -437,6 +438,11 @@ export default function LiveApp() {
           </svg>
           {t('nav.squads')}
         </button>
+
+        {/* The clock, between the two buttons - the same strip the map uses. */}
+        <div className="pointer-events-auto rounded border border-neutral-800 bg-black/70 px-3 py-1.5 text-[11px] backdrop-blur">
+          <GameClock />
+        </div>
 
         <button
           onClick={() => setScreen('world')}

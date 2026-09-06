@@ -46,7 +46,6 @@ import {
   PADS,
   type Placement,
 } from '../../shared/base';
-import {clockSynced, formatClock, useServerClock} from './serverClock';
 
 /** A second tap after this is a new selection, not an open. */
 const DOUBLE_TAP_MS = 650;
@@ -88,7 +87,6 @@ export default function BaseBoard({
   const [lifted, setLifted] = useState<{id: string; x: number; y: number} | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const lastTap = useRef<{id: string; at: number}>({id: '', at: 0});
-  const now = useServerClock();
 
   useEffect(() => {
     const el = box.current;
@@ -253,7 +251,6 @@ export default function BaseBoard({
   }
 
   const labelPx = Math.max(11, Math.round(fit.w * 0.03));
-  const clockPx = Math.max(9, Math.round(fit.w * 0.026));
 
   // Draw order follows the pad's y so a southern building overlaps a northern
   // one, the way the map paints bases. A lifted building floats above all.
@@ -373,26 +370,14 @@ export default function BaseBoard({
                 onDoubleClick={() => onOpen(b.entry)}
                 decoding="async"
                 className={`block w-full cursor-pointer ${
-                  isLifted ? 'scale-105 brightness-110 drop-shadow-[0_0_14px_rgba(251,191,36,0.9)]' : ''
+                  isLifted ? 'brightness-110 drop-shadow-[0_0_14px_rgba(251,191,36,0.9)]' : ''
                 } ${isSel && !lifted ? 'drop-shadow-[0_0_10px_rgba(255,255,255,0.7)]' : ''}`}
-                style={{touchAction: 'none'}}
+                style={{
+                  touchAction: 'none',
+                  transformOrigin: '50% 100%',
+                  transform: `rotate(${isLifted ? 0 : pad.tilt}deg) scaleY(${b.stretch})${isLifted ? ' scale(1.05)' : ''}`,
+                }}
               />
-              {b.id === 'command_center' && (
-                <div
-                  className="pointer-events-none absolute flex items-center justify-center font-mono font-semibold tracking-wider text-amber-300"
-                  style={{
-                    left: '50%',
-                    top: '72%',
-                    width: '21%',
-                    height: '3.2%',
-                    transform: 'translate(-50%, -50%)',
-                    fontSize: clockPx,
-                    textShadow: '0 0 4px rgba(251,191,36,0.8)',
-                  }}
-                >
-                  {clockSynced() ? `RST ${formatClock(now)}` : t('board.clockUnknown')}
-                </div>
-              )}
             </div>
           );
         })}
