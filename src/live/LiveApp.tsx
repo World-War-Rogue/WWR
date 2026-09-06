@@ -146,21 +146,37 @@ function PlayerMenu({
 
   return (
     <div ref={box} className="relative">
+      {/*
+        Sized to match Squads on the other side of the header.
+
+        It used to be px-2 py-1.5 around a 26px portrait with the name hidden
+        below the sm breakpoint - so on a phone it was a small circle and a
+        caret, with nothing on it that said what it was. The two ends of the
+        header are the same kind of target and should be the same size; a
+        smaller one reads as less important rather than as more compact.
+
+        The name is always shown now. It is what makes this legible as "you"
+        rather than as an unlabelled icon, and it truncates rather than
+        wrapping - a long callsign narrows this button, it does not break the
+        row.
+      */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className={`flex items-center gap-2 rounded border px-2 py-1.5 text-sm font-medium transition ${
+        aria-label={`${player.username} — profile and settings`}
+        aria-expanded={open}
+        className={`flex items-center gap-2 rounded border px-3 py-2 text-sm font-medium transition ${
           open
             ? 'border-fuchsia-500 text-fuchsia-200'
-            : 'border-neutral-700 text-neutral-300 hover:border-fuchsia-500'
+            : 'border-neutral-700 text-neutral-300 hover:border-fuchsia-500 hover:text-fuchsia-200'
         }`}
       >
         <Portrait
           glyph={profile?.portrait.glyph ?? 'star'}
           tint={profile?.portrait.tint ?? 'ash'}
           src={`/api/portrait?name=${encodeURIComponent(player.username)}`}
-          size={26}
+          size={28}
         />
-        <span className="hidden max-w-[10rem] truncate sm:block">{player.username}</span>
+        <span className="max-w-[5.5rem] truncate sm:max-w-[10rem]">{player.username}</span>
         <span aria-hidden="true" className="text-[10px] text-neutral-500">
           ▾
         </span>
