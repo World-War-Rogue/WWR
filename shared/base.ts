@@ -88,7 +88,11 @@ export interface BoardBuilding {
   id: string;
   /** English name; the string table carries translations keyed on the id. */
   name: string;
-  /** Runtime art: 512x512, transparent, bottom-centre anchored. */
+  /**
+   * Runtime art: 512x720, transparent, bottom-centre anchored, with every
+   * building's own slab scaled to the same width - so any building fits any
+   * pad, and a tall one (missile tubes, a rotor mast) simply rises higher.
+   */
   art: string;
   movable: boolean;
   /** Art width relative to BUILDING_WIDTH. The Command Center is the big one. */
@@ -127,7 +131,7 @@ export const BOARD_BUILDINGS: readonly BoardBuilding[] = [
   {
     id: 'armour_hub',
     name: 'Armour Command Tank',
-    art: '/base/armour-tank.webp',
+    art: '/base/building-armour.webp',
     movable: true,
     size: 1,
     defaultPad: 'left_02',
@@ -136,7 +140,7 @@ export const BOARD_BUILDINGS: readonly BoardBuilding[] = [
   {
     id: 'artillery_hub',
     name: 'Artillery Command Platform',
-    art: '/base/artillery-platform.webp',
+    art: '/base/building-artillery.webp',
     movable: true,
     size: 1,
     defaultPad: 'left_03',
@@ -145,7 +149,7 @@ export const BOARD_BUILDINGS: readonly BoardBuilding[] = [
   {
     id: 'rotary_hub',
     name: 'Rotary Wing Command Helicopter',
-    art: '/base/rotary-helicopter.webp',
+    art: '/base/building-rotary.webp',
     movable: true,
     size: 1,
     defaultPad: 'right_02',
@@ -154,7 +158,7 @@ export const BOARD_BUILDINGS: readonly BoardBuilding[] = [
   {
     id: 'fixed_wing_hub',
     name: 'Fixed Wing Command Jet',
-    art: '/base/fixed-wing-jet.webp',
+    art: '/base/building-fixed-wing.webp',
     movable: true,
     size: 1,
     defaultPad: 'right_03',
@@ -163,7 +167,7 @@ export const BOARD_BUILDINGS: readonly BoardBuilding[] = [
   {
     id: 'drone_hub',
     name: 'Drone Operations Aircraft',
-    art: '/base/drone.webp',
+    art: '/base/building-drone.webp',
     movable: true,
     size: 1,
     defaultPad: 'upper_01',

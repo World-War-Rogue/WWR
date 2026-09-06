@@ -346,9 +346,9 @@ export default function BaseBoard({
                   className="pointer-events-none absolute flex items-center justify-center font-mono font-semibold tracking-wider text-amber-300"
                   style={{
                     left: '50%',
-                    top: '58.5%',
-                    width: '23%',
-                    height: '5%',
+                    top: '72%',
+                    width: '21%',
+                    height: '3.2%',
                     transform: 'translate(-50%, -50%)',
                     fontSize: clockPx,
                     textShadow: '0 0 4px rgba(251,191,36,0.8)',
