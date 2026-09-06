@@ -9,6 +9,7 @@
  *     npm run sim
  *     npm run sim -- --seeds 2000
  *     npm run sim -- --only matrix
+ *     npm run sim -- --only buildings
  *
  * Exits non-zero when a STANDING assertion fails. Three of the measurements
  * here are not one-off curiosities - they are the balance promises the design
@@ -56,6 +57,8 @@ const root = resolvePath(dirname(fileURLToPath(import.meta.url)), '..');
 const assets = await import(pathToFileURL(resolvePath(root, 'shared/assets.ts')).href);
 const combat = await import(pathToFileURL(resolvePath(root, 'shared/combat.ts')).href);
 const board = await import(pathToFileURL(resolvePath(root, 'shared/base.ts')).href);
+const buildings = await import(pathToFileURL(resolvePath(root, 'shared/buildings.ts')).href);
+const upgrades = await import(pathToFileURL(resolvePath(root, 'shared/upgrades.ts')).href);
 
 const {
   ASSETS,
@@ -782,6 +785,62 @@ if (wanted('curve')) {
   const firstStep = attributeAtLevel(1000, 2) / attributeAtLevel(1000, 1) - 1;
   console.log(`\n  Season 1 (ranks 1-10) spans ${s1.toFixed(2)}x.`);
   console.log(`  The first upgrade a player ever buys is worth ${pct(firstStep)}.`);
+}
+
+/* -------------------------------------------------------------------------- */
+/* 10. Asset building upgrades - the guardrails in the design doc             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * docs/ASSET-BUILDING-UPGRADES-v1.md §7. A building is worth a lot, and it
+ * must never be worth ten Service Ranks: a level-10 base with rank-20 assets
+ * loses to a level-0 base with rank-30 ones, at every band.
+ */
+if (wanted('buildings')) {
+  heading('10. Asset building upgrades');
+  const {buildingBoost, buildingStep, LEVELLED_BUILDINGS} = buildings;
+  const {attributesWith, NO_PACKAGES} = upgrades;
+  const tank = ASSET_BY_ID.m1a2;
+
+  // 1. Level 10 is exactly x1.218994 on every attribute, packages aside.
+  const bare = attributesWith(tank, 20, NO_PACKAGES, 1);
+  const lifted = attributesWith(tank, 20, NO_PACKAGES, buildingBoost(10));
+  const ratios = ['firepower', 'armour', 'mobility', 'range', 'detection'].map((k) => lifted[k] / bare[k]);
+  const ratioOk = ratios.every((r) => Math.abs(r - 1.218994) < 0.002);
+  console.log(`  level 10 boost: ${buildingBoost(10).toFixed(6)}x  (per-attribute ${ratios.map((r) => r.toFixed(3)).join(' ')})`);
+  assert('buildings.curve', ratioOk, `attributes off the 1.218994 multiplier: ${ratios.join(',')}`);
+
+  // 2/3. Ten ranks beat ten building levels, at both bands the doc names.
+  for (const [low, high] of [[20, 30], [40, 50]]) {
+    const ids = SEASON_1.slice(0, 6).map((a) => a.id);
+    let lowWins = 0;
+    let highWins = 0;
+    for (let seed = 1; seed <= Math.min(SEEDS, 600); seed += 1) {
+      const a = {name: 'building', units: ids.map((assetId) => ({assetId, level: low, boost: buildingBoost(10)}))};
+      const b = {name: 'rank', units: ids.map((assetId) => ({assetId, level: high}))};
+      const r1 = fight(a, b, seed);
+      const r2 = fight(b, a, seed);
+      if (r1.outcome === 'attacker') lowWins += 1; else if (r1.outcome === 'defender') highWins += 1;
+      if (r2.outcome === 'attacker') highWins += 1; else if (r2.outcome === 'defender') lowWins += 1;
+    }
+    const total = lowWins + highWins;
+    console.log(`  rank ${low} + building 10  vs  rank ${high} + building 0: ranks win ${pct(highWins / total)}`);
+    assert(`buildings.rank${high}`, highWins > lowWins, `building beat ten ranks (${lowWins} v ${highWins})`);
+  }
+
+  // 5. Every table row is a positive, rising price and time.
+  let monotone = true;
+  for (const b of LEVELLED_BUILDINGS) {
+    let prev = {cost: 0, ms: 0};
+    for (let l = 1; l <= 10; l += 1) {
+      const step = buildingStep(b, l);
+      if (step.cost <= prev.cost || step.ms <= prev.ms) monotone = false;
+      prev = step;
+    }
+  }
+  const cc10 = buildingStep('command_center', 10);
+  console.log(`  Command Center 10: ${cc10.cost} in ${(cc10.ms / 3600000).toFixed(0)}h; tank building 10: ${buildingStep('armour_hub', 10).cost}`);
+  assert('buildings.table', monotone, 'a level costs less or takes less time than the one before it');
 }
 
 /* -------------------------------------------------------------------------- */

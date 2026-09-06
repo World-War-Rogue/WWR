@@ -174,7 +174,7 @@ export async function readAsset(
  *
  * Both statements go in one `db.batch`, which D1 runs as a transaction.
  */
-function claimWallet(
+export function claimWallet(
   db: D1Database,
   playerId: string,
   wallet: Wallet,
@@ -189,7 +189,7 @@ function claimWallet(
     .bind(playerId, split.tokens, split.credits, wallet.rev);
 }
 
-function ledger(
+export function ledger(
   db: D1Database,
   playerId: string,
   kind: string,
@@ -252,6 +252,8 @@ export async function rankUp(
   split: Split | null,
   season: number,
   now: number,
+  /** The Command Center's ceiling on rank (shared/buildings.ts rankCeiling). */
+  ceiling = ASSET_MAX_LEVEL,
 ): Promise<UpgradeResult> {
   if (!ASSET_BY_ID[assetId]) return {ok: false, error: 'No such asset.'};
   if (!Number.isInteger(target)) return {ok: false, error: 'Pick a rank.'};
@@ -264,6 +266,9 @@ export async function rankUp(
   const cap = Math.min(ASSET_MAX_LEVEL, maxRankForSeason(season));
   if (target > cap) {
     return {ok: false, error: `Season ${season} caps Service Rank at ${cap}.`};
+  }
+  if (target > ceiling) {
+    return {ok: false, error: `Command Center must reach level ${target} first.`};
   }
 
   const cost = rankCost(asset.level, target);

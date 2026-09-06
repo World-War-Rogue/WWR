@@ -10,7 +10,9 @@
  * six production buildings still exist in the database and still produce, and
  * until the redesign reset retires them this is where they are upgraded.
  */
-import {type ReactNode, useState} from 'react';
+import {type ReactNode, useEffect, useState} from 'react';
+import BuildingPanel from './BuildingPanel';
+import {type BaseLevelsView, type Wallet, api} from '../net/api';
 import {type MessageKey, t} from '../i18n';
 import {
   type BaseView,
@@ -91,7 +93,19 @@ export function CommandCenterSheet({
   profile: ReactNode;
 }) {
   const [tab, setTab] = useState<'departments' | 'events' | 'wars' | 'profile'>('departments');
-  const cc = base.buildings.find((b) => b.kind === 'command_post');
+  // Base levels v2: the Command Center's own level. Read when the sheet opens.
+  const [levels, setLevels] = useState<BaseLevelsView | null>(null);
+  const [wallet, setWallet] = useState<Wallet>(base.wallet);
+  useEffect(() => {
+    let live = true;
+    api
+      .baseLevels()
+      .then((b) => live && setLevels(b))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
   const tabs = [
     {key: 'departments', label: t('cc.departments')},
     {key: 'events', label: t('cc.events')},
@@ -101,7 +115,7 @@ export function CommandCenterSheet({
 
   return (
     <Sheet
-      title={`${t('cc.title')} · ${t('board.level', {level: cc?.level ?? 0})}`}
+      title={`${t('cc.title')} · ${t('board.level', {level: levels?.levels.command_center ?? 0})}`}
       tabs={tabs}
       active={tab}
       onTab={(k) => setTab(k as typeof tab)}
@@ -112,6 +126,21 @@ export function CommandCenterSheet({
       {tab === 'profile' && profile}
       {tab === 'departments' && (
         <>
+          {levels && (
+            <div className="mb-4">
+              <BuildingPanel
+                building="command_center"
+                levels={levels.levels}
+                job={levels.job}
+                season={levels.season}
+                wallet={wallet}
+                onChanged={(next) => {
+                  setLevels((b) => (b ? {...b, levels: next.levels, job: next.job} : b));
+                  if (next.wallet) setWallet(next.wallet);
+                }}
+              />
+            </div>
+          )}
           {base.job && (
             <div className="mb-4 rounded border border-orange-800 bg-orange-950/30 p-4">
               <p className="text-xs uppercase tracking-widest text-orange-400">Under construction</p>

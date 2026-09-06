@@ -243,6 +243,8 @@ export interface CombatantSpec {
   slot?: number;
   /** Fraction of HP it arrived with, 0-1. Damaged assets fight damaged. */
   hpFraction?: number;
+  /** Its category building's boost (shared/buildings.ts). 1 when absent. */
+  boost?: number;
 }
 
 export interface SideSpec {
@@ -338,7 +340,7 @@ function build(spec: SideSpec): Unit[] {
   spec.units.forEach((u, i) => {
     const asset = ASSET_BY_ID[u.assetId];
     if (!asset) return;
-    const a = attributesWith(asset, u.level, u.packages ?? NO_PACKAGES);
+    const a = attributesWith(asset, u.level, u.packages ?? NO_PACKAGES, u.boost ?? 1);
     const position = positionOfSlot(u.slot ?? 2);
     const pos = POSITION[position];
     const armour = a.armour * (1 + pos.armour);
@@ -481,7 +483,7 @@ export function resolve(
     sum(
       spec.units.map((u) => {
         const asset = ASSET_BY_ID[u.assetId];
-        return asset ? assetPowerWith(asset, u.level, u.packages ?? NO_PACKAGES) : 0;
+        return asset ? assetPowerWith(asset, u.level, u.packages ?? NO_PACKAGES, u.boost ?? 1) : 0;
       }),
     );
   const powerA = powerOf(attackerSpec);

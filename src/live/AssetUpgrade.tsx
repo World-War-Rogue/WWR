@@ -151,19 +151,27 @@ export default function AssetUpgrade({
   wallet,
   onClose,
   onChanged,
+  boost = 1,
+  rankCeiling,
 }: {
   asset: Asset;
   held: OwnedAsset;
   wallet: Wallet;
   onClose: () => void;
   onChanged: (wallet: Wallet, held: OwnedAsset) => void;
+  /** The category building's boost, so the numbers here match the fight. */
+  boost?: number;
+  /** The Command Center's ceiling on rank. Absent means only the season caps. */
+  rankCeiling?: number;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const cap = Math.min(ASSET_MAX_LEVEL, maxRankForSeason(SEASON));
-  const now = attributesWith(asset, held.level, held.packages);
-  const power = assetPowerWith(asset, held.level, held.packages);
+  const seasonCap = Math.min(ASSET_MAX_LEVEL, maxRankForSeason(SEASON));
+  const cap = Math.min(seasonCap, rankCeiling ?? seasonCap);
+  const ccBlocked = held.level >= cap && cap < seasonCap;
+  const now = attributesWith(asset, held.level, held.packages, boost);
+  const power = assetPowerWith(asset, held.level, held.packages, boost);
   const integration = systemIntegration(held.packages);
 
   /**
@@ -379,7 +387,9 @@ export default function AssetUpgrade({
           cost={rankStep}
           affordable={canAfford(rankStep)}
           reason={
-            held.level >= cap
+            ccBlocked
+              ? `Command Center must reach level ${held.level + 1} first`
+              : held.level >= cap
               ? `Season ${SEASON} caps this at ${cap}`
               : !canAfford(rankStep)
                 ? 'Not enough to cover that'
@@ -394,7 +404,9 @@ export default function AssetUpgrade({
               `what unlocks the four below. Permanent, and the one thing a strip cannot ` +
               `undo. A full season of ranks is worth ${SEASON_GAIN}x.`,
             gain:
-              held.level >= cap
+              ccBlocked
+                ? `Held at the Command Center's level.`
+                : held.level >= cap
                 ? `At the Season ${SEASON} cap.`
                 : `+${rankGain.toFixed(1)} points across all five, and raises every package ` +
                   `ceiling to ${held.level + 1}.`,

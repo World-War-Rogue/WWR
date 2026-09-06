@@ -18,6 +18,8 @@ import {
 } from '../shared/march';
 import {type SideSpec, resolve} from '../shared/combat';
 import {readSquads} from './squads';
+import {readBase} from './buildings';
+import {categoryBoost} from '../shared/buildings';
 
 export interface MarchRow {
   id: string;
@@ -91,6 +93,8 @@ export interface UnitSpec {
   packages: Packages;
   /** Slot in its Task Force, 0-5. The formation. Absent for legacy rows. */
   slot?: number;
+  /** Its category building's boost. Absent means 1. */
+  boost?: number;
 }
 
 interface AssetLevelRow {
@@ -107,12 +111,18 @@ const ROSTER_SQL = `SELECT asset_id AS assetId, level, pkg_armament, pkg_protect
                       FROM player_assets WHERE player_id = ?1`;
 
 async function rosterOf(db: D1Database, playerId: string): Promise<Map<string, UnitSpec>> {
-  const rows = await db.prepare(ROSTER_SQL).bind(playerId).all<AssetLevelRow>();
+  // The base's building levels ride along on every unit as a boost, so the
+  // resolver, the march clock and the power figure all see the same asset.
+  const [rows, base] = await Promise.all([
+    db.prepare(ROSTER_SQL).bind(playerId).all<AssetLevelRow>(),
+    readBase(db, playerId, Date.now()),
+  ]);
   return new Map(
-    (rows.results ?? []).map((r) => [
-      r.assetId,
-      {assetId: r.assetId, level: r.level, packages: packagesFromRow(r)},
-    ]),
+    (rows.results ?? []).map((r) => {
+      const asset = ASSET_BY_ID[r.assetId];
+      const boost = asset ? categoryBoost(base.levels, asset.category) : 1;
+      return [r.assetId, {assetId: r.assetId, level: r.level, packages: packagesFromRow(r), boost}];
+    }),
   );
 }
 
@@ -227,7 +237,7 @@ export async function launch(
   const slowest = Math.min(
     ...units.map((u) => {
       const asset = ASSET_BY_ID[u.assetId];
-      return asset ? attributesWith(asset, u.level, u.packages).mobility : 5;
+      return asset ? attributesWith(asset, u.level, u.packages, u.boost ?? 1).mobility : 5;
     }),
   );
   const seconds = marchSeconds(plotsBetween(from.x, from.y, to.x, to.y), slowest);
@@ -474,7 +484,7 @@ export async function settleArrivals(
     const power = (us: UnitSpec[]) =>
       us.reduce((sum, u) => {
         const asset = ASSET_BY_ID[u.assetId];
-        return sum + (asset ? assetPowerWith(asset, u.level, u.packages ?? BARE) : 0);
+        return sum + (asset ? assetPowerWith(asset, u.level, u.packages ?? BARE, u.boost ?? 1) : 0);
       }, 0);
 
     await db.batch([

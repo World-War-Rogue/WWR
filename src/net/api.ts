@@ -11,6 +11,7 @@ import type {Placement} from '../../shared/base';
 import type {BattleDetail, BattleSummary} from '../../shared/battles';
 import type {Deployment, MarchKind} from '../../shared/march';
 import type {PackageKey, Packages} from '../../shared/upgrades';
+import type {BuildingLevels} from '../../shared/buildings';
 
 export interface ChatMessage {
   id: string;
@@ -263,6 +264,22 @@ export interface SquadView {
   buildings: {motor_pool: number; airfield: number; barracks: number};
   /** Squads in the field. Locked: what marched out is what fights. */
   away: string[];
+  /** The Command Center and asset-building levels, and the job running. */
+  base: BaseLevelsView;
+}
+
+export interface BaseJobView {
+  id: string;
+  building: string;
+  toLevel: number;
+  startedAt: number;
+  completesAt: number;
+}
+
+export interface BaseLevelsView {
+  levels: BuildingLevels;
+  job: BaseJobView | null;
+  season: number;
 }
 
 export interface RallyPoint {
@@ -386,6 +403,12 @@ export const api = {
    * the catalogue and refuses anything else. The split is optional and the
    * server spends Credits first without it.
    */
+  baseLevels: () => call<BaseLevelsView>('/api/base/levels'),
+  startLevel: (building: string, split?: Wallet) =>
+    call<{ok: true; wallet: Wallet; levels: BuildingLevels; job: BaseJobView | null}>(
+      '/api/base/level',
+      {method: 'POST', body: JSON.stringify({building, split})},
+    ),
   rankUp: (assetId: string, target: number, split?: Wallet) =>
     call<UpgradeResponse>('/api/assets/rank', {
       method: 'POST',

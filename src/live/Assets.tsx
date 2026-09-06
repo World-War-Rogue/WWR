@@ -14,7 +14,9 @@ import {useEffect, useMemo, useState} from 'react';
 import AssetIcon from './AssetIcon';
 import AssetUpgrade from './AssetUpgrade';
 import ForcesTabs from './ForcesTabs';
-import {type OwnedAsset, type Wallet, api} from '../net/api';
+import {type BaseLevelsView, type OwnedAsset, type Wallet, api} from '../net/api';
+import BuildingPanel from './BuildingPanel';
+import {HUB_OF_CATEGORY, categoryBoost} from '../../shared/buildings';
 import {t} from '../i18n';
 import {taskForceName} from './taskForce';
 import {
@@ -207,6 +209,7 @@ export default function Assets({
   const [placed, setPlaced] = useState<Map<string, string>>(new Map());
   const [roster, setRoster] = useState<Map<string, OwnedAsset>>(new Map());
   const [wallet, setWallet] = useState<Wallet | null>(null);
+  const [base, setBase] = useState<BaseLevelsView | null>(null);
   const [upgrading, setUpgrading] = useState<string | null>(null);
 
   // Squad placement, so each card can say where it is. Read once when the
@@ -227,6 +230,7 @@ export default function Assets({
         setPlaced(map);
         setRoster(new Map(view.owned.map((o) => [o.assetId, o])));
         setWallet(view.wallet);
+        setBase(view.base);
       })
       .catch(() => undefined);
     return () => {
@@ -297,6 +301,21 @@ export default function Assets({
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        {only && base && HUB_OF_CATEGORY[only] && (
+          <div className="mb-3">
+            <BuildingPanel
+              building={HUB_OF_CATEGORY[only]!}
+              levels={base.levels}
+              job={base.job}
+              season={base.season}
+              wallet={wallet}
+              onChanged={(next) => {
+                setBase((b) => (b ? {...b, levels: next.levels, job: next.job} : b));
+                if (next.wallet) setWallet(next.wallet);
+              }}
+            />
+          </div>
+        )}
         <p className="mb-3 text-[11px] leading-relaxed text-neutral-600">
           No asset is stronger than another. Bigger numbers cost more lift, and a squad has a
           lift budget — so the choice is what a squad is <em>for</em>, not which entries are best.
@@ -323,6 +342,8 @@ export default function Assets({
           asset={ASSET_BY_ID[upgrading]}
           held={roster.get(upgrading)!}
           wallet={wallet}
+          boost={base ? categoryBoost(base.levels, ASSET_BY_ID[upgrading].category) : 1}
+          rankCeiling={base ? Math.max(1, base.levels.command_center) : undefined}
           onClose={() => setUpgrading(null)}
           onChanged={(nextWallet, nextHeld) => {
             setWallet(nextWallet);

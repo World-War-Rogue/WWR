@@ -33,6 +33,7 @@ import {
   type SquadName,
 } from '../shared/assets';
 import {type Packages, assetPowerWith, packagesFromRow} from '../shared/upgrades';
+import {type BuildingLevels, NO_BUILDINGS, categoryBoost} from '../shared/buildings';
 
 export interface OwnedAsset {
   assetId: string;
@@ -210,13 +211,14 @@ export function squadPower(
   board: SquadBoard,
   roster: Map<string, OwnedAsset>,
   squad: SquadName,
+  levels: BuildingLevels = NO_BUILDINGS,
 ): number {
   return board[squad].reduce<number>((sum, id) => {
     if (!id) return sum;
     const asset = ASSET_BY_ID[id];
     if (!asset) return sum;
     const held = roster.get(id);
-    return sum + assetPowerWith(asset, held?.level ?? 1, held?.packages);
+    return sum + assetPowerWith(asset, held?.level ?? 1, held?.packages, categoryBoost(levels, asset.category));
   }, 0);
 }
 

@@ -8,6 +8,8 @@ import {handleAdminRequests} from './admin';
 import {ensureRally, lastRalliedAt, rallyTo, readRally, setRally} from './rally';
 import {assignSlot, ensureRoster, moveSlot, readSquads, squadLiftUsed, squadPower} from './squads';
 import {packageUp, rankUp, resetPackages, settleWallet} from './upgrades';
+import {readBase, startLevel} from './buildings';
+import {rankCeiling} from '../shared/buildings';
 import {isPackageKey} from '../shared/upgrades';
 import {type Split} from '../shared/economy';
 import {
@@ -1038,10 +1040,11 @@ async function handleSquads(env: Env, player: PlayerRow): Promise<Response> {
   const state = await settleAndLoad(env, player.id, now);
   if (!state) return fail(404, 'No base found.');
 
-  const [owned, board, away] = await Promise.all([
+  const [owned, board, away, base] = await Promise.all([
     ensureRoster(env.DB, player.id, now),
     readSquads(env.DB, player.id),
     marchingSquads(env.DB, player.id),
+    readBase(env.DB, player.id, now),
   ]);
 
   const roster = new Map(owned.map((o) => [o.assetId, o]));
@@ -1062,8 +1065,11 @@ async function handleSquads(env: Env, player: PlayerRow): Promise<Response> {
       ),
     },
     power: Object.fromEntries(
-      SQUAD_NAMES.map((name) => [name, squadPower(board, roster, name)]),
+      SQUAD_NAMES.map((name) => [name, squadPower(board, roster, name, base.levels)]),
     ),
+    // The Command Center and asset-building levels, so every asset card can
+    // draw the attributes the building boost gives without a second request.
+    base: {levels: base.levels, job: base.job, season: CURRENT_SEASON},
     // Echoed so the squad screen can show them without asking for the base
     // separately. They no longer affect what fits in a squad.
     buildings: {
@@ -1116,6 +1122,7 @@ async function handleRankUp(
   const split = readSplit(body);
   if (split === 'bad') return fail(400, 'That payment does not make sense.');
 
+  const base = await readBase(env.DB, player.id, Date.now());
   const result = await rankUp(
     env.DB,
     player.id,
@@ -1124,6 +1131,7 @@ async function handleRankUp(
     split,
     CURRENT_SEASON,
     Date.now(),
+    rankCeiling(base.levels),
   );
   if (!result.ok) return fail(400, result.error);
   return json({
@@ -2638,6 +2646,26 @@ async function route(
   }
 
   if (endpoint === 'POST /api/assets/rank') return handleRankUp(request, env, player);
+
+  if (endpoint === 'GET /api/base/levels') {
+    const base = await readBase(env.DB, player.id, Date.now());
+    return json({levels: base.levels, job: base.job, season: CURRENT_SEASON});
+  }
+
+  if (endpoint === 'POST /api/base/level') {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const building = typeof body?.building === 'string' ? body.building : '';
+    const split = readSplit(body);
+    if (split === 'bad') return fail(400, 'That payment does not make sense.');
+    const result = await startLevel(env.DB, player.id, building, split, CURRENT_SEASON, Date.now());
+    if (!result.ok) return fail(400, result.error);
+    return json({
+      ok: true,
+      wallet: {tokens: result.wallet.tokens, credits: result.wallet.credits},
+      levels: result.base.levels,
+      job: result.base.job,
+    });
+  }
 
   if (endpoint === 'POST /api/assets/package') return handlePackageUp(request, env, player);
 

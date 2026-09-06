@@ -122,11 +122,17 @@ export function attributesWith(
   asset: Asset,
   level: number,
   pkg: Packages = NO_PACKAGES,
+  /**
+   * The category's building boost (shared/buildings.ts), applied to the
+   * ranked attribute BEFORE packages are added, for the same reason packages
+   * are not scaled by rank: a point of Armament is worth one point everywhere.
+   */
+  boost = 1,
 ): AssetAttributes {
   const integration = systemIntegration(pkg);
   const out = {} as AssetAttributes;
   for (const key of ['firepower', 'armour', 'mobility', 'range', 'detection'] as const) {
-    let v = attributeAtLevel(asset.attributes[key], level) + integration;
+    let v = attributeAtLevel(asset.attributes[key], level) * boost + integration;
     for (const p of PACKAGE_KEYS) {
       if (PACKAGE_ATTRIBUTE[p] === key) v += (pkg[p] - 1) * PACKAGE_POINTS_PER_RANK;
     }
@@ -140,8 +146,9 @@ export function assetPowerWith(
   asset: Asset,
   level: number,
   pkg: Packages = NO_PACKAGES,
+  boost = 1,
 ): number {
-  const a = attributesWith(asset, level, pkg);
+  const a = attributesWith(asset, level, pkg, boost);
   return Math.round((a.firepower + a.armour + a.mobility + a.range + a.detection) * 6);
 }
 
