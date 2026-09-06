@@ -40,6 +40,7 @@ export const BASE = {
   'board.tfOut': 'Out',
   'board.tfEmpty': 'Empty',
   'board.openHint': 'Tap again to open · hold to move',
+  'board.openHintFixed': 'Tap again to open',
   'board.clockUnknown': 'RST --:--',
 
   // Command Center

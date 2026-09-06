@@ -146,7 +146,11 @@ export default function BaseBoard({
   }
 
   function tapBuilding(id: string) {
-    const entry = id === COMMAND_CENTER_ID ? COMMAND_CENTER_ENTRY : BOARD_BUILDING_BY_ID[id]?.entry;
+    const entry: BuildingEntry | undefined = id.startsWith('tf:')
+      ? {kind: 'taskforce', squad: id.slice(3)}
+      : id === COMMAND_CENTER_ID
+        ? COMMAND_CENTER_ENTRY
+        : BOARD_BUILDING_BY_ID[id]?.entry;
     if (!entry) return;
     const at = Date.now();
     const prev = lastTap.current;
@@ -200,7 +204,7 @@ export default function BaseBoard({
   function onDown(e: ReactPointerEvent, id: string | null) {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     const b = id ? BOARD_BUILDING_BY_ID[id] ?? null : null;
-    const fixed = id === COMMAND_CENTER_ID || !!b?.fixed;
+    const fixed = id === COMMAND_CENTER_ID || !!b?.fixed || !!id?.startsWith('tf:');
     const p: NonNullable<typeof press.current> = {
       id,
       startX: e.clientX,
@@ -226,7 +230,7 @@ export default function BaseBoard({
     } else if (fixed) {
       p.timer = window.setTimeout(() => {
         if (press.current === p && p.mode === 'undecided') {
-          setNote(b ? t('board.fixedRunway') : t('board.fixed'));
+          setNote(b ? t('board.fixedRunway') : id?.startsWith('tf:') ? t('board.tfLine') : t('board.fixed'));
         }
       }, HOLD_MS);
     }
@@ -382,7 +386,7 @@ export default function BaseBoard({
                 <span className="text-orange-300"> · {t('board.level', {level: ccLevel})}</span>
               </span>
               <span className="mt-0.5 rounded bg-black/60 px-1.5 text-[0.8em] text-neutral-300">
-                {t('board.openHint')}
+                {t('board.openHintFixed')}
               </span>
             </div>
           )}
@@ -403,10 +407,14 @@ export default function BaseBoard({
           const out = forces?.away.includes(squad) ?? false;
           const state = !forces ? '' : out ? t('board.tfOut') : filled === 0 ? t('board.tfEmpty') : t('board.tfHome');
           const tint = out ? 'text-orange-300' : filled === 0 ? 'text-neutral-500' : 'text-emerald-300';
+          const tfId = `tf:${squad}`;
+          const tfSel = selected === tfId;
           return (
             <div
               key={padId}
-              className="pointer-events-none absolute flex flex-col items-center justify-center text-center"
+              className={`absolute flex flex-col items-center justify-center text-center ${
+                tfSel ? 'rounded ring-2 ring-white/70' : ''
+              }`}
               style={{
                 left: `${pad.x * 100}%`,
                 top: `${pad.y * 100}%`,
@@ -415,10 +423,22 @@ export default function BaseBoard({
                 transform: 'translate(-50%, -50%)',
                 fontSize: labelPx * 0.85,
                 zIndex: 8,
+                touchAction: 'none',
               }}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                onDown(e, tfId);
+              }}
+              onPointerMove={onMove}
+              onPointerUp={onUp}
+              onPointerCancel={onCancel}
+              onDoubleClick={() => onOpen({kind: 'taskforce', squad})}
             >
               <span className="whitespace-nowrap font-semibold uppercase tracking-wider text-neutral-800/90">{squad}</span>
               <span className={`mt-0.5 rounded bg-black/70 px-1.5 text-[0.85em] font-semibold ${tint}`}>{state}</span>
+              {tfSel && (
+                <span className="mt-0.5 rounded bg-black/60 px-1.5 text-[0.75em] text-neutral-300">{t('board.openHintFixed')}</span>
+              )}
             </div>
           );
         })}
@@ -450,7 +470,7 @@ export default function BaseBoard({
                     {buildingName(b)}
                   </span>
                   <span className="mt-0.5 rounded bg-black/60 px-1.5 text-[0.8em] text-neutral-300">
-                    {t('board.openHint')}
+                    {t(b.fixed ? 'board.openHintFixed' : 'board.openHint')}
                   </span>
                 </div>
               )}

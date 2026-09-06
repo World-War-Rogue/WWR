@@ -155,6 +155,7 @@ export default function LiveApp() {
   // assets screen was entered through (null = the whole catalogue).
   const [sheet, setSheet] = useState<'command_center' | 'depot' | {department: string} | null>(null);
   const [assetOnly, setAssetOnly] = useState<AssetCategory | null>(null);
+  const [squadOnly, setSquadOnly] = useState<string | null>(null);
   const [checking, setChecking] = useState(true);
   /** Bumped when the language changes, purely to force a redraw. */
   const [, setLangTick] = useState(0);
@@ -348,7 +349,17 @@ export default function LiveApp() {
     return (
       <>
         <div className="fixed inset-0 bg-[#0a0906] text-neutral-200">
-          <Squads onClose={() => setScreen('base')} onShowAssets={() => setScreen('assets')} />
+          <Squads
+            only={squadOnly}
+            onClose={() => {
+              setSquadOnly(null);
+              setScreen('base');
+            }}
+            onShowAssets={() => {
+              setSquadOnly(null);
+              setScreen('assets');
+            }}
+          />
         </div>
         {chat}
       </>
@@ -408,6 +419,9 @@ export default function LiveApp() {
               setScreen('assets');
             } else if (entry.kind === 'department') {
               setSheet({department: entry.id});
+            } else if (entry.kind === 'taskforce') {
+              setSquadOnly(entry.squad);
+              setScreen('squads');
             } else {
               setSheet(entry.kind);
             }

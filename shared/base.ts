@@ -118,7 +118,9 @@ export type BuildingEntry =
   | {kind: 'depot'}
   | {kind: 'assets'; category: AssetCategory}
   /** A department with no screen of its own yet: name, function, "soon". */
-  | {kind: 'department'; id: string};
+  | {kind: 'department'; id: string}
+  /** A Task Force slab: that Task Force's roster, to fill and rearrange. */
+  | {kind: 'taskforce'; squad: string};
 
 export interface BoardBuilding {
   /** Stable id. Never renamed once a placement row refers to it. */

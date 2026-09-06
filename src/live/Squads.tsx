@@ -100,9 +100,15 @@ function Slot({
 export default function Squads({
   onClose,
   onShowAssets,
+  only = null,
 }: {
   onClose: () => void;
   onShowAssets: () => void;
+  /**
+   * Opened from a Task Force slab on the base: just that one Task Force, so
+   * the player is editing the thing they tapped and not the whole roster.
+   */
+  only?: string | null;
 }) {
   const [view, setView] = useState<SquadView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -320,7 +326,7 @@ export default function Squads({
         <ForcesTabs active="squads" onChange={(tab) => tab === 'assets' && onShowAssets()} />
         {view && (
           <span className="ml-auto text-[11px] text-neutral-500">
-            Any six assets, any squad
+            {only ? taskForceName(only) : 'Any six assets, any task force'}
           </span>
         )}
       </div>
@@ -336,8 +342,8 @@ export default function Squads({
           <p className="text-sm text-neutral-500">Reading the roster…</p>
         ) : (
           <>
-            <div className="grid gap-3 lg:grid-cols-2">
-              {SQUAD_NAMES.map((name) => {
+            <div className={only ? 'mx-auto max-w-xl' : 'grid gap-3 lg:grid-cols-2'}>
+              {SQUAD_NAMES.filter((name) => !only || name === only).map((name) => {
                 const used = view.lift.used[name] ?? 0;
                 const filled = (view.squads[name] ?? []).filter(Boolean).length;
                 const out = away.has(name);
