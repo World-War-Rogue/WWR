@@ -203,7 +203,7 @@ export const ASSETS: Asset[] = [
     role: 'breach',
     operator: 'USA',
     lift: 5,
-    attributes: {firepower: 8, armour: 9, mobility: 4, range: 3, detection: 2},
+    attributes: {firepower: 9, armour: 10, mobility: 3, range: 3, detection: 5},
     blurb: 'Gas turbine, depleted uranium, and a habit of arriving first.',
   },
   {
@@ -214,7 +214,7 @@ export const ASSETS: Asset[] = [
     role: 'breach',
     operator: 'Germany',
     lift: 5,
-    attributes: {firepower: 7, armour: 10, mobility: 4, range: 3, detection: 2},
+    attributes: {firepower: 9, armour: 8, mobility: 5, range: 5, detection: 3},
     blurb: 'Built to be repaired in the field and rarely needing it.',
   },
   {
@@ -225,7 +225,7 @@ export const ASSETS: Asset[] = [
     role: 'breach',
     operator: 'UK',
     lift: 5,
-    attributes: {firepower: 7, armour: 10, mobility: 3, range: 4, detection: 2},
+    attributes: {firepower: 6, armour: 10, mobility: 3, range: 6, detection: 5},
     blurb: 'Slow, stubborn, and famously hard to finish off.',
   },
   {
@@ -236,7 +236,7 @@ export const ASSETS: Asset[] = [
     role: 'screen',
     operator: 'France',
     lift: 4,
-    attributes: {firepower: 4, armour: 4, mobility: 7, range: 3, detection: 4},
+    attributes: {firepower: 6, armour: 6, mobility: 7, range: 3, detection: 8},
     blurb: 'Light for its class. Gets somewhere else before the reply lands.',
   },
   {
@@ -247,7 +247,7 @@ export const ASSETS: Asset[] = [
     role: 'breach',
     operator: 'South Korea',
     lift: 5,
-    attributes: {firepower: 7, armour: 9, mobility: 4, range: 3, detection: 3},
+    attributes: {firepower: 8, armour: 9, mobility: 3, range: 7, detection: 3},
     blurb: 'Suspension that reads the ground and a gun that never stops tracking.',
   },
   {
@@ -258,7 +258,7 @@ export const ASSETS: Asset[] = [
     role: 'screen',
     operator: 'Japan',
     lift: 4,
-    attributes: {firepower: 4, armour: 3, mobility: 8, range: 3, detection: 4},
+    attributes: {firepower: 3, armour: 6, mobility: 10, range: 4, detection: 7},
     blurb: 'Small, quick, and built for ground nobody else brings a tank to.',
   },
   {
@@ -269,7 +269,7 @@ export const ASSETS: Asset[] = [
     role: 'breach',
     operator: 'Israel',
     lift: 5,
-    attributes: {firepower: 6, armour: 10, mobility: 4, range: 4, detection: 2},
+    attributes: {firepower: 6, armour: 10, mobility: 6, range: 4, detection: 4},
     blurb: 'Engine in front, crew behind it. The design argument is the crew.',
   },
   {
@@ -280,7 +280,7 @@ export const ASSETS: Asset[] = [
     role: 'breach',
     operator: 'Russia',
     lift: 4,
-    attributes: {firepower: 7, armour: 7, mobility: 3, range: 3, detection: 2},
+    attributes: {firepower: 6, armour: 10, mobility: 6, range: 6, detection: 2},
     blurb: 'Cheap to build, plentiful, and unpleasant in numbers.',
   },
   {
@@ -291,7 +291,7 @@ export const ASSETS: Asset[] = [
     role: 'breach',
     operator: 'Turkey',
     lift: 4,
-    attributes: {firepower: 6, armour: 8, mobility: 3, range: 3, detection: 2},
+    attributes: {firepower: 8, armour: 8, mobility: 7, range: 3, detection: 4},
     blurb: 'Newer than the fight it was designed for, and better for it.',
   },
   {
@@ -302,7 +302,7 @@ export const ASSETS: Asset[] = [
     role: 'breach',
     operator: 'Sweden',
     lift: 5,
-    attributes: {firepower: 7, armour: 9, mobility: 4, range: 3, detection: 3},
+    attributes: {firepower: 9, armour: 8, mobility: 3, range: 5, detection: 5},
     blurb: 'A Leopard that went north and came back better armoured.',
   },
   {
@@ -313,7 +313,7 @@ export const ASSETS: Asset[] = [
     role: 'screen',
     operator: 'Italy',
     lift: 4,
-    attributes: {firepower: 4, armour: 4, mobility: 7, range: 3, detection: 4},
+    attributes: {firepower: 3, armour: 5, mobility: 8, range: 6, detection: 8},
     blurb: 'Fast on a road and honest about preferring one.',
   },
   {
@@ -324,7 +324,7 @@ export const ASSETS: Asset[] = [
     role: 'screen',
     operator: 'Poland',
     lift: 3,
-    attributes: {firepower: 3, armour: 3, mobility: 6, range: 3, detection: 3},
+    attributes: {firepower: 5, armour: 7, mobility: 6, range: 6, detection: 6},
     blurb: 'Old bones, new optics, and more of them than you expected.',
   },
   {
@@ -335,7 +335,7 @@ export const ASSETS: Asset[] = [
     role: 'strike',
     operator: 'USA',
     lift: 3,
-    attributes: {firepower: 7, armour: 2, mobility: 4, range: 3, detection: 2},
+    attributes: {firepower: 9, armour: 3, mobility: 9, range: 4, detection: 5},
     blurb: 'Sits behind a ridge, looks over it once, and empties the far side.',
   },
   {
@@ -346,7 +346,7 @@ export const ASSETS: Asset[] = [
     role: 'strike',
     operator: 'USA',
     lift: 3,
-    attributes: {firepower: 7, armour: 1, mobility: 5, range: 3, detection: 2},
+    attributes: {firepower: 9, armour: 5, mobility: 6, range: 4, detection: 6},
     blurb: 'Narrow, quick, and designed to leave from a deck.',
   },
   {
@@ -357,7 +357,7 @@ export const ASSETS: Asset[] = [
     role: 'strike',
     operator: 'Russia',
     lift: 3,
-    attributes: {firepower: 7, armour: 2, mobility: 4, range: 3, detection: 2},
+    attributes: {firepower: 9, armour: 5, mobility: 6, range: 6, detection: 4},
     blurb: 'Coaxial rotors, no tail to shoot off, and ejection seats.',
   },
   {
@@ -368,7 +368,7 @@ export const ASSETS: Asset[] = [
     role: 'strike',
     operator: 'Russia',
     lift: 3,
-    attributes: {firepower: 7, armour: 2, mobility: 4, range: 3, detection: 2},
+    attributes: {firepower: 9, armour: 5, mobility: 9, range: 4, detection: 3},
     blurb: 'Armoured to keep flying after being hit, which it expects to be.',
   },
   {
@@ -379,7 +379,7 @@ export const ASSETS: Asset[] = [
     role: 'lift',
     operator: 'Russia',
     lift: 3,
-    attributes: {firepower: 3, armour: 5, mobility: 5, range: 2, detection: 3},
+    attributes: {firepower: 3, armour: 8, mobility: 8, range: 6, detection: 5},
     blurb: 'A gunship that also carries eight people. Neither job done gently.',
   },
   {
@@ -390,7 +390,7 @@ export const ASSETS: Asset[] = [
     role: 'screen',
     operator: 'France / Germany',
     lift: 3,
-    attributes: {firepower: 3, armour: 3, mobility: 6, range: 3, detection: 3},
+    attributes: {firepower: 5, armour: 5, mobility: 9, range: 3, detection: 8},
     blurb: 'Quiet for its size and hard to hear coming twice.',
   },
   {
@@ -401,7 +401,7 @@ export const ASSETS: Asset[] = [
     role: 'screen',
     operator: 'Turkey',
     lift: 2,
-    attributes: {firepower: 3, armour: 2, mobility: 5, range: 2, detection: 2},
+    attributes: {firepower: 4, armour: 3, mobility: 10, range: 6, detection: 7},
     blurb: 'Small, cheap to keep flying, and everywhere it is needed.',
   },
   {
@@ -412,7 +412,7 @@ export const ASSETS: Asset[] = [
     role: 'strike',
     operator: 'China',
     lift: 3,
-    attributes: {firepower: 7, armour: 2, mobility: 4, range: 3, detection: 2},
+    attributes: {firepower: 8, armour: 3, mobility: 6, range: 7, detection: 6},
     blurb: 'Uprated engines, new armour, and a great many of them.',
   },
   {
@@ -423,7 +423,7 @@ export const ASSETS: Asset[] = [
     role: 'strike',
     operator: 'South Africa',
     lift: 3,
-    attributes: {firepower: 7, armour: 1, mobility: 4, range: 4, detection: 2},
+    attributes: {firepower: 7, armour: 5, mobility: 9, range: 4, detection: 5},
     blurb: 'Built where the ranges are long and the support is far away.',
   },
   {
@@ -434,7 +434,7 @@ export const ASSETS: Asset[] = [
     role: 'lift',
     operator: 'USA',
     lift: 3,
-    attributes: {firepower: 2, armour: 4, mobility: 6, range: 3, detection: 3},
+    attributes: {firepower: 3, armour: 7, mobility: 8, range: 4, detection: 8},
     blurb: 'The one that comes to get you. Everything else is negotiable.',
   },
   {
@@ -445,7 +445,7 @@ export const ASSETS: Asset[] = [
     role: 'lift',
     operator: 'USA',
     lift: 4,
-    attributes: {firepower: 2, armour: 7, mobility: 6, range: 3, detection: 4},
+    attributes: {firepower: 3, armour: 5, mobility: 9, range: 6, detection: 7},
     blurb: 'Two rotors and no argument about whether it will fit.',
   },
   {
@@ -456,7 +456,7 @@ export const ASSETS: Asset[] = [
     role: 'lift',
     operator: 'UK / Italy',
     lift: 4,
-    attributes: {firepower: 2, armour: 5, mobility: 7, range: 3, detection: 5},
+    attributes: {firepower: 5, armour: 5, mobility: 8, range: 4, detection: 8},
     blurb: 'Three engines, because two has been known to be optimistic.',
   },
   {
@@ -467,7 +467,7 @@ export const ASSETS: Asset[] = [
     role: 'strike',
     operator: 'USA',
     lift: 5,
-    attributes: {firepower: 10, armour: 2, mobility: 6, range: 4, detection: 4},
+    attributes: {firepower: 9, armour: 5, mobility: 6, range: 7, detection: 3},
     blurb: 'Sees the whole fight and tells everyone else where to shoot.',
   },
   {
@@ -478,7 +478,7 @@ export const ASSETS: Asset[] = [
     role: 'screen',
     operator: 'USA',
     lift: 5,
-    attributes: {firepower: 4, armour: 4, mobility: 10, range: 3, detection: 5},
+    attributes: {firepower: 5, armour: 5, mobility: 9, range: 5, detection: 6},
     blurb: 'Arrives, clears the sky, and is not seen doing either.',
   },
   {
@@ -489,7 +489,7 @@ export const ASSETS: Asset[] = [
     role: 'strike',
     operator: 'USA',
     lift: 5,
-    attributes: {firepower: 10, armour: 3, mobility: 6, range: 5, detection: 2},
+    attributes: {firepower: 9, armour: 3, mobility: 7, range: 5, detection: 6},
     blurb: 'Carries more than anything its size has any right to.',
   },
   {
@@ -500,7 +500,7 @@ export const ASSETS: Asset[] = [
     role: 'strike',
     operator: 'USA',
     lift: 4,
-    attributes: {firepower: 10, armour: 3, mobility: 3, range: 4, detection: 2},
+    attributes: {firepower: 8, armour: 3, mobility: 8, range: 8, detection: 3},
     blurb: 'Built around the gun, then armoured until it could stay.',
   },
   {
@@ -511,7 +511,7 @@ export const ASSETS: Asset[] = [
     role: 'strike',
     operator: 'USA',
     lift: 4,
-    attributes: {firepower: 9, armour: 2, mobility: 5, range: 4, detection: 2},
+    attributes: {firepower: 10, armour: 5, mobility: 5, range: 5, detection: 5},
     blurb: 'Does six jobs adequately, which wins more days than one job perfectly.',
   },
   {
@@ -522,7 +522,7 @@ export const ASSETS: Asset[] = [
     role: 'overwatch',
     operator: 'USA',
     lift: 5,
-    attributes: {firepower: 10, armour: 2, mobility: 2, range: 10, detection: 2},
+    attributes: {firepower: 10, armour: 3, mobility: 3, range: 10, detection: 4},
     blurb: 'Turns in a slow circle and takes a town apart from inside it.',
   },
   {
@@ -533,7 +533,7 @@ export const ASSETS: Asset[] = [
     role: 'screen',
     operator: 'Multi-national',
     lift: 4,
-    attributes: {firepower: 4, armour: 4, mobility: 7, range: 3, detection: 4},
+    attributes: {firepower: 7, armour: 4, mobility: 8, range: 3, detection: 8},
     blurb: 'Four nations argued for a decade and got this right.',
   },
   {
@@ -544,7 +544,7 @@ export const ASSETS: Asset[] = [
     role: 'strike',
     operator: 'France',
     lift: 4,
-    attributes: {firepower: 8, armour: 2, mobility: 5, range: 5, detection: 2},
+    attributes: {firepower: 8, armour: 5, mobility: 8, range: 5, detection: 4},
     blurb: 'Flies off a carrier or a farm track and does not mind which.',
   },
   {
@@ -555,7 +555,7 @@ export const ASSETS: Asset[] = [
     role: 'screen',
     operator: 'Sweden',
     lift: 3,
-    attributes: {firepower: 3, armour: 3, mobility: 7, range: 2, detection: 3},
+    attributes: {firepower: 5, armour: 6, mobility: 8, range: 3, detection: 8},
     blurb: 'Rearmed on a road by six people in ten minutes.',
   },
   {
@@ -566,7 +566,7 @@ export const ASSETS: Asset[] = [
     role: 'screen',
     operator: 'Russia',
     lift: 5,
-    attributes: {firepower: 4, armour: 5, mobility: 9, range: 3, detection: 5},
+    attributes: {firepower: 4, armour: 4, mobility: 10, range: 3, detection: 9},
     blurb: 'Fewer than advertised, and the ones that fly are not a joke.',
   },
   {
@@ -577,7 +577,7 @@ export const ASSETS: Asset[] = [
     role: 'strike',
     operator: 'Russia',
     lift: 4,
-    attributes: {firepower: 9, armour: 3, mobility: 4, range: 4, detection: 2},
+    attributes: {firepower: 8, armour: 3, mobility: 5, range: 8, detection: 6},
     blurb: 'An armoured bathtub for two, wrapped in bomb racks.',
   },
   {
@@ -588,7 +588,7 @@ export const ASSETS: Asset[] = [
     role: 'screen',
     operator: 'South Korea',
     lift: 4,
-    attributes: {firepower: 4, armour: 4, mobility: 6, range: 3, detection: 5},
+    attributes: {firepower: 5, armour: 3, mobility: 8, range: 6, detection: 8},
     blurb: 'New, unblooded, and already better than most of what it replaces.',
   },
   {
@@ -599,7 +599,7 @@ export const ASSETS: Asset[] = [
     role: 'overwatch',
     operator: 'USA',
     lift: 3,
-    attributes: {firepower: 6, armour: 1, mobility: 3, range: 7, detection: 1},
+    attributes: {firepower: 6, armour: 4, mobility: 5, range: 9, detection: 6},
     blurb: 'Fires six, leaves in ninety seconds, is not where the reply lands.',
   },
   {
@@ -610,7 +610,7 @@ export const ASSETS: Asset[] = [
     role: 'overwatch',
     operator: 'USA',
     lift: 4,
-    attributes: {firepower: 8, armour: 1, mobility: 2, range: 9, detection: 2},
+    attributes: {firepower: 9, armour: 4, mobility: 3, range: 8, detection: 6},
     blurb: 'Twelve rockets, tracked, and it does not care about the road.',
   },
   {
@@ -621,7 +621,7 @@ export const ASSETS: Asset[] = [
     role: 'overwatch',
     operator: 'Israel',
     lift: 3,
-    attributes: {firepower: 6, armour: 2, mobility: 1, range: 8, detection: 1},
+    attributes: {firepower: 6, armour: 6, mobility: 2, range: 10, detection: 6},
     blurb: 'One launcher, any rocket, decided after it is already deployed.',
   },
   {
@@ -632,7 +632,7 @@ export const ASSETS: Asset[] = [
     role: 'overwatch',
     operator: 'South Korea',
     lift: 3,
-    attributes: {firepower: 6, armour: 2, mobility: 2, range: 7, detection: 1},
+    attributes: {firepower: 6, armour: 6, mobility: 5, range: 10, detection: 3},
     blurb: 'Pods swapped in minutes, which is the whole argument for it.',
   },
   {
@@ -643,7 +643,7 @@ export const ASSETS: Asset[] = [
     role: 'overwatch',
     operator: 'Russia',
     lift: 4,
-    attributes: {firepower: 9, armour: 1, mobility: 1, range: 9, detection: 2},
+    attributes: {firepower: 8, armour: 6, mobility: 5, range: 8, detection: 3},
     blurb: 'Twelve tubes of 300mm. Nothing subtle has ever been done with it.',
   },
   {
@@ -654,7 +654,7 @@ export const ASSETS: Asset[] = [
     role: 'breach',
     operator: 'Russia',
     lift: 4,
-    attributes: {firepower: 8, armour: 8, mobility: 3, range: 1, detection: 2},
+    attributes: {firepower: 9, armour: 9, mobility: 5, range: 3, detection: 4},
     blurb: 'Short-ranged, thermobaric, and it has to come close to be used.',
   },
   {
@@ -665,7 +665,7 @@ export const ASSETS: Asset[] = [
     role: 'overwatch',
     operator: 'China',
     lift: 4,
-    attributes: {firepower: 7, armour: 2, mobility: 2, range: 9, detection: 2},
+    attributes: {firepower: 8, armour: 1, mobility: 5, range: 9, detection: 7},
     blurb: 'Modular, long, and produced at a rate nobody else matches.',
   },
   {
@@ -676,7 +676,7 @@ export const ASSETS: Asset[] = [
     role: 'overwatch',
     operator: 'Brazil',
     lift: 3,
-    attributes: {firepower: 6, armour: 1, mobility: 1, range: 8, detection: 2},
+    attributes: {firepower: 6, armour: 6, mobility: 4, range: 7, detection: 7},
     blurb: 'Sold everywhere, quietly effective, rarely photographed.',
   },
   {
@@ -687,7 +687,7 @@ export const ASSETS: Asset[] = [
     role: 'overwatch',
     operator: 'Czechia',
     lift: 3,
-    attributes: {firepower: 6, armour: 2, mobility: 2, range: 7, detection: 1},
+    attributes: {firepower: 10, armour: 1, mobility: 4, range: 10, detection: 5},
     blurb: 'A Grad on a better truck, with a reload nobody has to stand outside for.',
   },
   {
@@ -698,7 +698,7 @@ export const ASSETS: Asset[] = [
     role: 'overwatch',
     operator: 'Germany',
     lift: 4,
-    attributes: {firepower: 7, armour: 2, mobility: 2, range: 9, detection: 2},
+    attributes: {firepower: 8, armour: 4, mobility: 5, range: 10, detection: 3},
     blurb: 'Three rounds in the air before the first one lands.',
   },
   {
@@ -709,7 +709,7 @@ export const ASSETS: Asset[] = [
     role: 'overwatch',
     operator: 'Sweden',
     lift: 3,
-    attributes: {firepower: 6, armour: 1, mobility: 3, range: 7, detection: 1},
+    attributes: {firepower: 10, armour: 6, mobility: 3, range: 7, detection: 4},
     blurb: 'Fires from the cab. Nobody gets out, so nobody gets caught out.',
   },
   {
@@ -720,7 +720,7 @@ export const ASSETS: Asset[] = [
     role: 'overwatch',
     operator: 'South Korea',
     lift: 4,
-    attributes: {firepower: 7, armour: 2, mobility: 2, range: 9, detection: 2},
+    attributes: {firepower: 10, armour: 3, mobility: 5, range: 8, detection: 4},
     blurb: 'The one everybody buys, because it works and it arrives.',
   },
   {
@@ -731,7 +731,7 @@ export const ASSETS: Asset[] = [
     role: 'strike',
     operator: 'USA',
     lift: 3,
-    attributes: {firepower: 7, armour: 1, mobility: 4, range: 4, detection: 2},
+    attributes: {firepower: 7, armour: 1, mobility: 5, range: 9, detection: 8},
     blurb: 'Fourteen hours overhead, and the last four are the ones that matter.',
   },
   {
@@ -742,7 +742,7 @@ export const ASSETS: Asset[] = [
     role: 'recon',
     operator: 'USA',
     lift: 2,
-    attributes: {firepower: 1, armour: 1, mobility: 3, range: 3, detection: 6},
+    attributes: {firepower: 5, armour: 3, mobility: 8, range: 7, detection: 7},
     blurb: 'Watches one road for a day and a half without being noticed.',
   },
   {
@@ -753,7 +753,7 @@ export const ASSETS: Asset[] = [
     role: 'recon',
     operator: 'USA',
     lift: 3,
-    attributes: {firepower: 1, armour: 1, mobility: 3, range: 5, detection: 8},
+    attributes: {firepower: 4, armour: 4, mobility: 5, range: 9, detection: 8},
     blurb: 'Sixty thousand feet, and it can read the whole theatre from there.',
   },
   {
@@ -764,7 +764,7 @@ export const ASSETS: Asset[] = [
     role: 'strike',
     operator: 'USA',
     lift: 1,
-    attributes: {firepower: 4, armour: 1, mobility: 2, range: 2, detection: 1},
+    attributes: {firepower: 5, armour: 5, mobility: 4, range: 9, detection: 7},
     blurb: 'Carried in a tube by one soldier. Waits, then does not come back.',
   },
   {
@@ -775,7 +775,7 @@ export const ASSETS: Asset[] = [
     role: 'strike',
     operator: 'Turkey',
     lift: 2,
-    attributes: {firepower: 6, armour: 1, mobility: 3, range: 3, detection: 1},
+    attributes: {firepower: 6, armour: 5, mobility: 6, range: 8, detection: 5},
     blurb: 'Cheap enough to lose and famous for what it did before anyone noticed.',
   },
   {
@@ -786,7 +786,7 @@ export const ASSETS: Asset[] = [
     role: 'strike',
     operator: 'Turkey',
     lift: 3,
-    attributes: {firepower: 8, armour: 1, mobility: 4, range: 3, detection: 2},
+    attributes: {firepower: 8, armour: 5, mobility: 5, range: 6, detection: 6},
     blurb: 'The TB2 grown up, and now carrying what a strike aircraft carries.',
   },
   {
@@ -797,7 +797,7 @@ export const ASSETS: Asset[] = [
     role: 'recon',
     operator: 'Israel',
     lift: 3,
-    attributes: {firepower: 1, armour: 1, mobility: 4, range: 4, detection: 8},
+    attributes: {firepower: 3, armour: 5, mobility: 8, range: 6, detection: 8},
     blurb: 'Stays up for a day and a half and forgets nothing it saw.',
   },
   {
@@ -808,7 +808,7 @@ export const ASSETS: Asset[] = [
     role: 'strike',
     operator: 'Israel',
     lift: 1,
-    attributes: {firepower: 5, armour: 1, mobility: 2, range: 1, detection: 1},
+    attributes: {firepower: 6, armour: 2, mobility: 8, range: 6, detection: 8},
     blurb: 'Loiters until a radar switches on, then removes the radar.',
   },
   {
@@ -819,7 +819,7 @@ export const ASSETS: Asset[] = [
     role: 'recon',
     operator: 'Israel',
     lift: 1,
-    attributes: {firepower: 1, armour: 1, mobility: 2, range: 2, detection: 4},
+    attributes: {firepower: 4, armour: 1, mobility: 7, range: 9, detection: 9},
     blurb: 'Hand-launched, silent, and the reason the artillery is accurate.',
   },
   {
@@ -830,7 +830,7 @@ export const ASSETS: Asset[] = [
     role: 'strike',
     operator: 'Russia',
     lift: 1,
-    attributes: {firepower: 4, armour: 1, mobility: 2, range: 2, detection: 1},
+    attributes: {firepower: 5, armour: 5, mobility: 5, range: 5, detection: 10},
     blurb: 'Small, cheap, and specifically interested in your artillery.',
   },
   {
@@ -841,7 +841,7 @@ export const ASSETS: Asset[] = [
     role: 'recon',
     operator: 'China',
     lift: 2,
-    attributes: {firepower: 1, armour: 1, mobility: 3, range: 3, detection: 6},
+    attributes: {firepower: 4, armour: 4, mobility: 5, range: 7, detection: 10},
     blurb: 'Exported widely to people who could not buy the alternative.',
   },
   {
@@ -852,7 +852,7 @@ export const ASSETS: Asset[] = [
     role: 'recon',
     operator: 'China',
     lift: 3,
-    attributes: {firepower: 1, armour: 1, mobility: 4, range: 4, detection: 8},
+    attributes: {firepower: 4, armour: 1, mobility: 9, range: 9, detection: 7},
     blurb: 'Sixty hours aloft, which is longer than most operations last.',
   },
   {
@@ -863,7 +863,7 @@ export const ASSETS: Asset[] = [
     role: 'overwatch',
     operator: 'USA',
     lift: 6,
-    attributes: {firepower: 10, armour: 3, mobility: 3, range: 10, detection: 4},
+    attributes: {firepower: 8, armour: 6, mobility: 2, range: 8, detection: 6},
     blurb: 'Ninety-six cells and a radar that sees past the horizon.',
     draftable: false,
   },
@@ -875,7 +875,7 @@ export const ASSETS: Asset[] = [
     role: 'overwatch',
     operator: 'USA',
     lift: 6,
-    attributes: {firepower: 10, armour: 4, mobility: 3, range: 10, detection: 3},
+    attributes: {firepower: 8, armour: 5, mobility: 3, range: 10, detection: 4},
     blurb: 'Looks wrong, costs more than it should, and hits very hard.',
     draftable: false,
   },
@@ -887,7 +887,7 @@ export const ASSETS: Asset[] = [
     role: 'strike',
     operator: 'USA',
     lift: 6,
-    attributes: {firepower: 10, armour: 2, mobility: 7, range: 6, detection: 5},
+    attributes: {firepower: 8, armour: 6, mobility: 7, range: 6, detection: 3},
     blurb: 'Nobody knows where it is. That is the entire capability.',
     draftable: false,
   },
@@ -899,7 +899,7 @@ export const ASSETS: Asset[] = [
     role: 'lift',
     operator: 'USA',
     lift: 6,
-    attributes: {firepower: 3, armour: 8, mobility: 9, range: 4, detection: 6},
+    attributes: {firepower: 4, armour: 8, mobility: 7, range: 5, detection: 6},
     blurb: 'Brings the helicopters, the marines, and somewhere to put them.',
     draftable: false,
   },
@@ -911,7 +911,7 @@ export const ASSETS: Asset[] = [
     role: 'screen',
     operator: 'UK',
     lift: 5,
-    attributes: {firepower: 4, armour: 4, mobility: 8, range: 3, detection: 7},
+    attributes: {firepower: 4, armour: 8, mobility: 8, range: 4, detection: 6},
     blurb: 'Built to shoot down what nobody else can see yet.',
     draftable: false,
   },
@@ -923,7 +923,7 @@ export const ASSETS: Asset[] = [
     role: 'recon',
     operator: 'UK',
     lift: 5,
-    attributes: {firepower: 2, armour: 2, mobility: 6, range: 6, detection: 10},
+    attributes: {firepower: 3, armour: 4, mobility: 6, range: 8, detection: 9},
     blurb: 'Quiet enough to hear a submarine that is trying not to be heard.',
     draftable: false,
   },
@@ -935,7 +935,7 @@ export const ASSETS: Asset[] = [
     role: 'overwatch',
     operator: 'France / Italy',
     lift: 5,
-    attributes: {firepower: 9, armour: 3, mobility: 2, range: 10, detection: 2},
+    attributes: {firepower: 10, armour: 4, mobility: 5, range: 8, detection: 3},
     blurb: 'Two navies, one hull, and a surprising amount of it.',
     draftable: false,
   },
@@ -947,7 +947,7 @@ export const ASSETS: Asset[] = [
     role: 'overwatch',
     operator: 'South Korea',
     lift: 6,
-    attributes: {firepower: 10, armour: 4, mobility: 3, range: 10, detection: 3},
+    attributes: {firepower: 10, armour: 4, mobility: 2, range: 8, detection: 6},
     blurb: 'More missile cells than anything else afloat that is not a carrier.',
     draftable: false,
   },
@@ -959,7 +959,7 @@ export const ASSETS: Asset[] = [
     role: 'strike',
     operator: 'Russia',
     lift: 5,
-    attributes: {firepower: 10, armour: 3, mobility: 6, range: 5, detection: 2},
+    attributes: {firepower: 10, armour: 3, mobility: 5, range: 8, detection: 4},
     blurb: 'Small for what it carries, which is the point being made.',
     draftable: false,
   },
@@ -971,7 +971,7 @@ export const ASSETS: Asset[] = [
     role: 'overwatch',
     operator: 'China',
     lift: 6,
-    attributes: {firepower: 10, armour: 3, mobility: 3, range: 10, detection: 4},
+    attributes: {firepower: 10, armour: 6, mobility: 2, range: 8, detection: 4},
     blurb: 'A cruiser in everything but the word used for it.',
     draftable: false,
   },
@@ -983,7 +983,7 @@ export const ASSETS: Asset[] = [
     role: 'screen',
     operator: 'Sweden',
     lift: 4,
-    attributes: {firepower: 3, armour: 4, mobility: 8, range: 3, detection: 4},
+    attributes: {firepower: 4, armour: 5, mobility: 10, range: 3, detection: 8},
     blurb: 'Vanishes into an archipelago and is not found again.',
     draftable: false,
   },
@@ -995,7 +995,7 @@ export const ASSETS: Asset[] = [
     role: 'screen',
     operator: 'Turkey',
     lift: 4,
-    attributes: {firepower: 4, armour: 4, mobility: 7, range: 3, detection: 4},
+    attributes: {firepower: 6, armour: 5, mobility: 7, range: 5, detection: 7},
     blurb: 'Built at home, sold abroad, and better than its price suggests.',
     draftable: false,
   },
@@ -1038,13 +1038,24 @@ export function liftOf(ids: string[]): number {
  * test can fail on this; a reviewer cannot be relied upon to add five numbers
  * in their head seventy-two times.
  */
+/**
+ * The budget every asset sits on. Fixed for all 72 by the game math spec
+ * (docs/GAME-MATH-v1.md): 29-31 points across the five attributes, each
+ * 1-10. It used to scale with lift - a cheap asset spent fewer points - and
+ * that was right while a squad had a lift budget. The lift budget went on
+ * 2026-09-06, which left every cheap asset simply worse; the re-budget of
+ * 2026-09-06 (asset-budget-v2) put all 72 on the same footing. Shape is what
+ * differs now, never total.
+ */
+export const BUDGET_MIN = 29;
+export const BUDGET_MAX = 31;
+
 export function auditAssets(): string[] {
   const problems: string[] = [];
   for (const a of ASSETS) {
-    const want = pointBudget(a.lift);
     const spent = pointsSpent(a.attributes);
-    if (spent !== want) {
-      problems.push(`${a.id}: ${spent} points spent, budget is ${want}`);
+    if (spent < BUDGET_MIN || spent > BUDGET_MAX) {
+      problems.push(`${a.id}: ${spent} points spent, budget is ${BUDGET_MIN}-${BUDGET_MAX}`);
     }
     for (const [key, value] of Object.entries(a.attributes)) {
       if (value < ATTRIBUTE_MIN || value > ATTRIBUTE_MAX) {
@@ -1056,6 +1067,17 @@ export function auditAssets(): string[] {
   for (const a of ASSETS) {
     if (seen.has(a.id)) problems.push(`${a.id}: duplicate id`);
     seen.add(a.id);
+  }
+  // Strict dominance: no asset may match another on every attribute and beat
+  // it on one. Equal budgets make this rare; the audit makes it impossible.
+  const keys = ['firepower', 'armour', 'mobility', 'range', 'detection'] as const;
+  for (const a of ASSETS) {
+    for (const b of ASSETS) {
+      if (a === b) continue;
+      const ge = keys.every((k) => b.attributes[k] >= a.attributes[k]);
+      const gt = keys.some((k) => b.attributes[k] > a.attributes[k]);
+      if (ge && gt) problems.push(`${b.id} dominates ${a.id}`);
+    }
   }
   return problems;
 }

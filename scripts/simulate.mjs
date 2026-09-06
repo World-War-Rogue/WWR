@@ -61,7 +61,7 @@ const {
   ASSETS,
   ASSET_BY_ID,
   auditAssets,
-  pointBudget,
+  BUDGET_MIN,
   SQUAD_SLOTS,
   attributeAtLevel,
   assetPower,
@@ -95,7 +95,7 @@ const ALL_CATEGORIES = [...new Set(ASSETS.map((a) => a.category))];
  * to a target.
  *
  * Lift is the thing to match, not power, because power at rank 1 is a flat
- * function of lift by construction - `pointBudget` is `BASE_POINTS + lift *
+ * function of lift by construction - the budget used to be `BASE_POINTS + lift *
  * POINTS_PER_LIFT` and power is six times the points spent. Matching lift is
  * therefore matching power, and doing it that way means a drift between the
  * two shows up here rather than being hidden by the normalisation.
@@ -473,8 +473,8 @@ if (wanted('counters')) {
    * multiplier alone is worth.
    */
   const LIFT_EACH = 5;
-  const even = Math.floor(pointBudget(LIFT_EACH) / 5);
-  const rest = pointBudget(LIFT_EACH) - even * 5;
+  const even = Math.floor(BUDGET_MIN / 5);
+  const rest = BUDGET_MIN - even * 5;
   const attrs = {
     firepower: even + rest,
     armour: even,
@@ -685,7 +685,7 @@ if (wanted('attrib')) {
    * category, so no counter multiplier can muddy the result.
    */
   const LIFT_EACH = 5;
-  const budget = pointBudget(LIFT_EACH);
+  const budget = BUDGET_MIN;
   const mk = (id, attrs) => ({
     id,
     code: id,

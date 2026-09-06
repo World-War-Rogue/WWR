@@ -27,7 +27,7 @@ import {
   ROLE_BLURB,
   ROLE_LABEL,
   SQUAD_NAMES,
-  pointBudget,
+  pointsSpent,
 } from '../../shared/assets';
 import {counterWeb} from '../../shared/combat';
 import {PACKAGE_KEYS} from '../../shared/upgrades';
@@ -166,7 +166,7 @@ function Card({
       <div className="mt-2 flex items-center justify-between border-t border-neutral-900 pt-2 text-[10px]">
         <span className="text-neutral-500">
           Lift <span className="font-mono text-neutral-300">{asset.lift}</span>
-          <span className="text-neutral-700"> · {pointBudget(asset.lift)} pts</span>
+          <span className="text-neutral-700"> · {pointsSpent(asset.attributes)} pts</span>
         </span>
         {asset.draftable === false ? (
           <span className="text-neutral-600">Coastal season</span>

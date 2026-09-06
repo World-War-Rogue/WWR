@@ -36,7 +36,7 @@ export const ROUNDS = 5;
 /** A flat floor every asset has, so HP is not just another firepower bonus. */
 export const HP_BASE = 3;
 export const HP_PER_POINT = 0.3;
-export const HP_PER_ARMOUR = 0.25;
+export const HP_PER_ARMOUR = 0.4;
 export const HP_SCALE = 8;
 
 /** Per-shot damage scale, and how much armour blunts a hit: 100/(100+4A). */
