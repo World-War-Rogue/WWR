@@ -100,9 +100,18 @@ same pass, or those bases are left in a state the ownership check rejects.
 
 ## Type-checking on the device VM
 
-Run tsc as `node --no-opt --no-turbofan ./node_modules/typescript/lib/tsc.js`,
+Run tsc as
+`node --max-opt=0 --single-threaded --no-concurrent-recompilation --stack-size=4000 ./node_modules/typescript/lib/tsc.js -p <tsconfig> --noEmit`,
 and **retry on a non-zero exit that is not 1 or 2** - it is a crash, not a
-finding.
+finding. `--single-threaded` is the flag that matters: the worker project
+segfaulted (exit 139) ten times in a row under `--max-opt=0` alone and passed
+first time with it, because the fatal comes from a background compile thread.
+The client project usually passes under `--max-opt=0` alone.
+
+The device shell itself runs on the same node and dies the same way, so ANY
+device_bash call can be killed mid-way - even one that only runs `ls`. A
+crash during `git commit` leaves `.git/index.lock` behind, which blocks GitHub
+Desktop; remove it. Do one thing per call and read back what landed.
 
 The VM's node crashes intermittently with a V8 fatal error in the optimizing
 compiler ("unreachable code", turboshaft in the stack). `--jitless` was the

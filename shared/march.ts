@@ -7,14 +7,20 @@
  * alliance and the map itself matter.
  */
 
-/** Seconds to cross one plot at mobility 5, the middle of the range. */
-export const SECONDS_PER_PLOT = 7;
+/**
+ * Seconds to cross one plot at mobility 5, the middle of the range.
+ *
+ * Quartered on 2026-09-06 (was 7): marches on the live map felt far too slow.
+ * The floor and ceiling were quartered with it so the whole curve moved
+ * together rather than the short marches pinning on the floor.
+ */
+export const SECONDS_PER_PLOT = 1.75;
 
 /** Nothing arrives instantly, however close or however fast. */
-export const MIN_MARCH_SECONDS = 45;
+export const MIN_MARCH_SECONDS = 12;
 
 /** And nothing is an evening's commitment. */
-export const MAX_MARCH_SECONDS = 40 * 60;
+export const MAX_MARCH_SECONDS = 10 * 60;
 
 /**
  * How long a squad takes to cross a distance.

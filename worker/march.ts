@@ -6,8 +6,8 @@
  * whose arrival instant has passed. A raid that lands at three in the morning
  * lands correctly anyway, and a world nobody is playing costs nothing to run.
  */
-import {ASSET_BY_ID, type SquadName, attributeAtLevel} from '../shared/assets';
-import {type Packages, assetPowerWith, packagesFromRow} from '../shared/upgrades';
+import {ASSET_BY_ID, type SquadName} from '../shared/assets';
+import {type Packages, assetPowerWith, attributesWith, packagesFromRow} from '../shared/upgrades';
 import {
   type Deployment,
   GARRISON_HOURS,
@@ -212,10 +212,14 @@ export async function launch(
 
   // The column moves at the pace of its slowest vehicle, which is a real cost
   // of bringing heavy armour and a real reason to keep one fast squad.
+  //
+  // Through attributesWith, not attributeAtLevel, so a Propulsion package
+  // reaches the march. Before this a player bought Propulsion, watched combat
+  // mobility rise, and marched exactly as slowly as before.
   const slowest = Math.min(
     ...units.map((u) => {
       const asset = ASSET_BY_ID[u.assetId];
-      return asset ? attributeAtLevel(asset.attributes.mobility, u.level) : 5;
+      return asset ? attributesWith(asset, u.level, u.packages).mobility : 5;
     }),
   );
   const seconds = marchSeconds(plotsBetween(from.x, from.y, to.x, to.y), slowest);
