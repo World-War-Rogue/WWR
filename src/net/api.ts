@@ -9,6 +9,7 @@
 import type {CosmeticItem, CosmeticSlot, Loadout} from '../../shared/cosmetics';
 import type {BattleDetail, BattleSummary} from '../../shared/battles';
 import type {Deployment, MarchKind} from '../../shared/march';
+import type {PackageKey, Packages} from '../../shared/upgrades';
 
 export interface ChatMessage {
   id: string;
@@ -142,6 +143,7 @@ export interface BaseView {
   justCompleted: {kind: string; level: number} | null;
   buildings: BuildingView[];
   job: {kind: string; toLevel: number; startedAt: number; completesAt: number} | null;
+  wallet: Wallet;
 }
 
 export interface SkinSpec {
@@ -217,8 +219,40 @@ export interface MarchView {
   kind: MarchKind;
 }
 
+/** What a player is holding, spendable on Service Rank and the four packages. */
+export interface Wallet {
+  /** Bought. Never spent first by default. */
+  tokens: number;
+  /** Earned. */
+  credits: number;
+}
+
+export interface OwnedAsset {
+  assetId: string;
+  /** Displays as Service Rank. Permanent - the one thing a reset cannot undo. */
+  level: number;
+  packages: Packages;
+  /** Command Credits sunk into the packages, and so refunded in full on a reset. */
+  packageCredits: number;
+}
+
+export interface UpgradeResponse {
+  ok: true;
+  wallet: Wallet;
+  asset: {
+    asset_id: string;
+    level: number;
+    pkg_armament: number;
+    pkg_protection: number;
+    pkg_propulsion: number;
+    pkg_electronics: number;
+    pkg_credits: number;
+  };
+}
+
 export interface SquadView {
-  owned: Array<{assetId: string; level: number}>;
+  owned: OwnedAsset[];
+  wallet: Wallet;
   squads: Record<string, Array<string | null>>;
   lift: {budget: number; used: Record<string, number>};
   power: Record<string, number>;
@@ -335,6 +369,29 @@ export const api = {
       {method: 'POST'},
     ),
   squads: () => call<SquadView>('/api/squads'),
+
+  /**
+   * Buy a Service Rank, or fit a package.
+   *
+   * The target is sent, never the price - the server recomputes the cost from
+   * the catalogue and refuses anything else. The split is optional and the
+   * server spends Credits first without it.
+   */
+  rankUp: (assetId: string, target: number, split?: Wallet) =>
+    call<UpgradeResponse>('/api/assets/rank', {
+      method: 'POST',
+      body: JSON.stringify({assetId, target, split}),
+    }),
+  fitPackage: (assetId: string, pkg: PackageKey, target: number, split?: Wallet) =>
+    call<UpgradeResponse>('/api/assets/package', {
+      method: 'POST',
+      body: JSON.stringify({assetId, package: pkg, target, split}),
+    }),
+  resetPackages: (assetId: string) =>
+    call<UpgradeResponse>('/api/assets/reset', {
+      method: 'POST',
+      body: JSON.stringify({assetId}),
+    }),
   attack: (squad: string, x: number, y: number) =>
     call<{arrivesAt: number; seconds: number}>('/api/attack', {
       method: 'POST',

@@ -14,9 +14,8 @@ import {
   type Asset,
   type AssetCategory,
   DRAFTABLE_CATEGORIES,
-  attributeAtLevel,
-  assetPower,
 } from './assets';
+import {type Packages, NO_PACKAGES, assetPowerWith, attributesWith} from './upgrades';
 
 /* -------------------------------------------------------------------------- */
 /* Tuning                                                                     */
@@ -245,6 +244,16 @@ export function counterWeb(category: AssetCategory): {
 export interface CombatantSpec {
   assetId: string;
   level: number;
+  /**
+   * Fitted packages, when the caller knows them.
+   *
+   * Optional, and it defaults to NO_PACKAGES, so every existing caller - the
+   * arena, the simulation harness, any test that builds a squad by hand - keeps
+   * working and keeps producing the numbers it produced before. What it stops
+   * is packages being a display-only number: an upgrade that never reaches the
+   * resolver is an upgrade a player pays for and does not receive.
+   */
+  packages?: Packages;
 }
 
 export interface SideSpec {
@@ -334,26 +343,21 @@ function build(spec: SideSpec): Unit[] {
   for (const entry of spec.units) {
     const asset = ASSET_BY_ID[entry.assetId];
     if (!asset) continue;
-    const a = asset.attributes;
-    const points =
-      attributeAtLevel(a.firepower, entry.level) +
-      attributeAtLevel(a.armour, entry.level) +
-      attributeAtLevel(a.mobility, entry.level) +
-      attributeAtLevel(a.range, entry.level) +
-      attributeAtLevel(a.detection, entry.level);
-    const hp =
-      (points * HP_PER_POINT + attributeAtLevel(a.armour, entry.level) * HP_PER_ARMOUR) *
-      HP_SCALE;
+    // One computation of what this unit actually is, packages included, rather
+    // than eight separate calls that could drift apart.
+    const a = attributesWith(asset, entry.level, entry.packages ?? NO_PACKAGES);
+    const points = a.firepower + a.armour + a.mobility + a.range + a.detection;
+    const hp = (points * HP_PER_POINT + a.armour * HP_PER_ARMOUR) * HP_SCALE;
     out.push({
       asset,
       level: entry.level,
       hp,
       maxHp: hp,
-      firepower: attributeAtLevel(asset.attributes.firepower, entry.level),
-      mobility: attributeAtLevel(asset.attributes.mobility, entry.level),
-      detection: attributeAtLevel(asset.attributes.detection, entry.level),
-      range: attributeAtLevel(asset.attributes.range, entry.level),
-      armour: attributeAtLevel(asset.attributes.armour, entry.level),
+      firepower: a.firepower,
+      mobility: a.mobility,
+      detection: a.detection,
+      range: a.range,
+      armour: a.armour,
       band: CATEGORY_BAND[asset.category],
       damaged: false,
     });
@@ -507,14 +511,15 @@ export function resolve(
   const startA = sum(A.map((u) => u.maxHp));
   const startD = sum(D.map((u) => u.maxHp));
 
-  const powerA = sum(attackerSpec.units.map((u) => {
-    const asset = ASSET_BY_ID[u.assetId];
-    return asset ? assetPower(asset, u.level) : 0;
-  }));
-  const powerD = sum(defenderSpec.units.map((u) => {
-    const asset = ASSET_BY_ID[u.assetId];
-    return asset ? assetPower(asset, u.level) : 0;
-  }));
+  const powerOf = (spec: SideSpec) =>
+    sum(
+      spec.units.map((u) => {
+        const asset = ASSET_BY_ID[u.assetId];
+        return asset ? assetPowerWith(asset, u.level, u.packages ?? NO_PACKAGES) : 0;
+      }),
+    );
+  const powerA = powerOf(attackerSpec);
+  const powerD = powerOf(defenderSpec);
 
   const expA = exposureOf(A);
   const expD = exposureOf(D);

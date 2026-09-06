@@ -12,13 +12,40 @@ import {
   SQUAD_NAMES,
   SQUAD_SLOTS,
   type SquadName,
-  assetPower,
   squadLiftBudget,
 } from '../shared/assets';
+import {type Packages, assetPowerWith, packagesFromRow} from '../shared/upgrades';
 
 export interface OwnedAsset {
   assetId: string;
   level: number;
+  /** The four fitted packages. Everything at 1 means nothing bought. */
+  packages: Packages;
+  /** Command Credits sunk into the packages, and so refundable on a reset. */
+  packageCredits: number;
+}
+
+interface AssetRow {
+  assetId: string;
+  level: number;
+  pkg_armament: number;
+  pkg_protection: number;
+  pkg_propulsion: number;
+  pkg_electronics: number;
+  pkg_credits: number;
+}
+
+const ROSTER_SQL = `SELECT asset_id AS assetId, level, pkg_armament, pkg_protection,
+                           pkg_propulsion, pkg_electronics, pkg_credits
+                      FROM player_assets WHERE player_id = ?1`;
+
+function owned(rows: AssetRow[]): OwnedAsset[] {
+  return rows.map((r) => ({
+    assetId: r.assetId,
+    level: r.level,
+    packages: packagesFromRow(r),
+    packageCredits: r.pkg_credits,
+  }));
 }
 
 export type SquadBoard = Record<SquadName, Array<string | null>>;
@@ -42,11 +69,8 @@ export async function ensureRoster(
   playerId: string,
   now: number,
 ): Promise<OwnedAsset[]> {
-  const existing = await db
-    .prepare(`SELECT asset_id AS assetId, level FROM player_assets WHERE player_id = ?1`)
-    .bind(playerId)
-    .all<OwnedAsset>();
-  if ((existing.results ?? []).length > 0) return existing.results ?? [];
+  const existing = await db.prepare(ROSTER_SQL).bind(playerId).all<AssetRow>();
+  if ((existing.results ?? []).length > 0) return owned(existing.results ?? []);
 
   await db.batch(
     DRAFTABLE.map((asset) =>
@@ -59,11 +83,8 @@ export async function ensureRoster(
     ),
   );
 
-  const after = await db
-    .prepare(`SELECT asset_id AS assetId, level FROM player_assets WHERE player_id = ?1`)
-    .bind(playerId)
-    .all<OwnedAsset>();
-  return after.results ?? [];
+  const after = await db.prepare(ROSTER_SQL).bind(playerId).all<AssetRow>();
+  return owned(after.results ?? []);
 }
 
 export async function readSquads(db: D1Database, playerId: string): Promise<SquadBoard> {
@@ -177,13 +198,25 @@ export async function assignSlot(
   return {ok: true};
 }
 
-/** Squad power, for the header. Computed on read like every other power in the game. */
-export function squadPower(board: SquadBoard, levels: Map<string, number>, squad: SquadName): number {
+/**
+ * Squad power, for the header. Computed on read like every other power here.
+ *
+ * Takes the whole owned asset rather than a level, because packages change what
+ * an asset is worth and a power figure that ignored them would disagree with
+ * the resolver - the player would buy an upgrade, watch the header not move,
+ * and reasonably conclude it did nothing.
+ */
+export function squadPower(
+  board: SquadBoard,
+  roster: Map<string, OwnedAsset>,
+  squad: SquadName,
+): number {
   return board[squad].reduce<number>((sum, id) => {
     if (!id) return sum;
     const asset = ASSET_BY_ID[id];
     if (!asset) return sum;
-    return sum + assetPower(asset, levels.get(id) ?? 1);
+    const held = roster.get(id);
+    return sum + assetPowerWith(asset, held?.level ?? 1, held?.packages);
   }, 0);
 }
 

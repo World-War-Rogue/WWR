@@ -12,11 +12,13 @@
  */
 import {useEffect, useMemo, useState} from 'react';
 import AssetIcon from './AssetIcon';
+import AssetUpgrade from './AssetUpgrade';
 import ForcesTabs from './ForcesTabs';
-import {api} from '../net/api';
+import {type OwnedAsset, type Wallet, api} from '../net/api';
 import {t} from '../i18n';
 import {
   ASSETS,
+  ASSET_BY_ID,
   ATTRIBUTE_MAX,
   type Asset,
   type AssetCategory,
@@ -27,6 +29,7 @@ import {
   pointBudget,
 } from '../../shared/assets';
 import {counterWeb} from '../../shared/combat';
+import {PACKAGE_KEYS} from '../../shared/upgrades';
 
 const CATEGORIES: AssetCategory[] = [
   'armour',
@@ -80,8 +83,21 @@ function Bars({asset}: {asset: Asset}) {
   );
 }
 
-function Card({asset, squad}: {asset: Asset; squad: string | null}) {
+function Card({
+  asset,
+  squad,
+  held,
+  onUpgrade,
+}: {
+  asset: Asset;
+  squad: string | null;
+  held: OwnedAsset | null;
+  onUpgrade: (() => void) | null;
+}) {
   const counters = counterWeb(asset.category);
+  const fitted = held
+    ? PACKAGE_KEYS.reduce((n, k) => n + (held.packages[k] > 1 ? 1 : 0), 0)
+    : 0;
   return (
     <article
       className={`rounded border p-3 ${
@@ -124,6 +140,28 @@ function Card({asset, squad}: {asset: Asset; squad: string | null}) {
 
       <Bars asset={asset} />
 
+      {/*
+        Rank and fittings, and the way in to change them.
+        
+        On the card rather than behind a tap, because "what have I already put
+        into this one" is the question a player is answering while browsing
+        sixty of them, and a number they have to open a panel to see is a number
+        they stop checking.
+      */}
+      {held && onUpgrade && (
+        <button
+          onClick={onUpgrade}
+          className="mt-2 flex w-full items-center gap-2 rounded border border-neutral-800 bg-neutral-900/50 px-2 py-1.5 text-left transition hover:border-orange-600"
+        >
+          <span className="text-[10px] uppercase tracking-wider text-neutral-600">Rank</span>
+          <span className="font-mono text-xs text-neutral-200">{held.level}</span>
+          <span className="text-[10px] text-neutral-600">
+            {fitted === 0 ? 'no packages' : `${fitted}/4 fitted`}
+          </span>
+          <span className="ml-auto text-[10px] font-semibold text-orange-400">Upgrade ›</span>
+        </button>
+      )}
+
       <div className="mt-2 flex items-center justify-between border-t border-neutral-900 pt-2 text-[10px]">
         <span className="text-neutral-500">
           Lift <span className="font-mono text-neutral-300">{asset.lift}</span>
@@ -151,6 +189,9 @@ export default function Assets({
   const [category, setCategory] = useState<AssetCategory | 'all'>('all');
   const [query, setQuery] = useState('');
   const [placed, setPlaced] = useState<Map<string, string>>(new Map());
+  const [roster, setRoster] = useState<Map<string, OwnedAsset>>(new Map());
+  const [wallet, setWallet] = useState<Wallet | null>(null);
+  const [upgrading, setUpgrading] = useState<string | null>(null);
 
   // Squad placement, so each card can say where it is. Read once when the
   // screen opens: nothing here changes while it is on screen, and the squad
@@ -168,6 +209,8 @@ export default function Assets({
           }
         }
         setPlaced(map);
+        setRoster(new Map(view.owned.map((o) => [o.assetId, o])));
+        setWallet(view.wallet);
       })
       .catch(() => undefined);
     return () => {
@@ -199,6 +242,14 @@ export default function Assets({
         </button>
         <ForcesTabs active="assets" onChange={(tab) => tab === 'squads' && onShowSquads()} />
         <span className="text-[11px] text-neutral-600">{shown.length} of {ASSETS.length}</span>
+        {wallet && (
+          <span className="font-mono text-[11px]">
+            <span className="text-emerald-300">{wallet.credits.toLocaleString()}</span>
+            <span className="text-neutral-700"> cr</span>
+            <span className="ml-2 text-amber-300">{wallet.tokens.toLocaleString()}</span>
+            <span className="text-neutral-700"> tk</span>
+          </span>
+        )}
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -231,7 +282,12 @@ export default function Assets({
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {shown.map((asset) => (
             <div key={asset.id}>
-              <Card asset={asset} squad={placed.get(asset.id) ?? null} />
+              <Card
+                asset={asset}
+                squad={placed.get(asset.id) ?? null}
+                held={roster.get(asset.id) ?? null}
+                onUpgrade={wallet ? () => setUpgrading(asset.id) : null}
+              />
             </div>
           ))}
         </div>
@@ -239,6 +295,19 @@ export default function Assets({
           <p className="py-8 text-center text-sm text-neutral-600">Nothing matches that.</p>
         )}
       </div>
+
+      {upgrading && wallet && roster.get(upgrading) && ASSET_BY_ID[upgrading] && (
+        <AssetUpgrade
+          asset={ASSET_BY_ID[upgrading]}
+          held={roster.get(upgrading)!}
+          wallet={wallet}
+          onClose={() => setUpgrading(null)}
+          onChanged={(nextWallet, nextHeld) => {
+            setWallet(nextWallet);
+            setRoster((current) => new Map(current).set(nextHeld.assetId, nextHeld));
+          }}
+        />
+      )}
     </div>
   );
 }

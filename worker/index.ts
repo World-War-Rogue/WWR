@@ -7,6 +7,9 @@
 import {handleAdminRequests} from './admin';
 import {ensureRally, lastRalliedAt, rallyTo, readRally, setRally} from './rally';
 import {assignSlot, ensureRoster, moveSlot, readSquads, squadLiftUsed, squadPower} from './squads';
+import {packageUp, rankUp, resetPackages, settleWallet} from './upgrades';
+import {isPackageKey} from '../shared/upgrades';
+import {type Split} from '../shared/economy';
 import {
   deployments,
   launch,
@@ -1040,11 +1043,16 @@ async function handleSquads(env: Env, player: PlayerRow): Promise<Response> {
     marchingSquads(env.DB, player.id),
   ]);
 
-  const levels = new Map(owned.map((o) => [o.assetId, o.level]));
+  const roster = new Map(owned.map((o) => [o.assetId, o]));
   const budget = squadLiftBudget(state.levels);
+  const wallet = await settleWallet(env.DB, player.id, now);
 
   return json({
     owned,
+    // The wallet rides along with the roster because the upgrade buttons are on
+    // the roster screen, and a second request for two numbers already in hand
+    // is a second request for nothing.
+    wallet: {tokens: wallet.tokens, credits: wallet.credits},
     squads: board,
     lift: {
       budget,
@@ -1053,7 +1061,7 @@ async function handleSquads(env: Env, player: PlayerRow): Promise<Response> {
       ),
     },
     power: Object.fromEntries(
-      SQUAD_NAMES.map((name) => [name, squadPower(board, levels, name)]),
+      SQUAD_NAMES.map((name) => [name, squadPower(board, roster, name)]),
     ),
     // Echoed so the squad screen can explain where the budget came from
     // without asking for the base separately.
@@ -1065,6 +1073,101 @@ async function handleSquads(env: Env, player: PlayerRow): Promise<Response> {
     // Squads in the field. Sent so the screen can lock them rather than
     // letting a player make a change that the server is going to refuse.
     away: [...away],
+  });
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* Upgrades                                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The payment split, if the client chose one.
+ *
+ * Absent means "spend Credits first", which is the default the server applies.
+ * A malformed split is rejected rather than silently corrected: a player who
+ * meant to pay in Credits and was quietly charged in Tokens has been robbed as
+ * far as they are concerned, and being wrong loudly is much cheaper.
+ */
+function readSplit(body: Record<string, unknown> | null): Split | null | 'bad' {
+  const raw = body?.split;
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw !== 'object') return 'bad';
+  const s = raw as Record<string, unknown>;
+  const tokens = Number(s.tokens);
+  const credits = Number(s.credits);
+  if (!Number.isInteger(tokens) || !Number.isInteger(credits)) return 'bad';
+  if (tokens < 0 || credits < 0) return 'bad';
+  return {tokens, credits};
+}
+
+/** Which season's cap applies. One place, so nothing reads it off a request. */
+const CURRENT_SEASON = 1;
+
+async function handleRankUp(
+  request: Request,
+  env: Env,
+  player: PlayerRow,
+): Promise<Response> {
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const assetId = typeof body?.assetId === 'string' ? body.assetId : '';
+  const target = Number(body?.target);
+  const split = readSplit(body);
+  if (split === 'bad') return fail(400, 'That payment does not make sense.');
+
+  const result = await rankUp(
+    env.DB,
+    player.id,
+    assetId,
+    target,
+    split,
+    CURRENT_SEASON,
+    Date.now(),
+  );
+  if (!result.ok) return fail(400, result.error);
+  return json({
+    ok: true,
+    wallet: {tokens: result.wallet.tokens, credits: result.wallet.credits},
+    asset: result.asset,
+  });
+}
+
+async function handlePackageUp(
+  request: Request,
+  env: Env,
+  player: PlayerRow,
+): Promise<Response> {
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const assetId = typeof body?.assetId === 'string' ? body.assetId : '';
+  const target = Number(body?.target);
+  const key = body?.package;
+  if (!isPackageKey(key)) return fail(400, 'No such package.');
+  const split = readSplit(body);
+  if (split === 'bad') return fail(400, 'That payment does not make sense.');
+
+  const result = await packageUp(env.DB, player.id, assetId, key, target, split, Date.now());
+  if (!result.ok) return fail(400, result.error);
+  return json({
+    ok: true,
+    wallet: {tokens: result.wallet.tokens, credits: result.wallet.credits},
+    asset: result.asset,
+  });
+}
+
+async function handlePackageReset(
+  request: Request,
+  env: Env,
+  player: PlayerRow,
+): Promise<Response> {
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const assetId = typeof body?.assetId === 'string' ? body.assetId : '';
+
+  const result = await resetPackages(env.DB, player.id, assetId, Date.now());
+  if (!result.ok) return fail(400, result.error);
+  return json({
+    ok: true,
+    wallet: {tokens: result.wallet.tokens, credits: result.wallet.credits},
+    asset: result.asset,
   });
 }
 
@@ -2507,10 +2610,25 @@ async function route(
 
   if (endpoint === 'GET /api/base') {
     const now = Date.now();
-    const state = await settleAndLoad(env, player.id, now);
+    const [state, wallet] = await Promise.all([
+      settleAndLoad(env, player.id, now),
+      // Settled here as well as on the roster screen, because this is the read
+      // every player makes on every visit - a tester who never opens the roster
+      // still gets their weekly top-up.
+      settleWallet(env.DB, player.id, now),
+    ]);
     if (!state) return fail(404, 'No base found.');
-    return json(baseView(state, now));
+    return json({
+      ...baseView(state, now),
+      wallet: {tokens: wallet.tokens, credits: wallet.credits},
+    });
   }
+
+  if (endpoint === 'POST /api/assets/rank') return handleRankUp(request, env, player);
+
+  if (endpoint === 'POST /api/assets/package') return handlePackageUp(request, env, player);
+
+  if (endpoint === 'POST /api/assets/reset') return handlePackageReset(request, env, player);
 
   if (endpoint === 'POST /api/base/upgrade') return handleStartUpgrade(request, env, player);
 

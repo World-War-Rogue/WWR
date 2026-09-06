@@ -6,7 +6,8 @@
  * whose arrival instant has passed. A raid that lands at three in the morning
  * lands correctly anyway, and a world nobody is playing costs nothing to run.
  */
-import {ASSET_BY_ID, type SquadName, assetPower, attributeAtLevel} from '../shared/assets';
+import {ASSET_BY_ID, type SquadName, attributeAtLevel} from '../shared/assets';
+import {type Packages, assetPowerWith, packagesFromRow} from '../shared/upgrades';
 import {
   type Deployment,
   GARRISON_HOURS,
@@ -76,44 +77,70 @@ export async function pendingMarches(db: D1Database, worldId: number): Promise<M
   return rows.results ?? [];
 }
 
+/**
+ * What a player's assets are, packages included.
+ *
+ * Packages have to travel with a march. They change what an asset IS - the
+ * resolver builds its attributes from them - so a march that carried only
+ * assetId and level would send a fitted-out squad and resolve it as a bare one,
+ * which is a player paying for upgrades and not receiving them.
+ */
+export interface UnitSpec {
+  assetId: string;
+  level: number;
+  packages: Packages;
+}
+
+interface AssetLevelRow {
+  assetId: string;
+  level: number;
+  pkg_armament: number;
+  pkg_protection: number;
+  pkg_propulsion: number;
+  pkg_electronics: number;
+}
+
+const ROSTER_SQL = `SELECT asset_id AS assetId, level, pkg_armament, pkg_protection,
+                           pkg_propulsion, pkg_electronics
+                      FROM player_assets WHERE player_id = ?1`;
+
+async function rosterOf(db: D1Database, playerId: string): Promise<Map<string, UnitSpec>> {
+  const rows = await db.prepare(ROSTER_SQL).bind(playerId).all<AssetLevelRow>();
+  return new Map(
+    (rows.results ?? []).map((r) => [
+      r.assetId,
+      {assetId: r.assetId, level: r.level, packages: packagesFromRow(r)},
+    ]),
+  );
+}
+
+const BARE: Packages = {armament: 1, protection: 1, propulsion: 1, electronics: 1};
+
 /** The units in one squad, ready for the resolver. */
 async function unitsOf(
   db: D1Database,
   playerId: string,
   squad: SquadName,
-): Promise<Array<{assetId: string; level: number}>> {
+): Promise<UnitSpec[]> {
   const board = await readSquads(db, playerId);
   const ids = (board[squad] ?? []).filter((id): id is string => !!id);
   if (ids.length === 0) return [];
-  const rows = await db
-    .prepare(
-      `SELECT asset_id AS assetId, level FROM player_assets WHERE player_id = ?1`,
-    )
-    .bind(playerId)
-    .all<{assetId: string; level: number}>();
-  const levels = new Map((rows.results ?? []).map((r) => [r.assetId, r.level]));
-  return ids.map((id) => ({assetId: id, level: levels.get(id) ?? 1}));
+  const roster = await rosterOf(db, playerId);
+  return ids.map((id) => roster.get(id) ?? {assetId: id, level: 1, packages: BARE});
 }
 
 /** Everything the defender still has at home. Squads that marched out are gone. */
-async function homeUnits(
-  db: D1Database,
-  playerId: string,
-): Promise<Array<{assetId: string; level: number}>> {
-  const [board, away, rows] = await Promise.all([
+async function homeUnits(db: D1Database, playerId: string): Promise<UnitSpec[]> {
+  const [board, away, roster] = await Promise.all([
     readSquads(db, playerId),
     marchingSquads(db, playerId),
-    db
-      .prepare(`SELECT asset_id AS assetId, level FROM player_assets WHERE player_id = ?1`)
-      .bind(playerId)
-      .all<{assetId: string; level: number}>(),
+    rosterOf(db, playerId),
   ]);
-  const levels = new Map((rows.results ?? []).map((r) => [r.assetId, r.level]));
-  const out: Array<{assetId: string; level: number}> = [];
+  const out: UnitSpec[] = [];
   for (const [squad, slots] of Object.entries(board)) {
     if (away.has(squad)) continue;
     for (const id of slots) {
-      if (id) out.push({assetId: id, level: levels.get(id) ?? 1});
+      if (id) out.push(roster.get(id) ?? {assetId: id, level: 1, packages: BARE});
     }
   }
   return out;
@@ -134,7 +161,7 @@ export async function garrisonUnits(
   db: D1Database,
   playerId: string,
   now: number,
-): Promise<Array<{assetId: string; level: number}>> {
+): Promise<UnitSpec[]> {
   const rows = await db
     .prepare(
       `SELECT units FROM marches
@@ -145,10 +172,13 @@ export async function garrisonUnits(
     .bind(playerId, now)
     .all<{units: string}>();
 
-  const out: Array<{assetId: string; level: number}> = [];
+  const out: UnitSpec[] = [];
   for (const row of rows.results ?? []) {
     try {
-      const parsed = JSON.parse(row.units) as Array<{assetId: string; level: number}>;
+      const parsed = JSON.parse(row.units) as UnitSpec[];
+      // A march stored before packages existed has none. `packages` is optional
+      // on the resolver's input for exactly this reason, so an old reinforcement
+      // in the field resolves as it always did rather than throwing.
       if (Array.isArray(parsed)) out.push(...parsed);
     } catch {
       // A reinforcement whose roster cannot be read simply is not there.
@@ -393,9 +423,9 @@ export async function settleArrivals(
     // The attacker's squad as it LEFT, not as it stands now. The defender's is
     // read live, because a defender rearranging while somebody is inbound is
     // exactly the reaction the warning exists to allow.
-    let attackUnits: Array<{assetId: string; level: number}> = [];
+    let attackUnits: UnitSpec[] = [];
     try {
-      const parsed = JSON.parse(march.units) as Array<{assetId: string; level: number}>;
+      const parsed = JSON.parse(march.units) as UnitSpec[];
       if (Array.isArray(parsed)) attackUnits = parsed;
     } catch {
       attackUnits = [];
@@ -429,10 +459,10 @@ export async function settleArrivals(
     const result = resolve(attacker, defender, seed);
 
     const battleId = newId();
-    const power = (us: Array<{assetId: string; level: number}>) =>
+    const power = (us: UnitSpec[]) =>
       us.reduce((sum, u) => {
         const asset = ASSET_BY_ID[u.assetId];
-        return sum + (asset ? assetPower(asset, u.level) : 0);
+        return sum + (asset ? assetPowerWith(asset, u.level, u.packages ?? BARE) : 0);
       }, 0);
 
     await db.batch([
