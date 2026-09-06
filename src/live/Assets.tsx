@@ -182,11 +182,21 @@ function Card({
 export default function Assets({
   onClose,
   onShowSquads,
+  only = null,
 }: {
   onClose: () => void;
   onShowSquads: () => void;
+  /**
+   * Opened from a category building on the base board: one category, and the
+   * category bar is hidden, because the building IS the category. The player
+   * came in through the tank; showing them helicopters would undo that.
+   */
+  only?: AssetCategory | null;
 }) {
-  const [category, setCategory] = useState<AssetCategory | 'all'>('all');
+  const [category, setCategory] = useState<AssetCategory | 'all'>(only ?? 'all');
+  useEffect(() => {
+    if (only) setCategory(only);
+  }, [only]);
   const [query, setQuery] = useState('');
   const [placed, setPlaced] = useState<Map<string, string>>(new Map());
   const [roster, setRoster] = useState<Map<string, OwnedAsset>>(new Map());
@@ -258,6 +268,11 @@ export default function Assets({
         />
       </div>
 
+      {only ? (
+        <div className="shrink-0 border-b border-neutral-800 px-3 py-2 text-xs uppercase tracking-widest text-orange-300">
+          {CATEGORY_LABEL[only]}
+        </div>
+      ) : (
       <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-neutral-800 px-3 py-2">
         {(['all', ...CATEGORIES] as const).map((key) => (
           <button
@@ -273,6 +288,7 @@ export default function Assets({
           </button>
         ))}
       </nav>
+      )}
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         <p className="mb-3 text-[11px] leading-relaxed text-neutral-600">

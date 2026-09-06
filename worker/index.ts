@@ -83,6 +83,7 @@ import {
   ownedItemIds,
 } from './cosmetics';
 import {COSMETICS, normaliseLoadout} from '../shared/cosmetics';
+import {arrange as arrangeBoard, readPlacements} from './baseBoard';
 import {
   SESSION_TTL_MS,
   hashPassword,
@@ -1327,7 +1328,7 @@ async function handleStartUpgrade(request: Request, env: Env, player: PlayerRow)
   const level = state.levels[kind];
   const ceiling = maxAllowedLevel(kind, state.levels.command_post);
   if (level >= BUILDINGS[kind].maxLevel) return fail(409, 'Already at maximum level.');
-  if (level >= ceiling) return fail(409, 'Command Post level is too low for this upgrade.');
+  if (level >= ceiling) return fail(409, 'Command Center level is too low for this upgrade.');
 
   const cost = upgradeCost(kind, level);
   const short = RESOURCES.filter((r) => state.resources[r] < cost[r]);
@@ -2608,18 +2609,32 @@ async function route(
 
   if (endpoint === 'GET /api/base') {
     const now = Date.now();
-    const [state, wallet] = await Promise.all([
+    const [state, wallet, placements] = await Promise.all([
       settleAndLoad(env, player.id, now),
       // Settled here as well as on the roster screen, because this is the read
       // every player makes on every visit - a tester who never opens the roster
       // still gets their weekly top-up.
       settleWallet(env.DB, player.id, now),
+      readPlacements(env.DB, player.id),
     ]);
     if (!state) return fail(404, 'No base found.');
     return json({
       ...baseView(state, now),
       wallet: {tokens: wallet.tokens, credits: wallet.credits},
+      placements,
     });
+  }
+
+  // Moving a building on the base board. Visual only - the server's interest
+  // is that a pad holds one building and the centre stays the Command Center.
+  if (endpoint === 'POST /api/base/arrange') {
+    const body = (await request.json().catch(() => null)) as {buildingId?: unknown; padId?: unknown} | null;
+    if (typeof body?.buildingId !== 'string' || typeof body?.padId !== 'string') {
+      return fail(400, 'Say which building and which pad.');
+    }
+    const result = await arrangeBoard(env.DB, player.id, body.buildingId, body.padId);
+    if (!result.ok) return fail(409, result.error);
+    return json({placements: result.placements});
   }
 
   if (endpoint === 'POST /api/assets/rank') return handleRankUp(request, env, player);

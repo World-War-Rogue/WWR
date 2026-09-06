@@ -1485,7 +1485,7 @@ export default function WorldMap({
                   <>
                     <p className="truncate font-semibold text-neutral-100">{selectedBase.username}</p>
                     <p className="text-xs text-neutral-400">
-                      {skinSpec(selectedBase.skin).name} · Command Post{' '}
+                      {skinSpec(selectedBase.skin).name} · {t('menu.commandPost')}{' '}
                       {selectedBase.level}
                     </p>
                   </>

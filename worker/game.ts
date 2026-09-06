@@ -29,7 +29,7 @@ export interface BuildingSpec {
 export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
   command_post: {
     kind: 'command_post',
-    name: 'Command Post',
+    name: 'Command Center',
     blurb: 'Raises the ceiling on every other structure in the base.',
     maxLevel: 30,
     gatedByCommandPost: false,

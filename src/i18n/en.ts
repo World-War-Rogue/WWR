@@ -24,6 +24,7 @@
  */
 import {ALLIANCE} from './en/alliance';
 import {ASSETS} from './en/assets';
+import {BASE} from './en/base';
 import {BATTLES} from './en/battles';
 import {CHAT} from './en/chat';
 import {CORE} from './en/core';
@@ -36,6 +37,7 @@ import {SQUADS} from './en/squads';
 
 export const EN = {
   ...CORE,
+  ...BASE,
   ...GATE,
   ...MAP,
   ...CHAT,

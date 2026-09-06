@@ -16,7 +16,7 @@ export const CORE = {
   'menu.signOut': 'Sign out',
   'menu.noAlliance': 'No alliance',
   'menu.power': 'Power',
-  'menu.commandPost': 'Command Post',
+  'menu.commandPost': 'Command Center',
   'menu.server': 'Server',
 
   // Resources
@@ -28,7 +28,7 @@ export const CORE = {
   // Base
   'base.upgrade': 'Upgrade',
   'base.upgrading': 'Upgrading',
-  'base.storageCap': 'Storage cap {amount} per resource. Raising the Command Post raises the cap and unlocks higher levels everywhere else.',
+  'base.storageCap': 'Storage cap {amount} per resource. Raising the Command Center raises the cap and unlocks higher levels everywhere else.',
   'base.level': 'Lv {level}',
 
   // Time

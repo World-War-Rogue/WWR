@@ -10,6 +10,8 @@ import {type FormEvent, useCallback, useEffect, useRef, useState} from 'react';
 import {setLanguage, t} from '../i18n';
 import Alliance from './Alliance';
 import Assets from './Assets';
+import BaseBoard from './BaseBoard';
+import {CommandCenterSheet, DepotSheet} from './BaseSheets';
 import Battles from './Battles';
 import Squads from './Squads';
 import Chat from './Chat';
@@ -29,9 +31,10 @@ import {
   RESOURCE_LABEL,
   RESOURCE_ORDER,
   api,
-  formatDuration,
   formatNumber,
 } from '../net/api';
+import type {BuildingEntry} from '../../shared/base';
+import type {AssetCategory} from '../../shared/assets';
 
 function useServerClock(base: BaseView | null) {
   // The countdown is drawn against the server's clock, not the browser's, so a
@@ -273,6 +276,10 @@ export default function LiveApp() {
   const [base, setBase] = useState<BaseView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
+  // Which building sheet is open over the board, and which category the
+  // assets screen was entered through (null = the whole catalogue).
+  const [sheet, setSheet] = useState<'command_center' | 'depot' | null>(null);
+  const [assetOnly, setAssetOnly] = useState<AssetCategory | null>(null);
   const [checking, setChecking] = useState(true);
   /** Bumped when the language changes, purely to force a redraw. */
   const [, setLangTick] = useState(0);
@@ -479,7 +486,17 @@ export default function LiveApp() {
     return (
       <>
         <div className="fixed inset-0 bg-[#0a0906] text-neutral-200">
-          <Assets onClose={() => setScreen('base')} onShowSquads={() => setScreen('squads')} />
+          <Assets
+            only={assetOnly}
+            onClose={() => {
+              setAssetOnly(null);
+              setScreen('base');
+            }}
+            onShowSquads={() => {
+              setAssetOnly(null);
+              setScreen('squads');
+            }}
+          />
         </div>
         {chat}
       </>
@@ -575,63 +592,38 @@ export default function LiveApp() {
             <ResourceBar base={base} />
           </div>
 
-          {base.job && (
-            <div className="mt-6 rounded border border-orange-800 bg-orange-950/30 p-4">
-              <p className="text-xs uppercase tracking-widest text-orange-400">Under construction</p>
-              <p className="mt-1 text-neutral-200">
-                {base.buildings.find((b) => b.kind === base.job!.kind)?.name ?? base.job.kind} → level{' '}
-                {base.job.toLevel}
-              </p>
-              <p className="mt-2 font-mono text-2xl text-orange-300">
-                {formatDuration(base.job.completesAt - now())}
-              </p>
-              <p className="mt-2 text-xs text-neutral-500">
-                This timer lives on the server. Close the tab and it keeps running.
-              </p>
-            </div>
-          )}
-
-          <div className="mt-6 space-y-3">
-            {base.buildings.map((building) => {
-              const busy = pending === building.kind;
-              const blocked = building.blockedByCommandPost;
-              return (
-                <div
-                  key={building.kind}
-                  className="flex flex-wrap items-center justify-between gap-4 rounded border border-neutral-800 bg-neutral-900/60 p-4"
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-baseline gap-2">
-                      <h2 className="font-semibold text-neutral-100">{building.name}</h2>
-                      <span className="font-mono text-sm text-orange-500">Lv {building.level}</span>
-                    </div>
-                    <p className="mt-1 text-sm text-neutral-500">{building.blurb}</p>
-                    {building.nextCost && (
-                      <p className="mt-2 font-mono text-xs text-neutral-400">
-                        {RESOURCE_ORDER.filter((r) => building.nextCost![r] > 0)
-                          .map((r) => `${RESOURCE_LABEL[r]} ${formatNumber(building.nextCost![r])}`)
-                          .join('   ')}
-                        {building.nextDurationMs !== null && `   ·   ${formatDuration(building.nextDurationMs)}`}
-                      </p>
-                    )}
-                  </div>
-
-                  <button
-                    onClick={() => void upgrade(building.kind)}
-                    disabled={busy || blocked || !building.canUpgrade || Boolean(base.job)}
-                    className="shrink-0 rounded bg-orange-600 px-4 py-2 text-sm font-semibold text-white disabled:bg-neutral-800 disabled:text-neutral-500"
-                  >
-                    {blocked ? 'Command Post too low' : busy ? 'Starting…' : 'Upgrade'}
-                  </button>
-                </div>
-              );
-            })}
+          <div className="mt-4">
+            <BaseBoard
+              base={base}
+              onPlacements={(placements) => setBase((b) => (b ? {...b, placements} : b))}
+              onOpen={(entry: BuildingEntry) => {
+                if (entry.kind === 'assets') {
+                  setAssetOnly(entry.category);
+                  setScreen('assets');
+                } else {
+                  setSheet(entry.kind);
+                }
+              }}
+            />
           </div>
 
-          <p className="mt-8 text-xs text-neutral-600">
-            Storage cap {formatNumber(base.storageCap)} per resource. Raising the Command Post raises the cap and
-            unlocks higher levels everywhere else.
-          </p>
+          {sheet === 'command_center' && (
+            <CommandCenterSheet
+              base={base}
+              pending={pending}
+              onUpgrade={(kind) => void upgrade(kind)}
+              onClose={() => setSheet(null)}
+            />
+          )}
+          {sheet === 'depot' && (
+            <DepotSheet
+              onClose={() => setSheet(null)}
+              onCustomise={() => {
+                setSheet(null);
+                setScreen('customize');
+              }}
+            />
+          )}
         </>
       )}
     </div>

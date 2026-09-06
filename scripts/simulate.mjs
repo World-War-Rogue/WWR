@@ -55,6 +55,7 @@ registerHooks({
 const root = resolvePath(dirname(fileURLToPath(import.meta.url)), '..');
 const assets = await import(pathToFileURL(resolvePath(root, 'shared/assets.ts')).href);
 const combat = await import(pathToFileURL(resolvePath(root, 'shared/combat.ts')).href);
+const board = await import(pathToFileURL(resolvePath(root, 'shared/base.ts')).href);
 
 const {
   ASSETS,
@@ -215,6 +216,13 @@ if (wanted('audit')) {
     for (const p of problems) console.log(`  ${p}`);
   }
   assert('audit', problems.length === 0, `${problems.length} rows off budget`);
+
+  // The base board: every building on a real pad, no two on the same one,
+  // the Command Center on the centre and nothing else there.
+  const boardFaults = board.auditBoard();
+  console.log(`${board.BOARD_BUILDINGS.length} buildings on ${board.PADS.length} pads.`);
+  for (const f of boardFaults) console.log(`  ${f}`);
+  assert('board', boardFaults.length === 0, `${boardFaults.length} board faults`);
 }
 
 /* -------------------------------------------------------------------------- */

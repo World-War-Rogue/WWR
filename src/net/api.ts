@@ -7,6 +7,7 @@
  */
 
 import type {CosmeticItem, CosmeticSlot, Loadout} from '../../shared/cosmetics';
+import type {Placement} from '../../shared/base';
 import type {BattleDetail, BattleSummary} from '../../shared/battles';
 import type {Deployment, MarchKind} from '../../shared/march';
 import type {PackageKey, Packages} from '../../shared/upgrades';
@@ -144,6 +145,8 @@ export interface BaseView {
   buildings: BuildingView[];
   job: {kind: string; toLevel: number; startedAt: number; completesAt: number} | null;
   wallet: Wallet;
+  /** Where each board building stands. Resolved server-side; never empty. */
+  placements: Placement[];
 }
 
 export interface SkinSpec {
@@ -349,6 +352,11 @@ export const api = {
       body: JSON.stringify(body),
     }),
   base: () => call<BaseView>('/api/base'),
+  arrange: (buildingId: string, padId: string) =>
+    call<{placements: Placement[]}>('/api/base/arrange', {
+      method: 'POST',
+      body: JSON.stringify({buildingId, padId}),
+    }),
   world: (x: number, y: number, w: number, h: number, worldId?: number) => {
     const params = new URLSearchParams({x: String(x), y: String(y), w: String(w), h: String(h)});
     if (worldId !== undefined) params.set('world', String(worldId));
