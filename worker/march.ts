@@ -89,6 +89,8 @@ export interface UnitSpec {
   assetId: string;
   level: number;
   packages: Packages;
+  /** Slot in its Task Force, 0-5. The formation. Absent for legacy rows. */
+  slot?: number;
 }
 
 interface AssetLevelRow {
@@ -123,10 +125,16 @@ async function unitsOf(
   squad: SquadName,
 ): Promise<UnitSpec[]> {
   const board = await readSquads(db, playerId);
-  const ids = (board[squad] ?? []).filter((id): id is string => !!id);
-  if (ids.length === 0) return [];
+  const slots = board[squad] ?? [];
+  if (!slots.some(Boolean)) return [];
   const roster = await rosterOf(db, playerId);
-  return ids.map((id) => roster.get(id) ?? {assetId: id, level: 1, packages: BARE});
+  // The slot index travels with the unit: it is the formation. Slots 0-1 are
+  // the front, 2-3 the centre, 4-5 the rear, and the resolver reads it.
+  const out: UnitSpec[] = [];
+  slots.forEach((id, slot) => {
+    if (id) out.push({...(roster.get(id) ?? {assetId: id, level: 1, packages: BARE}), slot});
+  });
+  return out;
 }
 
 /** Everything the defender still has at home. Squads that marched out are gone. */
@@ -139,9 +147,9 @@ async function homeUnits(db: D1Database, playerId: string): Promise<UnitSpec[]> 
   const out: UnitSpec[] = [];
   for (const [squad, slots] of Object.entries(board)) {
     if (away.has(squad)) continue;
-    for (const id of slots) {
-      if (id) out.push(roster.get(id) ?? {assetId: id, level: 1, packages: BARE});
-    }
+    slots.forEach((id, slot) => {
+      if (id) out.push({...(roster.get(id) ?? {assetId: id, level: 1, packages: BARE}), slot});
+    });
   }
   return out;
 }

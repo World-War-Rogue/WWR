@@ -15,125 +15,114 @@ import {
   type AssetCategory,
   DRAFTABLE_CATEGORIES,
 } from './assets';
+import type {AssetRole} from './assets';
 import {type Packages, NO_PACKAGES, assetPowerWith, attributesWith} from './upgrades';
 
 /* -------------------------------------------------------------------------- */
-/* Tuning                                                                     */
+/* Tuning - every number is provisional and named; docs/GAME-MATH-v1.md      */
 /* -------------------------------------------------------------------------- */
 
 export const ROUNDS = 5;
 
 /**
- * Survivability.
+ * Hit points: HP = HP_SCALE * (HP_BASE + HP_PER_POINT * firepower + HP_PER_ARMOUR * armour).
  *
- * NOT the armour attribute alone. Simulation said so twice, in opposite
- * directions.
- *
- * First: with `hp = armour * 12` an armour asset was eight times tougher than a
- * drone, no counter could overcome it, and artillery lost to armour 99% of the
- * time despite being its designed counter. So durability was made to scale with
- * what an asset IS - which scales with its lift - and armour became a bonus on
- * top rather than the whole of it.
- *
- * Then the bonus turned out to still be far too large. `auditAssets` charges the
- * same point for every attribute, so two assets on one budget are meant to be
- * worth the same - and at HP_PER_ARMOUR 1.2 an armour-heavy asset beat an
- * equal-cost, equal-power range-heavy one 100% of the time, because armour was
- * counted twice: once in the points sum that sets hit points, then again here.
- *
- * 0.1 is where the two price equally, measured. Armour is still the durability
- * attribute - it is worth about 1.2 of a normal attribute for hit points, and
- * it alone builds the screen in `reachOf` - but it is a bonus now rather than
- * most of the pool. `npm run sim` asserts this and will fail if it drifts.
+ * HP_PER_ARMOUR is the number the harness has been wrong about twice. The
+ * spec sets 1.2 AND adds a mitigation term on armour below, which is armour
+ * counted twice - the exact fault the harness found in the first resolver.
+ * Kept at the spec's value so the harness can measure it; section 8 of the
+ * simulation (equal budget, different shape) is the check.
  */
-export const HP_PER_POINT = 0.6;
-export const HP_PER_ARMOUR = 0.1;
+/** A flat floor every asset has, so HP is not just another firepower bonus. */
+export const HP_BASE = 3;
+export const HP_PER_POINT = 0.3;
+export const HP_PER_ARMOUR = 0.25;
 export const HP_SCALE = 8;
 
-/**
- * What a matchup is worth.
- *
- * A bonus to the attacker, never a penalty to the defender - so a matchup can
- * only ever be an edge, and power stays the thing that decides most fights.
- * The whole spread between the best and worst matchup is twenty per cent.
- *
- * Earlier attempts ran 1.5 against 0.6, an eighty per cent spread, and made
- * rotary beat armour 96% of the time. That is the counters-decide-everything
- * design that was explicitly not chosen.
- */
+/** Per-shot damage scale, and how much armour blunts a hit: 100/(100+4A). */
+export const DAMAGE_SCALE = 2.0;
+export const ARMOUR_MITIGATION = 4;
+
+/** Range: 1 + 0.025 * (own range - enemy average), clamped. */
+export const RANGE_DELTA = 0.025;
+export const RANGE_MIN = 0.8;
+export const RANGE_MAX = 1.18;
+
 export const COUNTER_PERFECT = 1.2;
 export const COUNTER_MEDIUM = 1.1;
 
 /**
- * What a squad pays for missing a band, per band missing.
- *
- * This is the mechanism that makes combined arms the answer rather than a
- * preference, and it had to be added: without it a mono-category squad beat a
- * mixed one, because a focused squad never suffers a bad matchup within itself
- * while a mixed one is a bet on what it will meet. Rock-paper-scissors with
- * one throw rewards guessing right, not bringing variety.
- *
- * With it, a squad holding all three bands beats every pure squad. Without a
- * close band nothing shields the rear; without an air band nothing contests the
- * sky; without a deep band nothing reaches. All three are true of real
- * formations and all three are now expensive.
- *
- * The penalty used to apply to close and air only, and never to deep. That had
- * two consequences nobody intended. Artillery is the only draftable category in
- * the deep band, so an artillery squad paid the penalty twice while nothing
- * ever paid for leaving artillery out - measured, carrying armour was worth
- * +11 points of win rate and artillery -3, against a promise that no asset is
- * worth more than another. Covering all three bands closed that to +5 and +6.
- *
- * 1.2 rather than 1.5 because three penalties compound where two used to.
+ * Exposure: each band a Task Force fails to cover makes it easier to hit.
+ * Two kinds of band, both counted, as decided on 2026-09-06: the category
+ * bands (deep / air / close - is there something to answer artillery, air
+ * and armour) and the role bands (contact / fire / information - is there
+ * something to hold, something to shoot from range, something to see).
+ * 1 + EXPOSURE_PER_MISSING_BAND per band missing.
  */
-export const EXPOSURE_PER_MISSING_BAND = 1.2;
+export const EXPOSURE_PER_MISSING_BAND = 0.09;
 
-/**
- * Deep fire is gated on knowing where to shoot.
- *
- * A side with no reconnaissance still fires - it is shelling map squares - at
- * `SPOTTING_FLOOR`. A side that owns the detection contest approaches
- * `SPOTTING_FLOOR + SPOTTING_SWING`. This is the most important pair of
- * numbers in the file: it is what makes a drone worth a slot beside a tank,
- * and why artillery is not simply the best category.
- */
+/** Spotting: clamp(FLOOR, 1, BASE + DELTA * (own avg detection - theirs) + recon). */
 export const SPOTTING_FLOOR = 0.35;
-export const SPOTTING_SWING = 1.3;
+export const SPOTTING_BASE = 0.65;
+export const SPOTTING_DELTA = 0.025;
 
 /**
- * Bounded, small, and never the story. A loss has to be explicable.
- *
- * Rolled once per volley rather than once per shooter. Six independent rolls
- * average out to almost nothing - the measured spread across a whole squad was
- * under two per cent, and no fight ever changed hands because of it.
- *
- * Worth knowing before this is tuned: raising it does NOT buy meaningful
- * uncertainty. At 0.35 a mirror match still drew 88% of the time, because the
- * roll happens fifteen times a battle (three bands, five rounds) and averages
- * out again. Combat here is close to deterministic by construction, and making
- * it less so is a design change rather than a constant.
+ * The roll. Every shot swings by up to VARIANCE either way, and with
+ * probability CHANCE lands for TACTICAL_ROLL on top. The spec had only the
+ * crit; with it alone an equal fight was decided by who shot first, because
+ * nothing else in the resolver varies between two runs of the same battle.
  */
+export const VARIANCE = 0.4;
 export const CHANCE = 0.05;
-
-/** Mobility buys initiative, and buys your way out when it goes wrong. */
-export const WITHDRAW_RELIEF = 0.35;
-
+export const TACTICAL_ROLL = 1.2;
 /**
- * How close two squads have to finish for it to be called a draw.
- *
- * This was an unnamed 0.05 sitting inline in `resolve`, and it turned out to be
- * one of the most consequential numbers in the file. A medium counter is worth
- * a ten per cent damage edge, which comes out as roughly a four per cent
- * difference in surviving strength - INSIDE a five per cent draw band. So every
- * medium counter in the game resolved as a draw and the entire tier was
- * decorative: measured, a medium counter converted to a win 7% of the time and
- * drew the other 93%.
- *
- * At two per cent the tier does what it is for - a medium counter is a real but
- * modest edge, and a genuinely even fight is still a draw.
+ * Each side also draws ONE roll for the whole battle - the day's conditions,
+ * who got set first - of up to BATTLE_SWING either way on its damage. Per-shot
+ * variance averages out over thirty shots; without a side-level swing a 5%
+ * power gap won 93% of fights and the spec asks for close fights to be close.
  */
+export const BATTLE_SWING = 0.28;
+
+/** Targeting: weight * (1 + TARGET_DAMAGED * fraction of HP already lost). */
+export const TARGET_DAMAGED = 0.12;
+
+/** Within this much strength, nobody won. */
 export const DRAW_BAND = 0.02;
+
+/* Formation: six slots, three pairs. Slot index decides. */
+export type Position = 'front' | 'centre' | 'rear';
+export function positionOfSlot(slot: number): Position {
+  return slot < 2 ? 'front' : slot < 4 ? 'centre' : 'rear';
+}
+export const POSITION: Record<
+  Position,
+  {targetWeight: number; damage: number; armour: number; detection: number}
+> = {
+  front: {targetWeight: 1.45, damage: 0.96, armour: 0.08, detection: 0},
+  centre: {targetWeight: 1.0, damage: 1.0, armour: 0, detection: 0},
+  rear: {targetWeight: 0.65, damage: 1.0, armour: 0, detection: 0.1},
+};
+/** Rear fires +12% when its range at least matches the enemy average, else -10%. */
+export const REAR_RANGE_BONUS = 0.12;
+export const REAR_RANGE_PENALTY = -0.1;
+
+/* Roles, in the position they were built for. */
+export const BREACH_FRONT_DAMAGE = 0.06;
+export const SCREEN_FRONT_PROTECTION = 0.05;
+export const STRIKE_CENTRE_DAMAGED_TARGET = 0.08;
+export const OVERWATCH_REAR_DAMAGE = 0.06;
+export const RECON_CENTRE_SPOTTING = 0.05;
+export const RECON_SPOTTING_CAP = 0.1;
+
+/** Which role covers which role band. Lift and strike cover none. */
+export type RoleBand = 'contact' | 'fire' | 'information';
+export const ROLE_BANDS: RoleBand[] = ['contact', 'fire', 'information'];
+export const ROLE_BAND: Partial<Record<AssetRole, RoleBand>> = {
+  breach: 'contact',
+  screen: 'contact',
+  overwatch: 'fire',
+  recon: 'information',
+};
 
 export type Band = 'deep' | 'air' | 'close';
 export const BANDS: Band[] = ['deep', 'air', 'close'];
@@ -244,48 +233,51 @@ export function counterWeb(category: AssetCategory): {
 export interface CombatantSpec {
   assetId: string;
   level: number;
-  /**
-   * Fitted packages, when the caller knows them.
-   *
-   * Optional, and it defaults to NO_PACKAGES, so every existing caller - the
-   * arena, the simulation harness, any test that builds a squad by hand - keeps
-   * working and keeps producing the numbers it produced before. What it stops
-   * is packages being a display-only number: an upgrade that never reaches the
-   * resolver is an upgrade a player pays for and does not receive.
-   */
+  /** Fitted packages. Optional so the arena and the harness keep working. */
   packages?: Packages;
+  /**
+   * Which of the six slots it stands in: 0-1 front, 2-3 centre, 4-5 rear.
+   * The formation IS the slot order a player drags assets into. Optional:
+   * without it an asset stands in the centre, which is the neutral position.
+   */
+  slot?: number;
+  /** Fraction of HP it arrived with, 0-1. Damaged assets fight damaged. */
+  hpFraction?: number;
 }
 
 export interface SideSpec {
   name: string;
   units: CombatantSpec[];
   /**
-   * Home ground. The map passes the defender's Command Post and buildings; the
-   * arena passes 1, because there is no base there. Supplied by the caller so
-   * the resolver never reads a building and the arena cannot inherit a bonus
-   * nobody is standing on.
+   * Home ground and every other stage-5-to-9 multiplier on outgoing damage,
+   * pre-combined by the caller. The map passes the defender's buildings; the
+   * arena passes 1. The resolver never reads a building.
    */
   modifier?: number;
 }
 
 interface Unit {
+  id: string;
   asset: Asset;
   level: number;
   hp: number;
   maxHp: number;
   firepower: number;
-  mobility: number;
-  detection: number;
-  /** How far past a screen it can reach. See `reachOf`. */
-  range: number;
   armour: number;
+  mobility: number;
+  range: number;
+  detection: number;
   band: Band;
-  damaged: boolean;
+  position: Position;
+  role: AssetRole;
+  /** Hit this round already - a strike in the centre punishes that. */
+  hitThisRound: boolean;
 }
 
 export interface CombatUnitResult {
   assetId: string;
   name: string;
+  /** Disabled: no HP left. It is repairable, not gone. */
   damaged: boolean;
   /** How much of its pool it had left, 0 to 1. */
   remaining: number;
@@ -311,8 +303,10 @@ export interface SideResult {
   power: number;
   /** What composition was worth, measured rather than declared. */
   composition: number;
-  /** Share of the detection contest, 0 to 1. */
+  /** Spotting, 0.35 to 1. */
   spotting: number;
+  /** Exposure multiplier the side fought under. 1 means every band covered. */
+  exposure: number;
   losses: number;
   units: CombatUnitResult[];
   /** Fraction of the starting pool still standing when it ended. */
@@ -328,175 +322,145 @@ function rng(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
 
 /* -------------------------------------------------------------------------- */
-/* Resolution                                                                 */
+/* Building a side                                                            */
 /* -------------------------------------------------------------------------- */
 
 function build(spec: SideSpec): Unit[] {
-  const out: Unit[] = [];
-  for (const entry of spec.units) {
-    const asset = ASSET_BY_ID[entry.assetId];
-    if (!asset) continue;
-    // One computation of what this unit actually is, packages included, rather
-    // than eight separate calls that could drift apart.
-    const a = attributesWith(asset, entry.level, entry.packages ?? NO_PACKAGES);
-    const points = a.firepower + a.armour + a.mobility + a.range + a.detection;
-    const hp = (points * HP_PER_POINT + a.armour * HP_PER_ARMOUR) * HP_SCALE;
-    out.push({
+  const units: Unit[] = [];
+  spec.units.forEach((u, i) => {
+    const asset = ASSET_BY_ID[u.assetId];
+    if (!asset) return;
+    const a = attributesWith(asset, u.level, u.packages ?? NO_PACKAGES);
+    const position = positionOfSlot(u.slot ?? 2);
+    const pos = POSITION[position];
+    const armour = a.armour * (1 + pos.armour);
+    const detection = a.detection * (1 + pos.detection);
+    const maxHp = HP_SCALE * (HP_BASE + HP_PER_POINT * a.firepower + HP_PER_ARMOUR * armour);
+    const frac = Math.max(0, Math.min(1, u.hpFraction ?? 1));
+    units.push({
+      id: `${u.assetId}#${i}`,
       asset,
-      level: entry.level,
-      hp,
-      maxHp: hp,
+      level: u.level,
+      hp: maxHp * frac,
+      maxHp,
       firepower: a.firepower,
+      armour,
       mobility: a.mobility,
-      detection: a.detection,
       range: a.range,
-      armour: a.armour,
+      detection,
       band: CATEGORY_BAND[asset.category],
-      damaged: false,
+      position,
+      role: asset.role,
+      hitThisRound: false,
     });
-  }
-  return out;
+  });
+  return units;
 }
 
-const alive = (units: Unit[]) => units.filter((u) => !u.damaged);
-const sum = (ns: number[]) => ns.reduce((a, b) => a + b, 0);
+const alive = (units: Unit[]) => units.filter((u) => u.hp > 0);
+const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
+const avg = (xs: number[]) => (xs.length === 0 ? 0 : sum(xs) / xs.length);
 
 /**
- * What a side pays for the bands it left out.
- *
- * Multiplied into the damage it RECEIVES, so a squad of six tanks with no air
- * cover and nothing at range is not merely missing options - it is easier to
- * kill, which is the honest consequence of having no answer to most of the
- * fight. Every band counts, including deep: see EXPOSURE_PER_MISSING_BAND for
- * what leaving one out of the count did.
+ * How exposed a side is: one step per band it does not cover, counting both
+ * the category bands and the role bands. A mono-category Task Force of the
+ * right roles is still exposed; a mixed one with nobody to see is too.
  */
 export function exposureOf(units: Unit[]): number {
-  const bands = new Set(units.map((u) => u.band));
-  let mult = 1;
-  for (const band of BANDS) {
-    if (!bands.has(band)) mult *= EXPOSURE_PER_MISSING_BAND;
+  const cats = new Set(units.map((u) => u.band));
+  const roles = new Set(units.map((u) => ROLE_BAND[u.role]).filter(Boolean));
+  const missing = BANDS.length - cats.size + (ROLE_BANDS.length - roles.size);
+  return 1 + EXPOSURE_PER_MISSING_BAND * missing;
+}
+
+function spottingOf(mine: Unit[], theirs: Unit[]): number {
+  const delta = avg(mine.map((u) => u.detection)) - avg(theirs.map((u) => u.detection));
+  const recon = Math.min(
+    RECON_SPOTTING_CAP,
+    mine.filter((u) => u.role === 'recon' && u.position === 'centre').length * RECON_CENTRE_SPOTTING,
+  );
+  return Math.max(SPOTTING_FLOOR, Math.min(1, SPOTTING_BASE + SPOTTING_DELTA * delta + recon));
+}
+
+/* -------------------------------------------------------------------------- */
+/* The fight                                                                  */
+/* -------------------------------------------------------------------------- */
+
+function pickTarget(enemies: Unit[]): Unit | null {
+  let best: Unit | null = null;
+  let bestScore = -1;
+  for (const e of enemies) {
+    const lost = 1 - e.hp / e.maxHp;
+    const score = POSITION[e.position].targetWeight * (1 + TARGET_DAMAGED * lost);
+    if (score > bestScore || (score === bestScore && best && e.id < best.id)) {
+      best = e;
+      bestScore = score;
+    }
   }
-  return mult;
+  return best;
 }
 
-/**
- * Damage one band's worth of fire into the other side.
- *
- * Targets are taken best-matchup first, so a band of helicopters spends itself
- * on armour before anything else. That is what makes the counter web visible
- * in the report rather than buried in an average - "the Apaches broke the
- * Abrams" is a sentence a player can learn from.
- */
-/**
- * What fraction of a band's fire gets past the enemy's close-range screen.
- *
- * A contest between how far the shooters reach and how hard the screen is to
- * shoot through, in the same shape as the spotting contest: always between 0
- * and 1, and scale-free, so it means the same thing at rank 1 and rank 50.
- *
- * ── Why range needed this ─────────────────────────────────────────────────
- *
- * `range` is documented in `shared/assets.ts` as "which band it fights in", but
- * the band comes from CATEGORY_BAND and always did, so range was read exactly
- * once - into the points sum that sets hit points - and never again. Every
- * other attribute does a second job: firepower deals damage, armour adds hit
- * points on top of its points, mobility buys initiative and withdrawal,
- * detection wins the spotting contest. Range did nothing.
- *
- * That broke the promise the whole catalogue rests on. `auditAssets` prices all
- * five attributes identically, so two assets on the same point budget are meant
- * to be worth the same - and measured, an armour-heavy asset beat an equal-cost
- * range-heavy one 100% of the time with both showing identical power.
- *
- * So range now buys reach past a screen, and armour buys the screen's strength.
- * Both are real, both scale, and they are in direct tension: a wall of armour
- * is what long range is for, and long range is what a wall of armour fears.
- */
-export function reachOf(shooters: Unit[], screen: Unit[]): number {
-  if (screen.length === 0) return 1;
-  const reach = sum(shooters.map((u) => u.range));
-  const wall = sum(screen.map((u) => u.armour));
-  if (reach + wall === 0) return 1;
-  return reach / (reach + wall);
-}
-
-function fire(
-  shooters: Unit[],
-  targets: Unit[],
+function shot(
+  shooter: Unit,
+  target: Unit,
+  enemies: Unit[],
   spotting: number,
   modifier: number,
-  /** What the RECEIVING side pays for the bands it did not bring. */
   exposure: number,
   roll: () => number,
-): {dealt: number; killed: string[]} {
-  const living = alive(targets);
-  if (living.length === 0 || shooters.length === 0) return {dealt: 0, killed: []};
+): number {
+  const enemyRange = avg(enemies.map((u) => u.range));
+  const rangeMult = Math.max(RANGE_MIN, Math.min(RANGE_MAX, 1 + RANGE_DELTA * (shooter.range - enemyRange)));
 
-  let pool = 0;
-  for (const s of shooters) {
-    // Only deep fire is gated on spotting. A tank at close range does not need
-    // a drone to tell it where the other tank is.
-    const sight =
-      s.band === 'deep' ? SPOTTING_FLOOR + SPOTTING_SWING * spotting : 1;
-    pool += s.firepower * sight;
+  let positionAttack = POSITION[shooter.position].damage;
+  if (shooter.position === 'rear') {
+    positionAttack *= 1 + (shooter.range >= enemyRange ? REAR_RANGE_BONUS : REAR_RANGE_PENALTY);
   }
-  // One roll for the volley, not one per shooter. Six independent rolls average
-  // out to nothing - measured, the spread across a whole squad was under two
-  // per cent and no fight ever changed hands because of it, which made every
-  // matchup a lookup table returning 0% or 100%. A battle has to be able to
-  // surprise the person who launched it.
-  pool *= modifier * exposure * (1 + (roll() * 2 - 1) * CHANCE);
 
-  // The screen. Whatever is standing at close range shields what is behind it,
-  // and only the fraction of fire that out-reaches the screen gets past.
-  const screen = living.filter((u) => u.band === 'close');
-  const behind = living.filter((u) => u.band !== 'close');
-  const past = screen.length > 0 && behind.length > 0 ? reachOf(shooters, screen) : 1;
+  let roleAttack = 1;
+  if (shooter.role === 'breach' && shooter.position === 'front') roleAttack *= 1 + BREACH_FRONT_DAMAGE;
+  if (shooter.role === 'overwatch' && shooter.position === 'rear') roleAttack *= 1 + OVERWATCH_REAR_DAMAGE;
+  if (shooter.role === 'strike' && shooter.position === 'centre' && target.hitThisRound) {
+    roleAttack *= 1 + STRIKE_CENTRE_DAMAGED_TARGET;
+  }
 
-  const spend = (candidates: Unit[], amount: number): {dealt: number; killed: string[]} => {
-    const killed: string[] = [];
-    let dealt = 0;
-    let left = amount;
-    const order = [...candidates].sort((a, b) => {
-      const am = Math.max(...shooters.map((s) => counterOf(s.asset.category, a.asset.category)));
-      const bm = Math.max(...shooters.map((s) => counterOf(s.asset.category, b.asset.category)));
-      return bm - am || a.hp - b.hp;
-    });
-    for (const target of order) {
-      if (left <= 0) break;
-      if (target.damaged) continue;
-      const multiplier = Math.max(
-        ...shooters.map((s) => counterOf(s.asset.category, target.asset.category)),
-      );
-      const applied = Math.min(target.hp, left * multiplier);
-      target.hp -= applied;
-      dealt += applied;
-      left -= applied / multiplier;
-      if (target.hp <= 0) {
-        target.damaged = true;
-        killed.push(target.asset.name);
-      }
-    }
-    return {dealt, killed};
-  };
+  const counter = counterOf(shooter.asset.category, target.asset.category);
+  const mitigation = 100 / (100 + ARMOUR_MITIGATION * target.armour);
+  const tactical = (1 + (roll() * 2 - 1) * VARIANCE) * (roll() < CHANCE ? TACTICAL_ROLL : 1);
 
-  // Fire that out-reaches the screen may pick its target anywhere. The rest is
-  // held at the front, and falls through to the whole squad once the screen is
-  // gone, so nothing is wasted shooting at something that is no longer there.
-  const far = spend(living, pool * past);
-  const near = spend(alive(screen).length > 0 ? screen : living, pool * (1 - past));
+  // A screen in the front takes 5% off what its front-line neighbours take.
+  const screened =
+    target.position === 'front' &&
+    enemies.some((u) => u !== target && u.role === 'screen' && u.position === 'front' && u.hp > 0)
+      ? 1 - SCREEN_FRONT_PROTECTION
+      : 1;
 
-  return {
-    dealt: far.dealt + near.dealt,
-    killed: [...far.killed, ...near.killed],
-  };
+  const damage =
+    DAMAGE_SCALE *
+    shooter.firepower *
+    rangeMult *
+    spotting *
+    positionAttack *
+    roleAttack *
+    counter *
+    exposure *
+    mitigation *
+    tactical *
+    modifier *
+    screened;
+
+  const applied = Math.min(target.hp, damage);
+  target.hp -= applied;
+  target.hitThisRound = true;
+  return applied;
 }
 
 export function resolve(
@@ -507,6 +471,8 @@ export function resolve(
   const roll = rng(seed);
   const A = build(attackerSpec);
   const D = build(defenderSpec);
+  const swingA = 1 + (roll() * 2 - 1) * BATTLE_SWING;
+  const swingD = 1 + (roll() * 2 - 1) * BATTLE_SWING;
 
   const startA = sum(A.map((u) => u.maxHp));
   const startD = sum(D.map((u) => u.maxHp));
@@ -526,89 +492,64 @@ export function resolve(
 
   const rounds: CombatRound[] = [];
   const notes: string[] = [];
-  if (expA > 1) notes.push(`${attackerSpec.name} brought no answer to every band.`);
-  if (expD > 1) notes.push(`${defenderSpec.name} brought no answer to every band.`);
-  let spotA = 0.5;
-  let spotD = 0.5;
+  if (expA > 1) notes.push(`${attackerSpec.name} left a band uncovered.`);
+  if (expD > 1) notes.push(`${defenderSpec.name} left a band uncovered.`);
+  let spotA = SPOTTING_BASE;
+  let spotD = SPOTTING_BASE;
 
   for (let r = 1; r <= ROUNDS; r += 1) {
     const liveA = alive(A);
     const liveD = alive(D);
     if (liveA.length === 0 || liveD.length === 0) break;
 
-    // The detection contest is re-fought every round, because losing your
-    // reconnaissance mid-battle should blind your artillery for the rest of it.
-    const detA = sum(liveA.map((u) => u.detection));
-    const detD = sum(liveD.map((u) => u.detection));
-    spotA = detA + detD === 0 ? 0.5 : detA / (detA + detD);
-    spotD = 1 - spotA;
+    // Spotting is re-fought every round: lose your recon and your rear goes
+    // blind for the rest of the fight.
+    spotA = spottingOf(liveA, liveD);
+    spotD = spottingOf(liveD, liveA);
+    for (const u of [...A, ...D]) u.hitThisRound = false;
+
+    // Every living asset shoots once, in mobility order across both sides -
+    // the fast shoot first, and an asset broken before its turn never fires.
+    // Ties in mobility are broken by the seeded roll, not by name: broken by
+    // name, one side shot first every round of every battle between equal
+    // assets and a x1.1 counter could not overcome it. The harness saw a
+    // medium counter lose 100%.
+    const keyed = [...liveA.map((u) => ({u, side: 'A' as const})), ...liveD.map((u) => ({u, side: 'D' as const}))].map(
+      (e) => ({...e, tie: roll()}),
+    );
+    const order = keyed.sort((x, y) => y.u.mobility - x.u.mobility || x.tie - y.tie);
 
     let dmgA = 0;
     let dmgD = 0;
-    const events: string[] = [];
-
-    for (const band of BANDS) {
-      const shootersA = alive(A).filter((u) => u.band === band);
-      const shootersD = alive(D).filter((u) => u.band === band);
-
-      // Mobility buys the first shot inside a band. In an even fight that is
-      // the difference between trading and taking one for free.
-      const mobA = sum(shootersA.map((u) => u.mobility));
-      const mobD = sum(shootersD.map((u) => u.mobility));
-      const attackerFirst = mobA >= mobD;
-
-      const shoot = (
-        shooters: Unit[],
-        targets: Unit[],
-        spotting: number,
-        modifier: number,
-        exposure: number,
-        label: string,
-      ) => {
-        if (shooters.length === 0) return 0;
-        const {dealt, killed} = fire(shooters, targets, spotting, modifier, exposure, roll);
-        if (killed.length > 0) events.push(`${label} broke ${killed.join(', ')}`);
-        return dealt;
-      };
-
-      const fireA = () =>
-        shoot(
-          alive(A).filter((u) => u.band === band),
-          D,
-          spotA,
-          attackerSpec.modifier ?? 1,
-          expD,
-          attackerSpec.name,
-        );
-      const fireD = () =>
-        shoot(
-          alive(D).filter((u) => u.band === band),
-          A,
-          spotD,
-          defenderSpec.modifier ?? 1,
-          expA,
-          defenderSpec.name,
-        );
-
-      if (attackerFirst) {
-        dmgA += fireA();
-        dmgD += fireD();
-      } else {
-        dmgD += fireD();
-        dmgA += fireA();
-      }
+    const broken: string[] = [];
+    for (const {u, side} of order) {
+      if (u.hp <= 0) continue;
+      const enemies = alive(side === 'A' ? D : A);
+      if (enemies.length === 0) break;
+      const target = pickTarget(enemies);
+      if (!target) break;
+      const dealt = shot(
+        u,
+        target,
+        enemies,
+        side === 'A' ? spotA : spotD,
+        ((side === 'A' ? attackerSpec.modifier : defenderSpec.modifier) ?? 1) * (side === 'A' ? swingA : swingD),
+        side === 'A' ? expD : expA,
+        roll,
+      );
+      if (side === 'A') dmgA += dealt;
+      else dmgD += dealt;
+      if (target.hp <= 0) broken.push(target.asset.name);
     }
 
     rounds.push({
       index: r,
-      summary: events.length > 0 ? events.join('; ') : 'Fire traded, nothing broken.',
+      summary: broken.length > 0 ? `Broken: ${broken.join(', ')}` : 'Fire traded, nothing broken.',
       attackerDamage: Math.round(dmgA),
       defenderDamage: Math.round(dmgD),
     });
   }
 
-  // Withdrawal: the losing side saves what it can, and mobility decides how
-  // much. Being fast is how you survive having brought the wrong squad.
   const leftA = sum(alive(A).map((u) => u.hp));
   const leftD = sum(alive(D).map((u) => u.hp));
   const strengthA = startA === 0 ? 0 : leftA / startA;
@@ -621,54 +562,38 @@ export function resolve(
         ? 'attacker'
         : 'defender';
 
-  const losing = outcome === 'attacker' ? D : outcome === 'defender' ? A : null;
-  if (losing) {
-    const mob = sum(losing.map((u) => u.mobility)) / Math.max(1, losing.length);
-    const relief = Math.min(WITHDRAW_RELIEF, (mob / 10) * WITHDRAW_RELIEF);
-    let saved = 0;
-    for (const u of losing) {
-      if (u.damaged && roll() < relief) {
-        u.damaged = false;
-        u.hp = u.maxHp * 0.15;
-        saved += 1;
-      }
-    }
-    if (saved > 0) notes.push(`${saved} withdrew before they were finished.`);
-  }
+  const describe = (
+    units: Unit[],
+    spec: SideSpec,
+    power: number,
+    spotting: number,
+    exposure: number,
+    start: number,
+  ): SideResult => ({
+    name: spec.name,
+    power,
+    composition: 0,
+    spotting,
+    exposure,
+    losses: units.filter((u) => u.hp <= 0).length,
+    strength: start === 0 ? 0 : sum(units.map((u) => Math.max(0, u.hp))) / start,
+    units: units.map((u) => ({
+      assetId: u.asset.id,
+      name: u.asset.name,
+      damaged: u.hp <= 0,
+      remaining: u.maxHp === 0 ? 0 : Math.max(0, u.hp) / u.maxHp,
+    })),
+  });
 
-  const describe = (units: Unit[], spec: SideSpec, power: number, spotting: number, start: number): SideResult => {
-    const left = sum(units.map((u) => (u.damaged ? 0 : u.hp)));
-    return {
-      name: spec.name,
-      power,
-      // Measured, not declared: what this squad actually achieved against what
-      // its raw power says it should have. The report shows it so a defeated
-      // player can see the reason rather than infer it.
-      composition: 0,
-      spotting,
-      losses: units.filter((u) => u.damaged).length,
-      strength: start === 0 ? 0 : left / start,
-      units: units.map((u) => ({
-        assetId: u.asset.id,
-        name: u.asset.name,
-        damaged: u.damaged,
-        remaining: u.maxHp === 0 ? 0 : Math.max(0, u.hp) / u.maxHp,
-      })),
-    };
-  };
+  const resultA = describe(A, attackerSpec, powerA, spotA, expA, startA);
+  const resultD = describe(D, defenderSpec, powerD, spotD, expD, startD);
 
-  const resultA = describe(A, attackerSpec, powerA, spotA, startA);
-  const resultD = describe(D, defenderSpec, powerD, spotD, startD);
-
-  // Composition is what the squad was worth beyond its raw power. Expressed as
-  // the ratio of how the fight actually went to how the power difference alone
-  // says it should have gone.
+  // Composition is what the Task Force was worth beyond its raw power: how
+  // the fight went against how the power difference alone says it should.
   const expected = powerA + powerD === 0 ? 0.5 : powerA / (powerA + powerD);
-  const actual =
-    strengthA + strengthD === 0 ? 0.5 : strengthA / (strengthA + strengthD);
+  const actual = strengthA + strengthD === 0 ? 0.5 : strengthA / (strengthA + strengthD);
   resultA.composition = expected === 0 ? 1 : Number((actual / expected).toFixed(3));
-  resultD.composition =
-    1 - expected === 0 ? 1 : Number(((1 - actual) / (1 - expected)).toFixed(3));
+  resultD.composition = 1 - expected === 0 ? 1 : Number(((1 - actual) / (1 - expected)).toFixed(3));
 
   return {outcome, rounds, notes, attacker: resultA, defender: resultD};
 }
