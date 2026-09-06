@@ -1,5 +1,5 @@
 /**
- * The base board: a painted salt-basin installation with fourteen pads, and
+ * The base board: a painted salt-basin installation with fifteen pads, and
  * the buildings standing on them.
  *
  * Static on purpose. One image for the ground, one image per building, and
@@ -7,18 +7,23 @@
  * a five-year-old phone, and a base screen that costs a frame a second is a
  * base screen that warms the phone in a pocket.
  *
+ * The painting COVERS the viewport: scaled so no black shows on either axis,
+ * which on most screens leaves part of it off-screen, so the ground pans -
+ * drag it, or scroll. Buildings are positioned by percentage of the board, so
+ * the pan is one transform on one element.
+ *
  * Interaction, as decided:
  *   - one tap selects a building and names it above its roof;
  *   - a second tap on the selected building inside 650ms (or a desktop
  *     double-click) opens it;
- *   - Arrange mode: tap a building, then tap a pad. An occupied pad offers a
- *     swap. On desktop the same thing works as drag and drop.
+ *   - press and HOLD a building and it lifts; drag it to any pad and drop it.
+ *     Whatever stood there moves itself to the nearest open pad. No Arrange
+ *     mode, no confirmation - a move is cheap to undo by moving it back.
  * The Command Center is never a target of any of that.
  *
  * Where a building stands is the server's record; this asks and redraws.
  */
 import {
-  type DragEvent,
   type PointerEvent as ReactPointerEvent,
   useEffect,
   useMemo,
@@ -45,25 +50,26 @@ import {clockSynced, formatClock, useServerClock} from './serverClock';
 
 /** A second tap after this is a new selection, not an open. */
 const DOUBLE_TAP_MS = 650;
-
-/**
- * How the painting fills the viewport. A phone is taller than the board's
- * 9:16, so the board is scaled to the height and the sides are cropped a
- * little - the outermost pads sit at x 0.10 and 0.90, which survives. A
- * desktop window is wider than the board, so the board is scaled to the
- * height and letterboxed; cropping the top and bottom compounds off a wide
- * screen would lose six pads.
- */
-function fitBoard(vw: number, vh: number): {w: number; h: number; left: number; top: number} {
-  const portrait = vw / vh < BOARD_W / BOARD_H;
-  const scale = portrait ? Math.max(vw / BOARD_W, vh / BOARD_H) : vh / BOARD_H;
-  const w = BOARD_W * scale;
-  const h = BOARD_H * scale;
-  return {w, h, left: (vw - w) / 2, top: (vh - h) / 2};
-}
+/** Hold a building this long and it lifts. Shorter than a browser long-press. */
+const HOLD_MS = 320;
+/** A press that travels further than this before the hold is a pan. */
+const SLOP_PX = 10;
+/** A drop lands on the nearest pad if it is within this fraction of board width. */
+const DROP_REACH = 0.14;
 
 function buildingName(b: BoardBuilding): string {
   return t(`building.${b.id}` as MessageKey) || b.name;
+}
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, v));
+}
+
+type Fit = {w: number; h: number; scale: number};
+
+function fitBoard(vw: number, vh: number): Fit {
+  const scale = Math.max(vw / BOARD_W, vh / BOARD_H);
+  return {w: BOARD_W * scale, h: BOARD_H * scale, scale};
 }
 
 export default function BaseBoard({
@@ -77,19 +83,13 @@ export default function BaseBoard({
 }) {
   const box = useRef<HTMLDivElement | null>(null);
   const [view, setView] = useState({w: 360, h: 640});
+  const [pan, setPan] = useState<{x: number; y: number} | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
-  const [arranging, setArranging] = useState(false);
-  const [moving, setMoving] = useState<string | null>(null);
-  const [swap, setSwap] = useState<{a: string; b: string; padId: string} | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [lifted, setLifted] = useState<{id: string; x: number; y: number} | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const lastTap = useRef<{id: string; at: number}>({id: '', at: 0});
   const now = useServerClock();
 
-  // The board is sized by CSS; everything on it is positioned by percentage.
-  // The one thing that needs a pixel number is text - a label that scales with
-  // the board rather than with the phone's font setting - so measure once and
-  // on resize, never per frame.
   useEffect(() => {
     const el = box.current;
     if (!el) return;
@@ -98,54 +98,37 @@ export default function BaseBoard({
     setView({w: el.clientWidth, h: el.clientHeight});
     return () => ro.disconnect();
   }, []);
+
   const fit = fitBoard(view.w, view.h);
-  const width = fit.w;
+  // The pan is the board's top-left in viewport pixels. Clamped so the ground
+  // always covers the screen; centred until the player moves it.
+  const minX = view.w - fit.w;
+  const minY = view.h - fit.h;
+  const cur = pan ?? {x: minX / 2, y: minY / 2};
+  const px = clamp(cur.x, minX, 0);
+  const py = clamp(cur.y, minY, 0);
 
   const padOf = useMemo(() => {
     const m = new Map<string, string>();
     for (const p of base.placements) m.set(p.buildingId, p.padId);
     return m;
   }, [base.placements]);
-  const buildingOn = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const p of base.placements) m.set(p.padId, p.buildingId);
-    return m;
-  }, [base.placements]);
 
   const ccLevel = base.buildings.find((b) => b.kind === 'command_post')?.level ?? 0;
 
   async function move(buildingId: string, padId: string) {
-    setBusy(true);
     setNote(null);
     try {
       const r = await api.arrange(buildingId, padId);
       onPlacements(r.placements);
-      setMoving(null);
-      setSwap(null);
     } catch (err) {
       setNote(err instanceof ApiError ? err.message : 'Could not reach the server.');
-    } finally {
-      setBusy(false);
     }
   }
 
   function tapBuilding(id: string) {
     const b = BOARD_BUILDING_BY_ID[id];
     if (!b) return;
-    if (arranging) {
-      if (!b.movable) {
-        setNote(t('board.fixed'));
-        return;
-      }
-      if (moving && moving !== id) {
-        // Tapping a second building while one is lifted: swap them.
-        setSwap({a: moving, b: id, padId: padOf.get(id) ?? b.defaultPad});
-        return;
-      }
-      setMoving(id);
-      setNote(t('board.tapToMove'));
-      return;
-    }
     const at = Date.now();
     const prev = lastTap.current;
     lastTap.current = {id, at};
@@ -156,58 +139,121 @@ export default function BaseBoard({
     setSelected(id);
   }
 
-  function tapPad(padId: string) {
-    if (!arranging || !moving) return;
-    if (padId === CENTRE_PAD) {
-      setNote(t('board.fixed'));
-      return;
-    }
-    const occupant = buildingOn.get(padId);
-    if (occupant && occupant !== moving) {
-      setSwap({a: moving, b: occupant, padId});
-      return;
-    }
-    void move(moving, padId);
+  /** Viewport pixels -> board fraction. */
+  function toBoard(clientX: number, clientY: number): {x: number; y: number} {
+    const r = box.current?.getBoundingClientRect();
+    const ox = r?.left ?? 0;
+    const oy = r?.top ?? 0;
+    return {x: (clientX - ox - px) / fit.w, y: (clientY - oy - py) / fit.h};
   }
 
-  // Pointer discipline: a tap is a down and an up that did not travel. A pan
-  // or a scroll that happens to end on a building must not select it.
-  const down = useRef<{x: number; y: number} | null>(null);
-  function onDown(e: ReactPointerEvent) {
-    down.current = {x: e.clientX, y: e.clientY};
-  }
-  function isTap(e: ReactPointerEvent): boolean {
-    const d = down.current;
-    down.current = null;
-    return !!d && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 12;
+  function nearestPad(x: number, y: number): string | null {
+    let best: string | null = null;
+    let bestD = DROP_REACH;
+    for (const p of PADS) {
+      if (p.id === CENTRE_PAD) continue;
+      const d = Math.hypot(p.x - x, (p.y - y) * (BOARD_H / BOARD_W));
+      if (d < bestD) {
+        bestD = d;
+        best = p.id;
+      }
+    }
+    return best;
   }
 
-  // Desktop drag and drop. Same outcomes as Arrange; a different verb.
-  function onDragStart(e: DragEvent, id: string) {
-    const b = BOARD_BUILDING_BY_ID[id];
-    if (!b?.movable) {
-      e.preventDefault();
-      return;
+  /*
+   * One pointer state machine for the whole board. A press starts as
+   * "undecided": if it travels, it is a pan of the ground; if it is on a
+   * building and held still past HOLD_MS, that building lifts and follows the
+   * pointer; if it ends before either, it is a tap.
+   */
+  const press = useRef<{
+    id: string | null;
+    startX: number;
+    startY: number;
+    panX: number;
+    panY: number;
+    mode: 'undecided' | 'pan' | 'lift';
+    timer: number | null;
+    pointerId: number;
+  } | null>(null);
+
+  function onDown(e: ReactPointerEvent, id: string | null) {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    const b = id ? BOARD_BUILDING_BY_ID[id] : null;
+    const p: NonNullable<typeof press.current> = {
+      id,
+      startX: e.clientX,
+      startY: e.clientY,
+      panX: px,
+      panY: py,
+      mode: 'undecided',
+      timer: null,
+      pointerId: e.pointerId,
+    };
+    press.current = p;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    if (b?.movable) {
+      p.timer = window.setTimeout(() => {
+        if (press.current === p && p.mode === 'undecided') {
+          p.mode = 'lift';
+          const at = toBoard(e.clientX, e.clientY);
+          setLifted({id: b.id, x: at.x, y: at.y});
+          setSelected(null);
+          if (navigator.vibrate) navigator.vibrate(12);
+        }
+      }, HOLD_MS);
+    } else if (b && !b.movable) {
+      p.timer = window.setTimeout(() => {
+        if (press.current === p && p.mode === 'undecided') setNote(t('board.fixed'));
+      }, HOLD_MS);
     }
-    e.dataTransfer.setData('text/plain', id);
-    e.dataTransfer.effectAllowed = 'move';
-    setMoving(id);
-  }
-  function onDropPad(e: DragEvent, padId: string) {
-    e.preventDefault();
-    const id = e.dataTransfer.getData('text/plain') || moving;
-    if (!id) return;
-    if (padId === CENTRE_PAD) return;
-    const occupant = buildingOn.get(padId);
-    if (occupant && occupant !== id) {
-      setSwap({a: id, b: occupant, padId});
-      return;
-    }
-    void move(id, padId);
   }
 
-  const labelPx = Math.max(11, Math.round(width * 0.032));
-  const clockPx = Math.max(9, Math.round(width * 0.027));
+  function onMove(e: ReactPointerEvent) {
+    const p = press.current;
+    if (!p || p.pointerId !== e.pointerId) return;
+    const dx = e.clientX - p.startX;
+    const dy = e.clientY - p.startY;
+    if (p.mode === 'undecided' && Math.hypot(dx, dy) > SLOP_PX) {
+      p.mode = 'pan';
+      if (p.timer) window.clearTimeout(p.timer);
+    }
+    if (p.mode === 'pan') {
+      setPan({x: p.panX + dx, y: p.panY + dy});
+    } else if (p.mode === 'lift') {
+      const at = toBoard(e.clientX, e.clientY);
+      setLifted((l) => (l ? {...l, x: at.x, y: at.y} : l));
+    }
+  }
+
+  function onUp(e: ReactPointerEvent) {
+    const p = press.current;
+    if (!p || p.pointerId !== e.pointerId) return;
+    press.current = null;
+    if (p.timer) window.clearTimeout(p.timer);
+    if (p.mode === 'lift') {
+      const at = toBoard(e.clientX, e.clientY);
+      const pad = nearestPad(at.x, at.y);
+      setLifted(null);
+      if (pad && p.id && pad !== padOf.get(p.id)) void move(p.id, pad);
+      return;
+    }
+    if (p.mode === 'undecided') {
+      if (p.id) tapBuilding(p.id);
+      else setSelected(null);
+    }
+  }
+
+  function onCancel() {
+    const p = press.current;
+    if (p?.timer) window.clearTimeout(p.timer);
+    press.current = null;
+    setLifted(null);
+  }
+
+  const labelPx = Math.max(11, Math.round(fit.w * 0.03));
+  const clockPx = Math.max(9, Math.round(fit.w * 0.026));
 
   // Draw order follows the pad's y so a southern building overlaps a northern
   // one, the way the map paints bases. A lifted building floats above all.
@@ -215,46 +261,41 @@ export default function BaseBoard({
     .map((b) => ({b, pad: PADS.find((p) => p.id === (padOf.get(b.id) ?? b.defaultPad))!}))
     .sort((p, q) => p.pad.y - q.pad.y);
 
+  const targetPad = lifted ? nearestPad(lifted.x, lifted.y) : null;
+
   return (
-    <div ref={box} className="absolute inset-0 select-none overflow-hidden bg-[#0a0906]">
-      {/* Arrange lives at the top right under the header, over the painting. */}
-      <div
-        className="pointer-events-none absolute inset-x-0 z-30 flex items-start justify-between gap-2 px-3"
-        style={{top: 'calc(env(safe-area-inset-top) + 3.75rem)'}}
-      >
-        <p className="min-h-[1.25rem] max-w-[65%] rounded bg-black/60 px-2 py-1 text-xs text-neutral-200 empty:hidden">
-          {arranging ? note ?? t('board.arranging') : note ?? ''}
-        </p>
-        <button
-          onClick={() => {
-            setArranging((v) => !v);
-            setMoving(null);
-            setSwap(null);
-            setSelected(null);
-            setNote(null);
-          }}
-          className={`pointer-events-auto shrink-0 rounded border px-3 py-1 text-xs font-medium shadow ${
-            arranging
-              ? 'border-orange-500 bg-orange-950/80 text-orange-200'
-              : 'border-neutral-600 bg-black/60 text-neutral-200 hover:border-orange-500'
-          }`}
+    <div
+      ref={box}
+      className="absolute inset-0 select-none overflow-hidden bg-[#0a0906]"
+      onWheel={(e) => setPan({x: px, y: py - e.deltaY})}
+    >
+      {note && (
+        <p
+          className="pointer-events-none absolute left-3 z-30 rounded bg-black/70 px-2 py-1 text-xs text-neutral-200"
+          style={{top: 'calc(env(safe-area-inset-top) + 3.75rem)'}}
         >
-          {arranging ? t('board.arrangeDone') : t('board.arrange')}
-        </button>
-      </div>
+          {note}
+        </p>
+      )}
 
       <div
-        className="absolute"
+        className="absolute left-0 top-0"
         style={{
           width: fit.w,
           height: fit.h,
-          left: fit.left,
-          top: fit.top,
-          touchAction: 'manipulation',
+          transform: `translate(${px}px, ${py}px)`,
+          touchAction: 'none',
         }}
         onPointerDown={(e) => {
-          if (e.target === e.currentTarget) setSelected(null);
+          if (e.target === e.currentTarget || (e.target as HTMLElement).tagName === 'IMG') {
+            // Ground, or the ground image. A building's own img stops
+            // propagation below, so this is only ever the painting.
+            onDown(e, null);
+          }
         }}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerCancel={onCancel}
       >
         <img
           src={BOARD_IMAGE}
@@ -264,24 +305,15 @@ export default function BaseBoard({
           decoding="async"
         />
 
-        {/* Pads: hit targets, drawn only while arranging. */}
-        {PADS.map((pad) => {
-          const occupant = buildingOn.get(pad.id);
-          const visible = arranging && pad.id !== CENTRE_PAD;
-          return (
-            <button
+        {/* Pads light up only while something is lifted. */}
+        {lifted &&
+          PADS.filter((p) => p.id !== CENTRE_PAD).map((pad) => (
+            <div
               key={pad.id}
-              aria-label={pad.id}
-              onPointerDown={onDown}
-              onPointerUp={(e) => isTap(e) && tapPad(pad.id)}
-              onDragOver={(e) => arranging && e.preventDefault()}
-              onDrop={(e) => onDropPad(e, pad.id)}
-              className={`absolute rounded-md transition ${
-                visible
-                  ? occupant
-                    ? 'border border-dashed border-orange-400/40'
-                    : 'border-2 border-dashed border-emerald-300/80 bg-emerald-300/15'
-                  : 'border border-transparent'
+              className={`pointer-events-none absolute rounded-md border-2 border-dashed transition ${
+                targetPad === pad.id
+                  ? 'border-emerald-300 bg-emerald-300/25'
+                  : 'border-emerald-200/50 bg-emerald-200/10'
               }`}
               style={{
                 left: `${pad.x * 100}%`,
@@ -292,30 +324,31 @@ export default function BaseBoard({
                 zIndex: 5,
               }}
             />
-          );
-        })}
+          ))}
 
         {drawn.map(({b, pad}) => {
           const isSel = selected === b.id;
-          const lifted = moving === b.id;
+          const isLifted = lifted?.id === b.id;
+          const x = isLifted ? lifted.x : pad.x;
+          const y = isLifted ? lifted.y + FOOT_DROP * pad.scale : pad.y + FOOT_DROP * pad.scale;
           return (
             <div
               key={b.id}
-              className="absolute"
+              className={`absolute ${isLifted ? '' : 'transition-[left,top] duration-200'}`}
               style={{
-                left: `${pad.x * 100}%`,
+                left: `${x * 100}%`,
+                top: `${y * 100}%`,
                 width: `${BUILDING_WIDTH * pad.scale * b.size * 100}%`,
-                top: `${(pad.y + FOOT_DROP * pad.scale) * 100}%`,
                 transform: 'translate(-50%, -100%)',
-                zIndex: lifted ? 30 : 10 + Math.round(pad.y * 10),
+                zIndex: isLifted ? 30 : 10 + Math.round(pad.y * 10),
               }}
             >
-              {isSel && !arranging && (
+              {isSel && !lifted && (
                 <div
                   className="pointer-events-none absolute inset-x-0 -top-1 z-20 flex -translate-y-full flex-col items-center"
                   style={{fontSize: labelPx}}
                 >
-                  <span className="rounded bg-black/80 px-2 py-0.5 font-semibold text-neutral-50 shadow">
+                  <span className="whitespace-nowrap rounded bg-black/80 px-2 py-0.5 font-semibold text-neutral-50 shadow">
                     {buildingName(b)}
                     {b.id === 'command_center' && (
                       <span className="text-orange-300"> · {t('board.level', {level: ccLevel})}</span>
@@ -329,17 +362,20 @@ export default function BaseBoard({
               <img
                 src={b.art}
                 alt={buildingName(b)}
-                draggable={arranging && b.movable}
-                onDragStart={(e) => onDragStart(e, b.id)}
-                onPointerDown={onDown}
-                onPointerUp={(e) => isTap(e) && tapBuilding(b.id)}
-                onDoubleClick={() => !arranging && onOpen(b.entry)}
+                draggable={false}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  onDown(e, b.id);
+                }}
+                onPointerMove={onMove}
+                onPointerUp={onUp}
+                onPointerCancel={onCancel}
+                onDoubleClick={() => onOpen(b.entry)}
                 decoding="async"
-                className={`block w-full cursor-pointer transition ${
-                  lifted ? 'scale-105 brightness-125 drop-shadow-[0_0_12px_rgba(251,191,36,0.9)]' : ''
-                } ${isSel && !arranging ? 'drop-shadow-[0_0_10px_rgba(255,255,255,0.7)]' : ''} ${
-                  arranging && !b.movable ? 'opacity-70' : ''
-                }`}
+                className={`block w-full cursor-pointer ${
+                  isLifted ? 'scale-105 brightness-110 drop-shadow-[0_0_14px_rgba(251,191,36,0.9)]' : ''
+                } ${isSel && !lifted ? 'drop-shadow-[0_0_10px_rgba(255,255,255,0.7)]' : ''}`}
+                style={{touchAction: 'none'}}
               />
               {b.id === 'command_center' && (
                 <div
@@ -360,35 +396,6 @@ export default function BaseBoard({
             </div>
           );
         })}
-
-        {swap && (
-          <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/60 p-6">
-            <div className="w-full max-w-xs rounded-lg border border-neutral-700 bg-neutral-950 p-4 text-sm">
-              <p className="font-semibold text-neutral-100">{t('board.swapTitle')}</p>
-              <p className="mt-1 text-neutral-400">
-                {t('board.swapBody', {
-                  a: buildingName(BOARD_BUILDING_BY_ID[swap.a]),
-                  b: buildingName(BOARD_BUILDING_BY_ID[swap.b]),
-                })}
-              </p>
-              <div className="mt-4 flex justify-end gap-2">
-                <button
-                  onClick={() => setSwap(null)}
-                  className="rounded border border-neutral-700 px-3 py-1.5 text-neutral-300"
-                >
-                  {t('board.cancel')}
-                </button>
-                <button
-                  disabled={busy}
-                  onClick={() => void move(swap.a, swap.padId)}
-                  className="rounded bg-orange-600 px-3 py-1.5 font-semibold text-white disabled:bg-neutral-800"
-                >
-                  {t('board.swapConfirm')}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

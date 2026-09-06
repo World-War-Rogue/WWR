@@ -11,17 +11,8 @@ export const BASE = {
 
   // The board
   'board.level': 'Level {level}',
-  'board.emptyPad': 'Empty pad',
-  'board.arrange': 'Arrange',
-  'board.arranging': 'Tap a building, then tap where it should go.',
-  'board.arrangeDone': 'Done',
-  'board.tapToMove': 'Now tap an empty pad, or another building to swap.',
-  'board.swapTitle': 'Swap positions?',
-  'board.swapBody': '{a} and {b} will trade pads.',
-  'board.swapConfirm': 'Swap',
-  'board.cancel': 'Cancel',
   'board.fixed': 'The Command Center stays where it is.',
-  'board.openHint': 'Tap again to open',
+  'board.openHint': 'Tap again to open · hold to move',
   'board.clockUnknown': 'RST --:--',
 
   // Command Center
