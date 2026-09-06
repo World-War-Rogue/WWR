@@ -18,12 +18,18 @@ export function GameClock({className = ''}: {className?: string}) {
   const now = useServerClock();
   return (
     <span
-      className={`font-mono tabular-nums text-neutral-300 ${className}`}
+      className={`font-mono tabular-nums ${className}`}
       title={`Rogue Standard Time (${CLOCK_OFFSET_LABEL})`}
     >
-      {formatClock(now)}
-      <span className="ml-1 text-neutral-500">{CLOCK_NAME}</span>
-      <span className="ml-1 hidden text-neutral-600 sm:inline">({CLOCK_OFFSET_LABEL})</span>
+      {/*
+        The digits are the brightest thing in the group and the labels step down
+        from them. The whole clock used to sit at neutral-300 with its labels at
+        500 and 600, which on a translucent black card was barely there - a
+        readout you have to hunt for is a readout nobody reads.
+      */}
+      <span className="font-semibold text-neutral-50">{formatClock(now)}</span>
+      <span className="ml-1 text-orange-400">{CLOCK_NAME}</span>
+      <span className="ml-1 hidden text-neutral-400 sm:inline">({CLOCK_OFFSET_LABEL})</span>
     </span>
   );
 }

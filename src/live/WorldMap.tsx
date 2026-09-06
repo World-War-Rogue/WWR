@@ -1358,11 +1358,13 @@ export default function WorldMap({
           <p className="text-sm font-semibold text-neutral-100">
             #{view?.world.id} {view?.world.name}
           </p>
+          {/*
+            Where you are. The base count that used to sit here came out: it
+            changed every time the camera moved, answered a question nobody
+            asks, and was the only moving number on a card that is otherwise
+            about identity.
+          */}
           <p className="text-[11px] text-neutral-500">
-            {view?.bases.length === 1
-              ? t('map.oneBaseInView')
-              : t('map.basesInView', {count: view?.bases.length ?? 0})}{' '}
-            ·{' '}
             {view?.you.plot
               ? t('map.youAt', {x: view.you.plot.x, y: view.you.plot.y})
               : t('map.unplaced')}
