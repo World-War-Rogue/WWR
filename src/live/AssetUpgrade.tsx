@@ -17,6 +17,7 @@
  * the two ever disagree the server wins and says so.
  */
 import {useState} from 'react';
+import {assetArtUrl, nextVisualStage, visualStage} from '../../shared/assetVisuals';
 
 import {
   type Asset,
@@ -142,6 +143,8 @@ function Track({
   );
 }
 
+const STAGE_LABEL: Record<number, number> = {1: 1, 10: 2, 20: 3, 30: 4, 40: 5, 50: 6};
+
 export default function AssetUpgrade({
   asset,
   held,
@@ -239,6 +242,42 @@ export default function AssetUpgrade({
             ✕
           </button>
         </div>
+
+        {/*
+          The asset as it looks at this rank, and when it next changes. The
+          picture is the reason to rank up that no number on this sheet gives:
+          at 10, 20, 30, 40 and 50 the machine visibly becomes more.
+        */}
+        {assetArtUrl(asset.id, held.level) && (
+          <div className="mt-3 flex items-center gap-3 rounded border border-neutral-800 bg-neutral-900/40 p-2">
+            <img
+              src={assetArtUrl(asset.id, held.level)!}
+              alt=""
+              decoding="async"
+              className="h-28 w-28 shrink-0 object-contain"
+            />
+            <div className="min-w-0 text-xs text-neutral-400">
+              <p className="text-neutral-200">
+                Stage {STAGE_LABEL[visualStage(held.level)]} of 6
+              </p>
+              <p className="mt-1">
+                {nextVisualStage(held.level)
+                  ? `New look at Service Rank ${nextVisualStage(held.level)}.`
+                  : 'Final form.'}
+              </p>
+              <div className="mt-2 flex gap-1">
+                {([1, 10, 20, 30, 40, 50] as const).map((r) => (
+                  <span
+                    key={r}
+                    className={`h-1.5 w-5 rounded ${
+                      held.level >= r ? 'bg-orange-500' : 'bg-neutral-800'
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="mt-3 flex items-center justify-between rounded border border-neutral-800 bg-neutral-900/50 px-3 py-2">
           <span className="text-[10px] uppercase tracking-[0.2em] text-neutral-600">Wallet</span>
