@@ -66,6 +66,16 @@ same Worker.
 ## Runtime limits already hit
 
 - D1 rejects `CREATE TEMP TABLE` with `SQLITE_AUTH`.
+- **Migrations must use `--` line comments only.** `wrangler d1 migrations apply`
+  splits the file on `;` and rejects any chunk that holds no statement, so a
+  C-style banner between two statements fails the WHOLE file with
+  `SQL code did not contain a statement [code: 7500]` before anything runs.
+  Valid SQL is not the same as a file wrangler will accept, and checking a
+  migration against SQLite does not check it against the splitter. Applying every
+  file in `migrations/` in order to an in-memory SQLite, with rows seeded before
+  the one under test, catches the other half - a table rebuild that drops data -
+  without touching production. Worth doing for any migration that recreates a
+  table.
 - PBKDF2 is capped at 100,000 iterations in the Workers runtime. Higher throws
   at runtime, not at deploy.
 - Workers cannot hold a connection, so chat polls on a `since` cursor. Durable
