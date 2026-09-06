@@ -25,6 +25,7 @@ import {
   type AssetAttributes,
   ASSET_MAX_LEVEL,
   attributeAtLevel,
+  milli,
 } from './assets';
 
 /* -------------------------------------------------------------------------- */
@@ -76,16 +77,17 @@ export const PACKAGE_LABEL: Record<PackageKey, string> = {
  * Attribute points added per package rank above 1.
  *
  * ADDITIVE, not multiplicative, and this matters. Service Rank is already
- * geometric - a season of ranks multiplies every attribute by SEASON_GAIN - so
+ * geometric - every rank multiplies every attribute by RANK_GROWTH - so
  * a package that also multiplied would stack into a number nobody could reason
  * about, and a rank-10 asset with a rank-10 Armament package would be carrying
  * 3x firepower off two purchases.
  *
- * PROVISIONAL. At 0.2 a maxed Season 1 package is worth +1.8 points on one
- * attribute, against a typical spread of twenty-odd points across five. Waiting
- * on the cost simulation, which is why it is one named constant.
+ * 0.14 per the game math specification (docs/GAME-MATH-v1.md): packages matter
+ * without erasing what the asset is. A maxed Season 1 package is +1.26 points
+ * on one attribute. Still one named constant, still provisional until the
+ * harness says otherwise.
  */
-export const PACKAGE_POINTS_PER_RANK = 0.2;
+export const PACKAGE_POINTS_PER_RANK = 0.14;
 
 /**
  * System Integration: the reward for keeping all four up.
@@ -128,7 +130,7 @@ export function attributesWith(
     for (const p of PACKAGE_KEYS) {
       if (PACKAGE_ATTRIBUTE[p] === key) v += (pkg[p] - 1) * PACKAGE_POINTS_PER_RANK;
     }
-    out[key] = v;
+    out[key] = milli(v);
   }
   return out;
 }

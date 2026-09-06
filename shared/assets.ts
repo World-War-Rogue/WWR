@@ -1104,35 +1104,34 @@ export function isSquadName(value: unknown): value is SquadName {
  * already is rather than closing the gap to something else, so an Abrams at 30
  * is a better Abrams and never becomes a drone.
  *
- * ── Geometric, so every season is worth the same ──────────────────────────
+ * Geometric: every rank is the same proportional step, RANK_GROWTH, so every
+ * season is worth the same multiple and there is no cliff anywhere. Set to
+ * 1.045 by the game math specification (docs/GAME-MATH-v1.md, 2026-09-06),
+ * which replaced the earlier 1.75 per season (about 1.0576 per rank): rank 50
+ * is 8.6x rank 1 instead of 15x - strong but readable, and easier to balance
+ * across five seasons. Competitive combat never sees the ceiling anyway,
+ * because the Season Readiness Band clamps effective rank.
  *
- * One constant: a season of ranks multiplies an attribute by SEASON_GAIN. The
- * old curve was `1 + 0.06 * (rank - 1) ** 1.15`, which was tuned when a season
- * meant thirty ranks. Stretched over five seasons of ten it paid out unevenly -
- * Season 1 was worth 1.75x and Season 5 only 1.21x, so the further a player got
- * the less a rank was worth. Geometric fixes that with no cliff anywhere: every
- * rank is the same proportional step, and every season is the same multiple.
+ * ── Precision ─────────────────────────────────────────────────────────────
  *
- * SEASON_GAIN is 1.75 because that is exactly what Season 1 was worth under the
- * old curve. Season 1 is unchanged; the four seasons after it stop shrinking.
- *
- * A consequence worth stating, because it looks alarming and is not: rank 50 is
- * about 15x rank 1. Competitive combat never sees that, because the Season
- * Readiness Band clamps effective rank to at most 10 in Season 1, 20 in Season
- * 2 and so on - a rank-50 asset fights at the band like everyone else. The
- * ceiling only shows up where real rank is allowed, which is personal content,
- * and every reward there is flat per completion so it cannot feed back.
- *
- * And an honest limit: fifty ranks reaching any sane ceiling means each single
- * rank is a small step - 5.8% here, 6.0% under the old curve. That is
- * arithmetic, not tuning. Forty-nine steps of 10% would be 106x. If one upgrade
- * is meant to feel like an event, the answer is what else a player can spend on
- * and how the gain is presented, not a steeper curve.
+ * This used to round to a whole number, which was a live bug: a base-3
+ * attribute at rank 2 is 3.135, rounded to 3, so the first rank a player ever
+ * bought did nothing to it - and the same held for every low attribute for
+ * several ranks. Attributes are now kept to a thousandth (the specification's
+ * milli-points) and rounded only for display. Every rank moves every number.
  */
-export const SEASON_GAIN = 1.75;
+export const RANK_GROWTH = 1.045;
+/** What ten ranks - one season - multiply an attribute by. Derived, for copy. */
+export const SEASON_GAIN = Number((RANK_GROWTH ** RANKS_PER_SEASON).toFixed(3));
+/** Attributes are held to this many decimal places everywhere but the screen. */
+export const STAT_PRECISION = 1000;
+
+export function milli(value: number): number {
+  return Math.round(value * STAT_PRECISION) / STAT_PRECISION;
+}
 
 export function attributeAtLevel(base: number, level: number): number {
-  return Math.round(base * SEASON_GAIN ** ((level - 1) / RANKS_PER_SEASON));
+  return milli(base * RANK_GROWTH ** (level - 1));
 }
 
 /** Power contributed by one asset at one level. What a squad is compared on. */
