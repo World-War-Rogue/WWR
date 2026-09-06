@@ -37,6 +37,7 @@ import {marchProgress} from '../../shared/march';
 import type {Deployment, MarchKind} from '../../shared/march';
 import {SQUAD_NAMES} from '../../shared/assets';
 import {t} from '../i18n';
+import {taskForceName} from './taskForce';
 
 const MIN_ZOOM = 14; // pixels per plot when fully zoomed out
 // Far enough in that a premium skin is worth having drawn at all. A base is
@@ -535,7 +536,7 @@ function DeployedRow({
   return (
     <div className="px-3 py-2 text-left">
       <div className="flex items-baseline gap-2">
-        <span className="text-xs font-semibold text-neutral-100">{d.squad}</span>
+        <span className="text-xs font-semibold text-neutral-100">{taskForceName(d.squad)}</span>
         <span className={`truncate text-[11px] ${tint}`}>{what}</span>
       </div>
       <div className="mt-0.5 flex items-center gap-2">
@@ -1712,7 +1713,7 @@ export default function WorldMap({
                             : 'border-neutral-700 bg-neutral-900 hover:border-red-600'
                       }`}
                     >
-                      <span className="text-sm font-semibold text-neutral-100">{name}</span>
+                      <span className="text-sm font-semibold text-neutral-100">{taskForceName(name)}</span>
                       <span className="ml-auto text-right">
                         <span className="block font-mono text-[11px] text-neutral-300">
                           {power.toLocaleString()}

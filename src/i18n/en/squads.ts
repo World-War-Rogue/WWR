@@ -1,8 +1,8 @@
 /** squads strings. See ../en.ts for what this file is part of. */
 export const SQUADS = {
   // Squads
-  'squads.title': 'Squads',
-  'squads.liftBudget': 'Lift budget {budget} per squad',
+  'squads.title': 'Task Forces',
+  'squads.liftBudget': 'Lift budget {budget} per task force',
   'squads.power': 'power',
   'squads.lift': 'lift',
   'squads.empty': 'empty',
@@ -17,9 +17,9 @@ export const SQUADS = {
   'squads.inSlot': '{name} is in {squad}, slot {slot}',
   'squads.dragHint': 'Drag an asset onto another slot to move or swap it.',
   'squads.nothingFits': 'Nothing you hold fits in {amount} lift.',
-  'squads.nothingFitsHint': 'Clear a slot, or raise the Motor Pool, Airfield or Barracks to carry more.',
+  'squads.nothingFitsHint': 'Clear a slot to make room.',
   'squads.away': 'in the field',
-  'squads.awayHint': 'A squad that is out cannot be changed, and neither can what is in it.',
+  'squads.awayHint': 'A task force that is out cannot be changed, and neither can what is in it.',
   'squads.assetAway': 'out with {squad}',
-  'squads.hint': 'Tap a slot to fill it. Lift is the brake: heavier assets cost more, and the budget comes from your Motor Pool, Airfield and Barracks — so early on a squad has to be mixed, and that is the point.',
+  'squads.hint': 'Tap a slot to fill it. Any six assets, any task force — but a mixed one covers every band, and that is the point.',
 } as const;

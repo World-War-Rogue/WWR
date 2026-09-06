@@ -28,6 +28,7 @@ import {ApiError, type SquadView, api} from '../net/api';
 import AssetIcon from './AssetIcon';
 import ForcesTabs from './ForcesTabs';
 import {t} from '../i18n';
+import {taskForceName} from './taskForce';
 
 const ROLE_TINT: Record<string, string> = {
   breach: 'text-red-300',
@@ -349,7 +350,7 @@ export default function Squads({
                   >
                     <div className="flex items-baseline justify-between gap-2">
                       <h3 className="text-sm font-semibold text-neutral-100">
-                        {name}
+                        {taskForceName(name)}
                         {out && (
                           <span className="ml-2 rounded border border-orange-800 px-1.5 py-0.5 text-[10px] font-normal uppercase tracking-wider text-orange-300">
                             {t('squads.away')}
@@ -459,7 +460,7 @@ export default function Squads({
                       <p className="truncate text-[11px] text-neutral-500">
                         {t('squads.inSlot', {
                           name: CATEGORY_LABEL[held.category],
-                          squad: acting.squad,
+                          squad: taskForceName(acting.squad),
                           slot: acting.slot + 1,
                         })}
                       </p>
@@ -519,7 +520,7 @@ export default function Squads({
           <div className="flex max-h-[78%] flex-col rounded-t-xl border-t border-neutral-700 bg-neutral-950 shadow-2xl">
             <div className="flex shrink-0 items-center gap-2 border-b border-neutral-800 px-3 py-3">
               <h3 className="text-sm font-semibold text-neutral-100">
-                {t('squads.slot', {squad: picking.squad, slot: picking.slot + 1})}
+                {t('squads.slot', {squad: taskForceName(picking.squad), slot: picking.slot + 1})}
               </h3>
 
               {slotHolds && (
@@ -604,12 +605,12 @@ export default function Squads({
                           </span>
                           {out ? (
                             <span className="block text-[10px] text-orange-400">
-                              {t('squads.assetAway', {squad: out})}
+                              {t('squads.assetAway', {squad: taskForceName(out)})}
                             </span>
                           ) : (
                             where && (
                               <span className="block text-[10px] text-orange-500/80">
-                                {t('squads.inSquad', {squad: where})}
+                                {t('squads.inSquad', {squad: taskForceName(where)})}
                               </span>
                             )
                           )}

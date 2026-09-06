@@ -8,6 +8,7 @@
  * whatever the screen happened to render.
  */
 import {type ReactNode, useCallback, useEffect, useState} from 'react';
+import {taskForceName} from './taskForce';
 import {type MessageKey, t} from '../i18n';
 import {api, type ApiError} from '../net/api';
 import type {BattleDetail, BattleSummary} from '../../shared/battles';
@@ -207,7 +208,7 @@ function Detail({
             <ul className="mt-2 space-y-2">
               {detail.squads.map((squad, i) => (
                 <li key={`${squad.side}-${squad.squad}-${i}`} className="text-xs">
-                  <span className="font-semibold text-neutral-200">{squad.squad}</span>
+                  <span className="font-semibold text-neutral-200">{taskForceName(squad.squad)}</span>
                   <span className="text-neutral-500">
                     {' · '}
                     {squad.side === 'attacker' ? t('battles.attacker') : t('battles.defender')}

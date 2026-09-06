@@ -16,6 +16,7 @@ import AssetUpgrade from './AssetUpgrade';
 import ForcesTabs from './ForcesTabs';
 import {type OwnedAsset, type Wallet, api} from '../net/api';
 import {t} from '../i18n';
+import {taskForceName} from './taskForce';
 import {
   ASSETS,
   ASSET_BY_ID,
@@ -133,7 +134,7 @@ function Card({
         their head while reading sixty cards.
       */}
       <p className="mt-1.5 text-[11px] font-semibold text-orange-400/90">
-        {squad ? t('assets.inSquad', {squad}) : <span className="text-neutral-700">{t('assets.unassigned')}</span>}
+        {squad ? t('assets.inSquad', {squad: taskForceName(squad)}) : <span className="text-neutral-700">{t('assets.unassigned')}</span>}
       </p>
 
       <p className="mt-1 text-[11px] leading-snug text-neutral-500">{asset.blurb}</p>

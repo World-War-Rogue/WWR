@@ -151,7 +151,7 @@ export async function assignSlot(
   away: Set<string>,
 ): Promise<AssignResult> {
   if (slot < 0 || slot >= SQUAD_SLOTS) return {ok: false, error: 'No such slot.'};
-  if (away.has(squad)) return {ok: false, error: `${squad} is out. Bring it home first.`};
+  if (away.has(squad)) return {ok: false, error: `Task Force ${squad} is out. Bring it home first.`};
 
   if (assetId === null) {
     await db

@@ -4,14 +4,15 @@ export const CORE = {
   'nav.alliance': 'Alliance',
   'nav.worldMap': 'World map',
   'nav.myBase': 'My base',
-  'nav.squads': 'Squads',
+  'nav.squads': 'Task Forces',
+  'tf.name': 'Task Force {name}',
   'nav.back': 'Back',
   'nav.close': 'Close',
 
   // Player menu
   'menu.viewProfile': 'View full profile',
   'menu.customise': 'Customise base',
-  'menu.squads': 'Squads',
+  'menu.squads': 'Task Forces',
   'menu.accessRequests': 'Access requests',
   'menu.signOut': 'Sign out',
   'menu.noAlliance': 'No alliance',

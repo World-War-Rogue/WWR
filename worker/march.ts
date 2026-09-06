@@ -202,13 +202,13 @@ export async function launch(
   if (attackerId === defenderId) return {ok: false, error: 'That is your own base.'};
 
   const units = await unitsOf(db, attackerId, squad);
-  if (units.length === 0) return {ok: false, error: `${squad} is empty.`};
+  if (units.length === 0) return {ok: false, error: `Task Force ${squad} is empty.`};
 
   // For the message only. The unique index below is what actually decides -
   // this just gets to say WHICH thing is wrong, since one index rejection can
   // mean either "that squad is out" or "you already reinforced them".
   const busy = await marchingSquads(db, attackerId);
-  if (busy.has(squad)) return {ok: false, error: `${squad} is already out.`};
+  if (busy.has(squad)) return {ok: false, error: `Task Force ${squad} is already out.`};
 
   // The column moves at the pace of its slowest vehicle, which is a real cost
   // of bringing heavy armour and a real reason to keep one fast squad.
@@ -259,7 +259,7 @@ export async function launch(
       error:
         kind === 'reinforce'
           ? 'You already have a squad reinforcing them.'
-          : `${squad} is already marching.`,
+          : `Task Force ${squad} is already marching.`,
     };
   }
 
@@ -681,9 +681,9 @@ export async function recall(
       garrison_until: number | null;
     }>();
 
-  if (!row) return {ok: false, error: `${squad} is already home.`};
+  if (!row) return {ok: false, error: `Task Force ${squad} is already home.`};
   if (row.kind === 'return' && row.garrison_until === null) {
-    return {ok: false, error: `${squad} is already on its way home.`};
+    return {ok: false, error: `Task Force ${squad} is already on its way home.`};
   }
 
   // Where the squad actually is. A garrison is standing at the target; a march
@@ -707,7 +707,7 @@ export async function recall(
         .bind(row.id, now)
         .run();
   if ((claim.meta?.changes ?? 0) === 0) {
-    return {ok: false, error: `${squad} has already moved.`};
+    return {ok: false, error: `Task Force ${squad} has already moved.`};
   }
 
   // The way back takes exactly as long as the way out has taken so far. Turn

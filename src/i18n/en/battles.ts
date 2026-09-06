@@ -26,7 +26,7 @@ export const BATTLES = {
   'battles.looted': '{amount} looted',
   'battles.you': 'you',
   'battles.power': 'Power',
-  'battles.squads': 'Squads',
+  'battles.squads': 'Task forces',
   'battles.withdrew': 'withdrew',
   'battles.destroyed': 'destroyed',
   'battles.squadLosses': '{count} lost',

@@ -3,14 +3,14 @@ export const ASSETS = {
   // Assets
   'assets.title': 'Assets',
   'assets.inSquad': 'In {squad}',
-  'assets.unassigned': 'Not in a squad',
+  'assets.unassigned': 'Not in a task force',
   'assets.search': 'Search',
   'assets.all': 'All',
   'assets.showing': '{shown} of {total}',
   'assets.nothingMatches': 'Nothing matches that.',
   'assets.comingWithSeason': 'Coastal season',
   'assets.losesTo': 'loses to {categories}',
-  'assets.noneStronger': 'No asset is stronger than another. Bigger numbers cost more lift, and a squad has a lift budget — so the choice is what a squad is for, not which entries are best.',
+  'assets.noneStronger': 'No asset is stronger than another. Bigger numbers cost more lift, and a task force has a lift budget — so the choice is what a squad is for, not which entries are best.',
 
   // Attributes
   'attr.firepower': 'Firepower',

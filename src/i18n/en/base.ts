@@ -42,7 +42,7 @@ export const BASE = {
   'depot.services': 'Services',
   'depot.suppliesSoon': 'Fuel, steel, munitions and alloy, for Credits or Tokens at the same price.',
   'depot.modulesSoon': 'Ordnance, Protection, Powertrain and Electronic modules. Fit them at the asset’s own building.',
-  'depot.cosmeticsSoon': 'Base skins, nameplates and squad effects. One cosmetic clearance per week.',
+  'depot.cosmeticsSoon': 'Base skins, nameplates and task force effects. One cosmetic clearance per week.',
   'depot.servicesSoon': 'A second engineer team, relocation charges and other one-time services.',
   'depot.comingSoon': 'Opening soon',
   'depot.customise': 'Customise base',
