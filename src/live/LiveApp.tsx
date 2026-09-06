@@ -433,27 +433,12 @@ export default function LiveApp() {
         className="pointer-events-none absolute inset-x-0 top-0 z-40 flex items-center justify-between gap-2 px-3"
         style={{paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)'}}
       >
-        <button
-          onClick={() => setScreen('squads')}
-          className="pointer-events-auto flex items-center gap-2 rounded border border-neutral-600 bg-black/70 px-3 py-2 text-sm font-medium text-neutral-200 shadow backdrop-blur transition hover:border-orange-500 hover:text-orange-200"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-            className="h-4 w-4"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <rect x="3" y="3" width="7" height="7" rx="1" />
-            <rect x="14" y="3" width="7" height="7" rx="1" />
-            <rect x="3" y="14" width="7" height="7" rx="1" />
-            <rect x="14" y="14" width="7" height="7" rx="1" />
-          </svg>
-          {t('nav.squads')}
-        </button>
+        {/*
+          No Task Forces button here: the four slabs at the foot of the base
+          ARE the Task Forces, and the assets are behind their own buildings.
+          A spacer keeps the clock centred and World map on the right.
+        */}
+        <div aria-hidden="true" className="w-24" />
 
         {/* The clock, between the two buttons - the same strip the map uses. */}
         <div className="pointer-events-auto rounded border border-neutral-800 bg-black/70 px-3 py-1.5 text-[11px] backdrop-blur">
