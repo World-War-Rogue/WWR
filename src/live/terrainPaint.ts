@@ -45,7 +45,7 @@ import {
   PROP_ATLAS_SRC,
   PROP_FRAMES,
 } from '../../shared/terrainAtlas';
-import {propFade, propsInPlot} from '../../shared/terrainProps';
+import {MIN_PROP_ZOOM, propFade, propsInPlot} from '../../shared/terrainProps';
 
 /* -------------------------------------------------------------------------- */
 /* The atlas                                                                  */
@@ -166,7 +166,21 @@ export interface GroundSpec {
 }
 
 let buffer: HTMLCanvasElement | null = null;
+/** Half-resolution staging canvas for the ground, reused across paints. */
+let scratch: HTMLCanvasElement | null = null;
 let bufferKey = '';
+/** The camera the buffer was painted for, so a stale one can be reused. */
+let bufferCam: {cx: number; cy: number; zoom: number} | null = null;
+let lastBuild = 0;
+
+/**
+ * How long to reuse a stale buffer before rebuilding.
+ *
+ * Rebuilding is per-pixel and a wheel gesture fires camera changes far faster
+ * than that. Without this the first zoom-out ran a full rebuild for every
+ * intermediate zoom level and locked the page hard enough to look like a crash.
+ */
+const REBUILD_MS = 110;
 
 function keyOf(s: GroundSpec): string {
   // Occupancy folded in cheaply. Bases move rarely, so this almost never
@@ -285,9 +299,14 @@ function paintInto(target: CanvasRenderingContext2D, s: GroundSpec): void {
     }
   }
 
-  const scratch = document.createElement('canvas');
-  scratch.width = iw;
-  scratch.height = ih;
+  // Kept between paints. A full-viewport canvas allocated on every rebuild is
+  // a few megabytes of garbage several times a second during a gesture, and
+  // the browser reclaiming it is felt as a stutter in the middle of the zoom.
+  if (!scratch) scratch = document.createElement('canvas');
+  if (scratch.width !== iw || scratch.height !== ih) {
+    scratch.width = iw;
+    scratch.height = ih;
+  }
   const sctx = scratch.getContext('2d');
   if (!sctx) return;
   sctx.putImageData(img, 0, 0);
@@ -307,6 +326,12 @@ function paintProps(ctx: CanvasRenderingContext2D, s: GroundSpec, seed: number):
   if (!atlasReady || !atlas) return;
 
   const {w, h, zoom, cx, cy, extent} = s;
+
+  // Nothing is drawn below the weakest threshold in the catalogue, and the loop
+  // below is O(visible plots) - which is about a hundred plots at the zoom the
+  // map opens at and four thousand at the world view. Walking all of them to
+  // decide every one is invisible is what made zooming out lock the page.
+  if (zoom < MIN_PROP_ZOOM) return;
   const sx = (px: number) => (px - cx) * zoom + w / 2;
   const sy = (py: number) => (py - cy) * zoom + h / 2;
 
@@ -364,23 +389,62 @@ function paintProps(ctx: CanvasRenderingContext2D, s: GroundSpec, seed: number):
 /* -------------------------------------------------------------------------- */
 
 /**
- * Draw the ground, from the buffer, rebuilding it only when it has gone stale.
+ * Draw the ground.
+ *
+ * Returns true when what was drawn is a STALE buffer stretched to fit, which
+ * means the caller should ask for another paint shortly so it can sharpen. That
+ * is the whole throttle: a wheel gesture produces camera changes far faster than
+ * a per-pixel rebuild can service, so the buffer is reused and transformed while
+ * the camera is moving and rebuilt once it settles.
  */
-export function paintGround(ctx: CanvasRenderingContext2D, s: GroundSpec): void {
-  if (s.w === 0 || s.h === 0) return;
+export function paintGround(ctx: CanvasRenderingContext2D, s: GroundSpec): boolean {
+  if (s.w === 0 || s.h === 0) return false;
   ensureAtlas();
 
   const key = keyOf(s);
-  if (!buffer || bufferKey !== key || buffer.width !== s.w || buffer.height !== s.h) {
-    if (!buffer) buffer = document.createElement('canvas');
-    buffer.width = s.w;
-    buffer.height = s.h;
-    const bctx = buffer.getContext('2d');
-    if (!bctx) return;
-    paintInto(bctx, s);
-    bufferKey = key;
+  const fits = buffer !== null && buffer.width === s.w && buffer.height === s.h;
+  const now = performance.now();
+
+  if (fits && bufferKey === key) {
+    ctx.drawImage(buffer as HTMLCanvasElement, 0, 0);
+    return false;
   }
+
+  // Stale, but recent enough that rebuilding now would fight the gesture.
+  // Stretch what we have to where the camera is and come back for it.
+  if (fits && bufferCam && now - lastBuild < REBUILD_MS) {
+    // Where the buffer's centre pixel belongs on screen now, worked back to a
+    // destination rectangle. A world point X sits at w/2 + (X - cx) * zoom, and
+    // the buffer's centre pixel holds the world point bufferCam.cx, so the
+    // offset is the buffer camera's displacement from the current one - drawn
+    // at the ratio of the two zooms.
+    const scale = s.zoom / bufferCam.zoom;
+    const dx = s.w / 2 + (bufferCam.cx - s.cx) * s.zoom - (s.w / 2) * scale;
+    const dy = s.h / 2 + (bufferCam.cy - s.cy) * s.zoom - (s.h / 2) * scale;
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(
+      buffer as HTMLCanvasElement,
+      dx,
+      dy,
+      s.w * scale,
+      s.h * scale,
+    );
+    ctx.restore();
+    return true;
+  }
+
+  if (!buffer) buffer = document.createElement('canvas');
+  buffer.width = s.w;
+  buffer.height = s.h;
+  const bctx = buffer.getContext('2d');
+  if (!bctx) return false;
+  paintInto(bctx, s);
+  bufferKey = key;
+  bufferCam = {cx: s.cx, cy: s.cy, zoom: s.zoom};
+  lastBuild = performance.now();
   ctx.drawImage(buffer, 0, 0);
+  return false;
 }
 
 /** Corridors, for anything that wants to know where the old roads ran. */

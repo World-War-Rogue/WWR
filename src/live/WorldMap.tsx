@@ -588,6 +588,18 @@ export default function WorldMap({
   const effectsRef = useRef(new EffectLayer());
   const frameRef = useRef<number | null>(null);
   const lastFrameRef = useRef(0);
+  /**
+   * A follow-up paint, queued when the ground was drawn from a stale buffer.
+   *
+   * `paintGround` refuses to rebuild its per-pixel buffer more than once every
+   * hundred milliseconds or so, because a wheel gesture produces camera changes
+   * far faster than that and doing the work each time is what locked the page.
+   * While it is refusing it stretches the buffer it has, which is right for the
+   * duration of the gesture and wrong the moment the gesture stops - nothing
+   * else would ask for another frame, so the map would just stay soft. This is
+   * that ask.
+   */
+  const sharpenRef = useRef<number | null>(null);
   const [, forceDraw] = useState(0);
 
   // Whether anything currently loaded needs a frame clock. A map of still
@@ -776,7 +788,7 @@ export default function WorldMap({
     const season = seasonSpec(DEFAULT_SEASON);
     const worldId = view?.world.id ?? 1001;
 
-    paintGround(ctx, {
+    const groundIsStale = paintGround(ctx, {
       worldId,
       season: season.id,
       extent,
@@ -787,6 +799,17 @@ export default function WorldMap({
       h,
       occupied: occupiedPlots,
     });
+
+    if (sharpenRef.current !== null) {
+      window.clearTimeout(sharpenRef.current);
+      sharpenRef.current = null;
+    }
+    if (groundIsStale) {
+      sharpenRef.current = window.setTimeout(() => {
+        sharpenRef.current = null;
+        forceDraw((n) => (n + 1) % 1_000_000);
+      }, 140);
+    }
 
     // The freighter the sea left behind.
     //
@@ -976,6 +999,13 @@ export default function WorldMap({
     };
   });
 
+  useEffect(
+    () => () => {
+      if (sharpenRef.current !== null) window.clearTimeout(sharpenRef.current);
+    },
+    [],
+  );
+
   // A skin with a single still and no motion never starts the loop, so the
   // frame its art lands on has to be asked for explicitly.
   useEffect(() => onArtLoaded(() => forceDraw((n) => (n + 1) % 1_000_000)), []);
@@ -1157,7 +1187,7 @@ export default function WorldMap({
         there would give the eye a second thing to check before pressing the
         one control that matters.
       */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 grid grid-cols-[1fr_auto_1fr] items-start gap-3 p-3">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-40 grid grid-cols-[1fr_auto_1fr] items-start gap-3 p-3">
         {/*
           Squads sits where it sits on the base screen, and My base sits where
           World map sits there. The two screens are now the same three targets
@@ -1255,8 +1285,17 @@ export default function WorldMap({
         </div>
       </div>
 
+      {/*
+        The allegiance key.
+
+        On the LEFT, because the right belongs to the world card and to Squads
+        out - and Squads out is where Recall lives. This sat on the right and
+        covered it, so a player could see that a squad was away and could not
+        press the one button that brought it home. A legend is a readout; it
+        never gets to sit on a control.
+      */}
       {camera.zoom < IDENTITY_ZOOM && (
-        <div className="pointer-events-none absolute right-3 top-24 rounded border border-neutral-800 bg-black/70 px-3 py-2 backdrop-blur">
+        <div className="pointer-events-none absolute left-3 top-24 z-20 rounded border border-neutral-800 bg-black/70 px-3 py-2 backdrop-blur">
           {(['you', 'ally', 'server', 'neutral', 'hostile'] as const).map((key) => (
             <div key={key} className="flex items-center gap-2 py-0.5">
               <span
@@ -1270,96 +1309,206 @@ export default function WorldMap({
       )}
 
       {/*
-        Bottom-left cluster. The + and − buttons are temporary: on touch the map
-        pinches and on desktop the wheel already zooms, so they come out once
-        the game ships as an app. RV stays, which is why it sits at the end of
-        the row rather than being wedged between them.
+        Everything pinned to the bottom of the map, in one column.
+
+        These were four independent absolutely-positioned blocks, three of
+        them on bottom-16 and none of them carrying a z-index, so the
+        selection panel landed exactly on top of Reports, Home and the zoom
+        buttons and won on DOM order alone. That is what a player sees as
+        "the menu covers the buttons". Stacking them in one flex column means
+        the panel can be any height it likes - and it changes height, since it
+        grows a Rendezvous button for officers - while the controls underneath
+        it stay reachable.
+
+        The column is the fixed-controls layer, z-30: above anything anchored
+        to the map, below the top nav and below any sheet.
       */}
-      <div className="pointer-events-none absolute bottom-16 left-3 flex items-center gap-2">
-        {[
-          {label: '+', delta: 1.3},
-          {label: '−', delta: 1 / 1.3},
-        ].map((btn) => (
-          <button
-            key={btn.label}
-            onClick={() =>
-              setCamera((c) => ({
-                ...c,
-                zoom: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, c.zoom * btn.delta)),
-              }))
-            }
-            className="pointer-events-auto h-9 w-9 rounded border border-neutral-700 bg-black/70 text-lg text-neutral-200 backdrop-blur hover:border-orange-600"
-          >
-            {btn.label}
-          </button>
-        ))}
-
-        {rally && (
-          <button
-            onClick={() => void answerRally()}
-            disabled={rallying || rallyWait > 0}
-            title={
-              rallyWait > 0
-                ? `You can rally again in ${formatCooldown(rallyWait)}`
-                : `Rendezvous set by ${rally.setBy} at ${rally.x}, ${rally.y}`
-            }
-            className="pointer-events-auto h-9 rounded border border-cyan-700 bg-cyan-950/70 px-3 text-sm font-semibold text-cyan-200 backdrop-blur transition hover:border-cyan-400 disabled:opacity-40"
-          >
-            {rallying ? '…' : rallyWait > 0 ? `RV ${formatCooldown(rallyWait)}` : 'RV'}
-          </button>
+      <div className="pointer-events-none absolute inset-x-3 bottom-16 z-30 flex flex-col gap-2">
+        {error && (
+          <div className="pointer-events-auto rounded border border-red-900 bg-red-950/80 px-3 py-2 text-sm text-red-200 backdrop-blur">
+            {error}
+            <span className="ml-2 text-red-400/70">{t('map.retrying')}</span>
+          </div>
         )}
-      </div>
 
-      <div className="pointer-events-none absolute bottom-16 right-3 flex flex-col items-end gap-2">
-        <button
-          onClick={onOpenBattles}
-          title="Battle reports"
-          className="pointer-events-auto flex h-11 items-center gap-2 rounded border border-neutral-700 bg-black/70 px-4 text-sm font-semibold text-neutral-100 backdrop-blur transition hover:border-red-600 hover:text-red-200"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-            className="h-4 w-4"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M4 4v16" />
-            <path d="M4 5h11l-1.5 3L15 11H4" />
-          </svg>
-          {t('map.reports')}
-        </button>
+        {selected && (
+          <div className="pointer-events-auto rounded border border-neutral-800 bg-black/85 p-3 backdrop-blur sm:ml-auto sm:w-80">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-mono text-[11px] text-neutral-500">
+                  plot {selected.x}, {selected.y}
+                </p>
+                {selectedBase ? (
+                  <>
+                    <p className="truncate font-semibold text-neutral-100">{selectedBase.username}</p>
+                    <p className="text-xs text-neutral-400">
+                      {skinSpec(selectedBase.skin).name} · Command Post{' '}
+                      {selectedBase.level}
+                    </p>
+                  </>
+                ) : (
+                  <p className="font-semibold text-emerald-400">{t('map.openGround')}</p>
+                )}
+              </div>
+              <button
+                onClick={() => setSelected(null)}
+                className="shrink-0 text-neutral-500 hover:text-neutral-200"
+              >
+                ✕
+              </button>
+            </div>
 
-        {view?.you.plot && (
-          <button
-            onClick={() =>
-              setCamera({
-                cx: view.you.plot!.x + 0.5,
-                cy: view.you.plot!.y + 0.5,
-                zoom: HOME_ZOOM,
-              })
-            }
-            title="Back to your base"
-            className="pointer-events-auto flex h-11 items-center gap-2 rounded border border-neutral-700 bg-black/70 px-4 text-sm font-semibold text-neutral-100 backdrop-blur transition hover:border-fuchsia-500 hover:text-fuchsia-200"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              className="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+            {occupied ? (
+              <>
+                <button
+                  onClick={() => onViewProfile(selectedBase.username)}
+                  className="mt-3 w-full rounded border border-fuchsia-700 bg-fuchsia-950/40 px-3 py-2 text-sm font-semibold text-fuchsia-200 hover:border-fuchsia-500"
+                >
+                  {t('map.viewProfile')}
+                </button>
+                {selectedBase.username !== view?.you.username && (
+                  <button
+                    onClick={() => {
+                      setAttacking({x: selected.x, y: selected.y});
+                      // The roster is only needed once somebody decides to
+                      // attack, so it is fetched then rather than with the map.
+                      void api.squads().then(setSquads).catch(() => undefined);
+                    }}
+                    className={`mt-2 w-full rounded border px-3 py-2 text-sm font-semibold ${
+                      allied
+                        ? 'border-emerald-800 bg-emerald-950/40 text-emerald-200 hover:border-emerald-500'
+                        : 'border-red-800 bg-red-950/40 text-red-200 hover:border-red-500'
+                    }`}
+                  >
+                    {allied ? t('map.reinforce') : t('map.attack')}
+                  </button>
+                )}
+              </>
+            ) : (
+              <button
+                onClick={() => void moveHere()}
+                disabled={moving || squadsOut}
+                className="mt-3 w-full rounded bg-orange-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {squadsOut
+                  ? t('map.cannotMove')
+                  : moving
+                    ? t('map.relocating')
+                    : t('map.moveHere')}
+              </button>
+            )}
+
+            {/*
+              Only a General or Lieutenant sees this, and the server checks the
+              rank again on the way in - hiding a button is presentation, not
+              permission.
+            */}
+            {view?.you.maySetRally && (
+              <button
+                onClick={() => void setRallyHere()}
+                disabled={rallying}
+                className="mt-2 w-full rounded border border-cyan-700 bg-cyan-950/40 px-3 py-2 text-sm font-semibold text-cyan-200 hover:border-cyan-400 disabled:opacity-50"
+              >
+                {rallying ? t('map.settingRendezvous') : t('map.setRendezvous')}
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="flex items-end justify-between gap-2">
+          {/*
+            Bottom-left cluster. The + and − buttons are temporary: on touch the
+            map pinches and on desktop the wheel already zooms, so they come out
+            once the game ships as an app. RV stays, which is why it sits at the
+            end of the row rather than being wedged between them.
+          */}
+          <div className="flex items-center gap-2">
+            {[
+              {label: '+', delta: 1.3},
+              {label: '−', delta: 1 / 1.3},
+            ].map((btn) => (
+              <button
+                key={btn.label}
+                onClick={() =>
+                  setCamera((c) => ({
+                    ...c,
+                    zoom: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, c.zoom * btn.delta)),
+                  }))
+                }
+                className="pointer-events-auto h-9 w-9 rounded border border-neutral-700 bg-black/70 text-lg text-neutral-200 backdrop-blur hover:border-orange-600"
+              >
+                {btn.label}
+              </button>
+            ))}
+
+            {rally && (
+              <button
+                onClick={() => void answerRally()}
+                disabled={rallying || rallyWait > 0}
+                title={
+                  rallyWait > 0
+                    ? `You can rally again in ${formatCooldown(rallyWait)}`
+                    : `Rendezvous set by ${rally.setBy} at ${rally.x}, ${rally.y}`
+                }
+                className="pointer-events-auto h-9 rounded border border-cyan-700 bg-cyan-950/70 px-3 text-sm font-semibold text-cyan-200 backdrop-blur transition hover:border-cyan-400 disabled:opacity-40"
+              >
+                {rallying ? '…' : rallyWait > 0 ? `RV ${formatCooldown(rallyWait)}` : 'RV'}
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-col items-end gap-2">
+            <button
+              onClick={onOpenBattles}
+              title="Battle reports"
+              className="pointer-events-auto flex h-11 items-center gap-2 rounded border border-neutral-700 bg-black/70 px-4 text-sm font-semibold text-neutral-100 backdrop-blur transition hover:border-red-600 hover:text-red-200"
             >
-              <path d="M3 10.5 12 3l9 7.5" />
-              <path d="M5 9.5V20h14V9.5" />
-            </svg>
-            {t('map.home')}
-          </button>
-        )}
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M4 4v16" />
+                <path d="M4 5h11l-1.5 3L15 11H4" />
+              </svg>
+              {t('map.reports')}
+            </button>
+
+            {view?.you.plot && (
+              <button
+                onClick={() =>
+                  setCamera({
+                    cx: view.you.plot!.x + 0.5,
+                    cy: view.you.plot!.y + 0.5,
+                    zoom: HOME_ZOOM,
+                  })
+                }
+                title="Back to your base"
+                className="pointer-events-auto flex h-11 items-center gap-2 rounded border border-neutral-700 bg-black/70 px-4 text-sm font-semibold text-neutral-100 backdrop-blur transition hover:border-fuchsia-500 hover:text-fuchsia-200"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M3 10.5 12 3l9 7.5" />
+                  <path d="M5 9.5V20h14V9.5" />
+                </svg>
+                {t('map.home')}
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/*
@@ -1368,7 +1517,7 @@ export default function WorldMap({
         the screen and the options have to arrive over it.
       */}
       {attacking && (
-        <div className="absolute inset-0 z-40 flex flex-col bg-black/70 backdrop-blur-sm">
+        <div className="absolute inset-0 z-50 flex flex-col bg-black/70 backdrop-blur-sm">
           <button
             aria-label={t('squads.cancel')}
             onClick={() => setAttacking(null)}
@@ -1435,97 +1584,6 @@ export default function WorldMap({
               })}
             </div>
           </div>
-        </div>
-      )}
-
-      {error && (
-        <div className="absolute inset-x-3 bottom-32 rounded border border-red-900 bg-red-950/80 px-3 py-2 text-sm text-red-200 backdrop-blur">
-          {error}
-          <span className="ml-2 text-red-400/70">{t('map.retrying')}</span>
-        </div>
-      )}
-
-      {selected && (
-        <div className="absolute inset-x-3 bottom-16 rounded border border-neutral-800 bg-black/85 p-3 backdrop-blur sm:left-auto sm:right-3 sm:w-80">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="font-mono text-[11px] text-neutral-500">
-                plot {selected.x}, {selected.y}
-              </p>
-              {selectedBase ? (
-                <>
-                  <p className="truncate font-semibold text-neutral-100">{selectedBase.username}</p>
-                  <p className="text-xs text-neutral-400">
-                    {skinSpec(selectedBase.skin).name} · Command Post{' '}
-                    {selectedBase.level}
-                  </p>
-                </>
-              ) : (
-                <p className="font-semibold text-emerald-400">{t('map.openGround')}</p>
-              )}
-            </div>
-            <button
-              onClick={() => setSelected(null)}
-              className="shrink-0 text-neutral-500 hover:text-neutral-200"
-            >
-              ✕
-            </button>
-          </div>
-
-          {occupied ? (
-            <>
-              <button
-                onClick={() => onViewProfile(selectedBase.username)}
-                className="mt-3 w-full rounded border border-fuchsia-700 bg-fuchsia-950/40 px-3 py-2 text-sm font-semibold text-fuchsia-200 hover:border-fuchsia-500"
-              >
-                {t('map.viewProfile')}
-              </button>
-              {selectedBase.username !== view?.you.username && (
-                <button
-                  onClick={() => {
-                    setAttacking({x: selected.x, y: selected.y});
-                    // The roster is only needed once somebody decides to
-                    // attack, so it is fetched then rather than with the map.
-                    void api.squads().then(setSquads).catch(() => undefined);
-                  }}
-                  className={`mt-2 w-full rounded border px-3 py-2 text-sm font-semibold ${
-                    allied
-                      ? 'border-emerald-800 bg-emerald-950/40 text-emerald-200 hover:border-emerald-500'
-                      : 'border-red-800 bg-red-950/40 text-red-200 hover:border-red-500'
-                  }`}
-                >
-                  {allied ? t('map.reinforce') : t('map.attack')}
-                </button>
-              )}
-            </>
-          ) : (
-            <button
-              onClick={() => void moveHere()}
-              disabled={moving || squadsOut}
-              className="mt-3 w-full rounded bg-orange-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
-            >
-              {squadsOut
-                ? t('map.cannotMove')
-                : moving
-                  ? t('map.relocating')
-                  : t('map.moveHere')}
-            </button>
-          )}
-
-          {/*
-            Only a General or Lieutenant sees this, and the server checks the
-            rank again on the way in - hiding a button is presentation, not
-            permission.
-          */}
-          {view?.you.maySetRally && (
-            <button
-              onClick={() => void setRallyHere()}
-              disabled={rallying}
-              className="mt-2 w-full rounded border border-cyan-700 bg-cyan-950/40 px-3 py-2 text-sm font-semibold text-cyan-200 hover:border-cyan-400 disabled:opacity-50"
-            >
-              {rallying ? t('map.settingRendezvous') : t('map.setRendezvous')}
-            </button>
-          )}
         </div>
       )}
     </div>
