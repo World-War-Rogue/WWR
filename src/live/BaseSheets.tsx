@@ -11,7 +11,7 @@
  * until the redesign reset retires them this is where they are upgraded.
  */
 import {type ReactNode, useState} from 'react';
-import {t} from '../i18n';
+import {type MessageKey, t} from '../i18n';
 import {
   type BaseView,
   RESOURCE_LABEL,
@@ -200,6 +200,18 @@ export function DepotSheet({onClose, onCustomise}: {onClose: () => void; onCusto
         </>
       )}
       {tab === 'services' && <Soon text={t('depot.servicesSoon')} />}
+    </Sheet>
+  );
+}
+
+/** A department that has a building but no screen yet: its name and its job. */
+export function DepartmentSheet({id, onClose}: {id: string; onClose: () => void}) {
+  const name = t(`building.${id}` as MessageKey);
+  const blurb = t(`blurb.${id}` as MessageKey);
+  return (
+    <Sheet title={name} tabs={[{key: 'about', label: t('department.soon')}]} active="about" onTab={() => undefined} onClose={onClose}>
+      <p className="text-sm text-neutral-200">{blurb}</p>
+      <p className="mt-3 text-xs text-neutral-500">{t('department.soonBody')}</p>
     </Sheet>
   );
 }

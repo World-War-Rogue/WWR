@@ -11,7 +11,7 @@ import {setLanguage, t} from '../i18n';
 import Alliance from './Alliance';
 import Assets from './Assets';
 import BaseBoard from './BaseBoard';
-import {CommandCenterSheet, DepotSheet} from './BaseSheets';
+import {CommandCenterSheet, DepartmentSheet, DepotSheet} from './BaseSheets';
 import Battles from './Battles';
 import Squads from './Squads';
 import Chat from './Chat';
@@ -153,7 +153,7 @@ export default function LiveApp() {
   const [pending, setPending] = useState<string | null>(null);
   // Which building sheet is open over the board, and which category the
   // assets screen was entered through (null = the whole catalogue).
-  const [sheet, setSheet] = useState<'command_center' | 'depot' | null>(null);
+  const [sheet, setSheet] = useState<'command_center' | 'depot' | {department: string} | null>(null);
   const [assetOnly, setAssetOnly] = useState<AssetCategory | null>(null);
   const [checking, setChecking] = useState(true);
   /** Bumped when the language changes, purely to force a redraw. */
@@ -406,6 +406,8 @@ export default function LiveApp() {
             if (entry.kind === 'assets') {
               setAssetOnly(entry.category);
               setScreen('assets');
+            } else if (entry.kind === 'department') {
+              setSheet({department: entry.id});
             } else {
               setSheet(entry.kind);
             }
@@ -489,6 +491,9 @@ export default function LiveApp() {
             />
           }
         />
+      )}
+      {sheet !== null && typeof sheet === 'object' && (
+        <DepartmentSheet id={sheet.department} onClose={() => setSheet(null)} />
       )}
       {sheet === 'depot' && (
         <DepotSheet

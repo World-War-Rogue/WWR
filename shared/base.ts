@@ -116,7 +116,9 @@ export const COMMAND_CENTER_BOX = {
 export type BuildingEntry =
   | {kind: 'command_center'}
   | {kind: 'depot'}
-  | {kind: 'assets'; category: AssetCategory};
+  | {kind: 'assets'; category: AssetCategory}
+  /** A department with no screen of its own yet: name, function, "soon". */
+  | {kind: 'department'; id: string};
 
 export interface BoardBuilding {
   /** Stable id. Never renamed once a placement row refers to it. */
@@ -145,21 +147,106 @@ export const COMMAND_CENTER_ID = 'command_center';
 export const COMMAND_CENTER_ENTRY: BuildingEntry = {kind: 'command_center'};
 
 /**
- * The movable buildings that exist today: the Depot and the five asset
- * buildings. The rest of the installation - fuel, steel, munitions, alloy,
- * storage, the operations centre, the trading post - arrives as its art and
- * its design do, one row each. Naval has no building until there is water.
+ * Every building on the board. Ten departments on the general pads, five
+ * asset buildings on the runway. The departments' functions are placeholders
+ * until the design brief gives them numbers; their art and their names are
+ * final. Naval has no building until there is water.
  */
 export const BOARD_BUILDINGS: readonly BoardBuilding[] = [
+  // The ten departments, one per general pad. Defaults: the two readouts on
+  // the upper pads, production down the west side, services along the south.
+  {
+    id: 'tactical_operations_center',
+    name: 'Tactical Operations Center',
+    art: '/base/building-tactical-operations-center.webp',
+    draw: 'pedestal',
+    fixed: false,
+    defaultPad: 'upper_01',
+    entry: {kind: 'department', id: 'tactical_operations_center'},
+  },
+  {
+    id: 'signals_center',
+    name: 'Signals Center',
+    art: '/base/building-signals-center.webp',
+    draw: 'pedestal',
+    fixed: false,
+    defaultPad: 'upper_02',
+    entry: {kind: 'department', id: 'signals_center'},
+  },
+  {
+    id: 'fuel_point',
+    name: 'Bulk Fuel Point',
+    art: '/base/building-fuel-point.webp',
+    draw: 'pedestal',
+    fixed: false,
+    defaultPad: 'left_01',
+    entry: {kind: 'department', id: 'fuel_point'},
+  },
+  {
+    id: 'fabrication_shop',
+    name: 'Base Fabrication Shop',
+    art: '/base/building-fabrication-shop.webp',
+    draw: 'pedestal',
+    fixed: false,
+    defaultPad: 'left_02',
+    entry: {kind: 'department', id: 'fabrication_shop'},
+  },
+  {
+    id: 'garrison_barracks',
+    name: 'Garrison Barracks',
+    art: '/base/building-garrison-barracks.webp',
+    draw: 'pedestal',
+    fixed: false,
+    defaultPad: 'left_03',
+    entry: {kind: 'department', id: 'garrison_barracks'},
+  },
+  {
+    id: 'recovery_yard',
+    name: 'Materials Recovery Yard',
+    art: '/base/building-recovery-yard.webp',
+    draw: 'pedestal',
+    fixed: false,
+    defaultPad: 'left_04',
+    entry: {kind: 'department', id: 'recovery_yard'},
+  },
+  {
+    id: 'quartermaster_warehouse',
+    name: 'Quartermaster Warehouse',
+    art: '/base/building-quartermaster-warehouse.webp',
+    draw: 'pedestal',
+    fixed: false,
+    defaultPad: 'lower_01',
+    entry: {kind: 'department', id: 'quartermaster_warehouse'},
+  },
   {
     id: 'depot',
     name: 'Depot',
-    art: '/base/maintenance-depot.webp',
+    art: '/base/building-depot.webp',
     draw: 'pedestal',
     fixed: false,
     defaultPad: 'lower_02',
     entry: {kind: 'depot'},
   },
+  {
+    id: 'engineer_support_yard',
+    name: 'Engineer Support Yard',
+    art: '/base/building-engineer-support-yard.webp',
+    draw: 'pedestal',
+    fixed: false,
+    defaultPad: 'lower_03',
+    entry: {kind: 'department', id: 'engineer_support_yard'},
+  },
+  {
+    id: 'alliance_trading_post',
+    name: 'Alliance Trading Post',
+    art: '/base/building-alliance-trading-post.webp',
+    draw: 'pedestal',
+    fixed: false,
+    defaultPad: 'lower_04',
+    entry: {kind: 'department', id: 'alliance_trading_post'},
+  },
+  // The five asset buildings, fixed on the runway in Matt's order, bottom up:
+  // drone, helicopter, aircraft, missile, tank.
   {
     id: 'armour_hub',
     name: 'Armour Building',
@@ -179,15 +266,6 @@ export const BOARD_BUILDINGS: readonly BoardBuilding[] = [
     entry: {kind: 'assets', category: 'artillery'},
   },
   {
-    id: 'rotary_hub',
-    name: 'Helicopter Building',
-    art: '/base/vehicle-rotary.webp',
-    draw: 'vehicle',
-    fixed: true,
-    defaultPad: 'right_04',
-    entry: {kind: 'assets', category: 'rotary'},
-  },
-  {
     id: 'fixed_wing_hub',
     name: 'Fixed-Wing Building',
     art: '/base/vehicle-fixed-wing.webp',
@@ -195,6 +273,15 @@ export const BOARD_BUILDINGS: readonly BoardBuilding[] = [
     fixed: true,
     defaultPad: 'right_03',
     entry: {kind: 'assets', category: 'fixed_wing'},
+  },
+  {
+    id: 'rotary_hub',
+    name: 'Helicopter Building',
+    art: '/base/vehicle-rotary.webp',
+    draw: 'vehicle',
+    fixed: true,
+    defaultPad: 'right_04',
+    entry: {kind: 'assets', category: 'rotary'},
   },
   {
     id: 'drone_hub',
