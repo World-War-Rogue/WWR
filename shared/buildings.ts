@@ -1,22 +1,32 @@
 /**
- * Base buildings that level: the Command Center and the five asset buildings.
+ * The base: sixteen buildings that level, and the four resources they cost.
  *
- * Decided in docs/ASSET-BUILDING-UPGRADES-v1.md and the owner's ruling on top
- * of it: the Command Center is the ceiling for everything. Nothing in the base
- * - a building level, a Service Rank, a package - may stand above the Command
- * Center's level, and the Command Center must FINISH level N before anything
- * else may START level N.
+ * Decided in docs/ASSET-BUILDING-UPGRADES-v1.md and docs/BUILDING-RESOURCES-v1.md
+ * with the owner's rulings on top:
+ *
+ *   Every building starts at level 1, like every asset. The first thing a
+ *   player buys is level 2. Ten levels a season, cap +10 per season, levels
+ *   carry across seasons.
+ *
+ *   The Command Center is the ceiling for everything. It must FINISH level N
+ *   before any building or Service Rank may START level N.
+ *
+ *   Buildings cost RESOURCES only - Fuel, Steel, Munitions, Alloy - never
+ *   Tokens. Tokens and Command Credits buy resources at the Depot, at equal
+ *   value, under a daily cap. Timers are absolute and cannot be bought down.
+ *
+ *   The Quartermaster Warehouse must be at least floor(N/2) to start level N
+ *   of anything else, so a cost can never exceed what the base can hold.
  *
  * Each asset building lifts every attribute of every asset in its category
- * by BUILDING_STEP per level, compounding: level 10 is x1.219. That sits on
- * top of Service Rank (x1.045 per rank) and under packages (added after),
- * so a package point is worth the same on a level-0 base as a level-10 one.
- *
- * Costs are one price payable in any mix of Tokens and Command Credits, like
- * every other purchase. Timers are absolute instants and cannot be bought
- * down. Levels carry across seasons; the season only raises the cap.
+ * by BUILDING_STEP per level above the first, compounding: level 10 is
+ * x1.02^9. That sits on top of Service Rank and under packages.
  */
 import type {AssetCategory} from './assets';
+
+/* -------------------------------------------------------------------------- */
+/* Buildings                                                                  */
+/* -------------------------------------------------------------------------- */
 
 export const LEVELLED_BUILDINGS = [
   'command_center',
@@ -25,8 +35,22 @@ export const LEVELLED_BUILDINGS = [
   'fixed_wing_hub',
   'rotary_hub',
   'drone_hub',
+  'tactical_operations_center',
+  'signals_center',
+  'fuel_point',
+  'fabrication_shop',
+  'garrison_barracks',
+  'recovery_yard',
+  'quartermaster_warehouse',
+  'engineer_support_yard',
+  'depot',
+  'alliance_trading_post',
 ] as const;
 export type LevelledBuilding = (typeof LEVELLED_BUILDINGS)[number];
+
+export function isLevelledBuilding(id: string): id is LevelledBuilding {
+  return (LEVELLED_BUILDINGS as readonly string[]).includes(id);
+}
 
 /** The asset building for a category; naval has none until Season 3. */
 export const HUB_OF_CATEGORY: Record<AssetCategory, LevelledBuilding | null> = {
@@ -46,106 +70,243 @@ export const CATEGORY_OF_HUB: Partial<Record<LevelledBuilding, AssetCategory>> =
   drone_hub: 'drone',
 };
 
-export function isLevelledBuilding(id: string): id is LevelledBuilding {
-  return (LEVELLED_BUILDINGS as readonly string[]).includes(id);
-}
+export type BuildingLevels = Record<LevelledBuilding, number>;
 
-/**
- * Per level above the first, on every attribute of the category. Every
- * building starts at level 1 like every asset, so level 1 is x1 and level 10
- * is x1.02^9 = x1.195.
- */
-export const BUILDING_STEP = 1.02;
 export const BUILDING_START_LEVEL = 1;
-
-/** Ten levels a season: 10, 20, 30, 40, 50. */
 export const BUILDING_LEVELS_PER_SEASON = 10;
 export const BUILDING_MAX_LEVEL = 50;
+
+/** A fresh base: everything at level 1, like every asset. */
+export const NO_BUILDINGS: BuildingLevels = Object.fromEntries(
+  LEVELLED_BUILDINGS.map((b) => [b, BUILDING_START_LEVEL]),
+) as BuildingLevels;
 
 export function buildingCapForSeason(season: number): number {
   return Math.min(BUILDING_MAX_LEVEL, Math.max(0, season) * BUILDING_LEVELS_PER_SEASON);
 }
 
-/** The multiplier a category's assets get from its building at this level. */
-export function buildingBoost(level: number): number {
-  return BUILDING_STEP ** Math.max(0, Math.floor(level) - BUILDING_START_LEVEL);
-}
+/* -------------------------------------------------------------------------- */
+/* Resources                                                                  */
+/* -------------------------------------------------------------------------- */
 
-/**
- * What it costs to reach a level, and how long it takes. Indexed by the level
- * being built (2..10 for Season 1; row 1 is the level everything starts at
- * and is never bought). Beyond ten the last row repeats with the
- * same ratio as the last step, until a later season's table replaces it.
- */
-const ASSET_BUILDING_TABLE: ReadonlyArray<{cost: number; minutes: number}> = [
-  {cost: 40, minutes: 20},
-  {cost: 60, minutes: 45},
-  {cost: 90, minutes: 90},
-  {cost: 130, minutes: 180},
-  {cost: 180, minutes: 360},
-  {cost: 240, minutes: 540},
-  {cost: 320, minutes: 720},
-  {cost: 420, minutes: 1080},
-  {cost: 540, minutes: 1440},
-  {cost: 700, minutes: 2160},
-];
+export const RESOURCE_KINDS = ['fuel', 'steel', 'munitions', 'alloy'] as const;
+export type ResourceKind = (typeof RESOURCE_KINDS)[number];
+export type Resources = Record<ResourceKind, number>;
 
-/**
- * The Command Center unlocks five buildings' worth of progress, so its rows
- * are the asset-building rows at x1.5. A placeholder until the designer
- * publishes the Command Center's own table.
- */
-export const COMMAND_CENTER_FACTOR = 1.5;
-
-export function buildingStep(
-  building: LevelledBuilding,
-  toLevel: number,
-): {cost: number; ms: number} {
-  const idx = Math.min(ASSET_BUILDING_TABLE.length, Math.max(1, toLevel)) - 1;
-  let {cost, minutes} = ASSET_BUILDING_TABLE[idx];
-  if (toLevel > ASSET_BUILDING_TABLE.length) {
-    const extra = toLevel - ASSET_BUILDING_TABLE.length;
-    cost = Math.round(cost * 1.3 ** extra);
-    minutes = Math.round(minutes * 1.5 ** extra);
-  }
-  if (building === 'command_center') {
-    cost = Math.round(cost * COMMAND_CENTER_FACTOR);
-    minutes = Math.round(minutes * COMMAND_CENTER_FACTOR);
-  }
-  return {cost, ms: minutes * 60_000};
-}
-
-export interface BuildingLevels {
-  command_center: number;
-  armour_hub: number;
-  artillery_hub: number;
-  fixed_wing_hub: number;
-  rotary_hub: number;
-  drone_hub: number;
-}
-
-/** A fresh base: everything at level 1, like every asset. */
-export const NO_BUILDINGS: BuildingLevels = {
-  command_center: 1,
-  armour_hub: 1,
-  artillery_hub: 1,
-  fixed_wing_hub: 1,
-  rotary_hub: 1,
-  drone_hub: 1,
+export const RESOURCE_LABEL: Record<ResourceKind, string> = {
+  fuel: 'Fuel',
+  steel: 'Steel',
+  munitions: 'Munitions',
+  alloy: 'Alloy',
 };
 
-/** The boost a category's assets get, given the base's building levels. */
-export function categoryBoost(levels: BuildingLevels, category: AssetCategory): number {
-  const hub = HUB_OF_CATEGORY[category];
-  return hub ? buildingBoost(levels[hub]) : 1;
+/** Which building makes each resource - named in the "need more" message. */
+export const PRODUCER_OF: Record<ResourceKind, LevelledBuilding> = {
+  fuel: 'fuel_point',
+  steel: 'fabrication_shop',
+  munitions: 'garrison_barracks',
+  alloy: 'recovery_yard',
+};
+
+export const NO_RESOURCES: Resources = {fuel: 0, steel: 0, munitions: 0, alloy: 0};
+
+const r = (fuel: number, steel: number, munitions: number, alloy: number): Resources => ({
+  fuel,
+  steel,
+  munitions,
+  alloy,
+});
+
+/**
+ * Production per hour by the producer's level (index = level, row 0 unused).
+ * Level 1 is what a fresh base makes.
+ */
+const PRODUCTION: Record<ResourceKind, readonly number[]> = {
+  fuel: [0, 250, 400, 600, 900, 1300, 1800, 2400, 3200, 4200, 5500],
+  steel: [0, 180, 300, 450, 650, 950, 1300, 1750, 2300, 3000, 3900],
+  munitions: [0, 150, 250, 375, 550, 800, 1100, 1500, 2000, 2600, 3400],
+  alloy: [0, 120, 200, 300, 450, 650, 900, 1200, 1600, 2100, 2800],
+};
+
+/** Storage per resource by Warehouse level, and the share a raid cannot take. */
+const WAREHOUSE_CAP = [0, 6000, 10000, 16000, 24000, 36000, 50000, 68000, 90000, 116000, 150000];
+const WAREHOUSE_PROTECTED = [0, 0.08, 0.16, 0.24, 0.32, 0.4, 0.48, 0.56, 0.64, 0.72, 0.8];
+
+/** Past level 10 the last row grows by a fixed ratio until a later table lands. */
+function row(table: readonly number[], level: number, growth: number): number {
+  const l = Math.max(1, Math.floor(level));
+  if (l < table.length) return table[l];
+  return Math.round(table[table.length - 1] * growth ** (l - (table.length - 1)));
+}
+
+export function productionPerHour(levels: BuildingLevels): Resources {
+  const out = {...NO_RESOURCES};
+  for (const k of RESOURCE_KINDS) out[k] = row(PRODUCTION[k], levels[PRODUCER_OF[k]], 1.3);
+  return out;
+}
+
+export function storageCap(levels: BuildingLevels): number {
+  return row(WAREHOUSE_CAP, levels.quartermaster_warehouse, 1.3);
+}
+
+export function protectedShare(levels: BuildingLevels): number {
+  const l = Math.max(1, Math.floor(levels.quartermaster_warehouse));
+  return l < WAREHOUSE_PROTECTED.length ? WAREHOUSE_PROTECTED[l] : 0.8;
+}
+
+/** A successful raid takes exactly this share of what the Warehouse does not protect. */
+export const RAID_SHARE = 0.05;
+
+export function raidLoot(stock: Resources, levels: BuildingLevels): Resources {
+  const safe = protectedShare(levels);
+  const out = {...NO_RESOURCES};
+  for (const k of RESOURCE_KINDS) {
+    out[k] = Math.min(stock[k], Math.floor(Math.max(0, stock[k]) * (1 - safe) * RAID_SHARE));
+  }
+  return out;
+}
+
+/* -------------------------------------------------------------------------- */
+/* The Depot sells resources                                                  */
+/* -------------------------------------------------------------------------- */
+
+/** Units of resource one Token or one Credit buys. */
+export const RESOURCE_PER_UNIT: Record<ResourceKind, number> = {
+  fuel: 100,
+  steel: 80,
+  munitions: 70,
+  alloy: 60,
+};
+
+/** Most of each resource an account may buy per game day. */
+export const DAILY_RESOURCE_CAP: Record<ResourceKind, number> = {
+  fuel: 20000,
+  steel: 16000,
+  munitions: 14000,
+  alloy: 12000,
+};
+
+/* -------------------------------------------------------------------------- */
+/* What a level costs                                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Cost tables from BUILDING RESOURCES v1 §3-4, indexed by the level being
+ * built. Row 1 is the level everything starts at and is never bought; the
+ * designer's tables are reproduced whole so they can be checked against the
+ * document line by line.
+ */
+const HUB_SCALE = [0, 1, 1.5, 2.2, 3.2, 4.6, 6.4, 8.8, 12, 16.4, 22];
+const HUB_MINUTES = [0, 20, 45, 90, 180, 360, 540, 720, 1080, 1440, 2160];
+const DEPT_SCALE = [0, 1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24];
+const DEPT_MINUTES = [0, 20, 40, 80, 160, 300, 450, 600, 900, 1200, 1800];
+const PRODUCER_MINUTES = [0, 15, 30, 60, 120, 240, 360, 480, 720, 960, 1440];
+
+const BASE_ROW: Record<Exclude<LevelledBuilding, 'command_center'>, Resources> = {
+  armour_hub: r(250, 750, 200, 250),
+  artillery_hub: r(200, 250, 750, 250),
+  fixed_wing_hub: r(750, 250, 200, 250),
+  rotary_hub: r(500, 250, 250, 500),
+  drone_hub: r(250, 200, 250, 750),
+  tactical_operations_center: r(300, 300, 400, 200),
+  signals_center: r(150, 200, 100, 500),
+  fuel_point: r(100, 300, 100, 200),
+  fabrication_shop: r(200, 200, 200, 400),
+  garrison_barracks: r(200, 200, 500, 100),
+  recovery_yard: r(200, 250, 100, 400),
+  quartermaster_warehouse: r(100, 500, 100, 500),
+  engineer_support_yard: r(200, 400, 200, 400),
+  depot: r(200, 300, 300, 300),
+  alliance_trading_post: r(300, 200, 200, 300),
+};
+
+const COMMAND_CENTER_ROWS: ReadonlyArray<{cost: Resources; minutes: number}> = [
+  {cost: NO_RESOURCES, minutes: 0},
+  {cost: r(900, 700, 600, 500), minutes: 60},
+  {cost: r(1350, 1050, 900, 750), minutes: 120},
+  {cost: r(2000, 1600, 1350, 1100), minutes: 240},
+  {cost: r(3000, 2300, 2000, 1650), minutes: 480},
+  {cost: r(4400, 3400, 3000, 2500), minutes: 720},
+  {cost: r(6400, 5000, 4400, 3700), minutes: 1080},
+  {cost: r(9200, 7200, 6400, 5400), minutes: 1440},
+  {cost: r(13200, 10400, 9200, 7800), minutes: 2160},
+  {cost: r(18800, 15000, 13200, 11200), minutes: 2880},
+  {cost: r(24000, 21600, 19000, 16200), minutes: 3600},
+];
+
+const PRODUCERS: ReadonlySet<LevelledBuilding> = new Set([
+  'fuel_point',
+  'fabrication_shop',
+  'garrison_barracks',
+  'recovery_yard',
+]);
+const HUBS: ReadonlySet<LevelledBuilding> = new Set([
+  'armour_hub',
+  'artillery_hub',
+  'fixed_wing_hub',
+  'rotary_hub',
+  'drone_hub',
+]);
+
+export interface BuildingStep {
+  cost: Resources;
+  ms: number;
+}
+
+/** What reaching `toLevel` costs and how long it takes. */
+export function buildingStep(building: LevelledBuilding, toLevel: number): BuildingStep {
+  const l = Math.max(2, Math.floor(toLevel));
+  const past = Math.max(0, l - 10);
+  const idx = Math.min(10, l);
+  if (building === 'command_center') {
+    const rowAt = COMMAND_CENTER_ROWS[idx];
+    return {
+      cost: scale(rowAt.cost, 1.3 ** past),
+      ms: Math.round(rowAt.minutes * 1.5 ** past) * 60_000,
+    };
+  }
+  const base = BASE_ROW[building];
+  const scaleTable = HUBS.has(building) ? HUB_SCALE : DEPT_SCALE;
+  const minutes = HUBS.has(building)
+    ? HUB_MINUTES
+    : PRODUCERS.has(building)
+      ? PRODUCER_MINUTES
+      : DEPT_MINUTES;
+  return {
+    cost: scale(base, scaleTable[idx] * 1.3 ** past),
+    ms: Math.round(minutes[idx] * 1.5 ** past) * 60_000,
+  };
+}
+
+function scale(cost: Resources, by: number): Resources {
+  const out = {...NO_RESOURCES};
+  for (const k of RESOURCE_KINDS) out[k] = Math.round(cost[k] * by);
+  return out;
+}
+
+/** The Second Engineer Team: one permanent extra build queue. */
+export const SECOND_TEAM = {
+  requiresEngineerYard: 10,
+  cost: r(0, 12000, 0, 12000),
+  currency: 1500,
+  ms: 24 * 3_600_000,
+};
+
+/* -------------------------------------------------------------------------- */
+/* Gates                                                                      */
+/* -------------------------------------------------------------------------- */
+
+/** Warehouse level needed to start level N of anything else. */
+export function warehouseNeeded(toLevel: number): number {
+  return Math.floor(toLevel / 2);
 }
 
 /**
  * Why a building may not start its next level, or null if it may.
  *
- * The rules, in the order a player would want to hear them: the season cap,
- * then the Command Center ceiling. The one-job-at-a-time rule is the queue's,
- * checked by the server against live jobs, not here.
+ * In the order a player wants to hear them: the season cap, the Command
+ * Center ceiling, the Warehouse. The queue and the resources are the
+ * server's to check against live rows.
  */
 export function buildingBlock(
   building: LevelledBuilding,
@@ -158,7 +319,18 @@ export function buildingBlock(
   if (building !== 'command_center' && next > levels.command_center) {
     return `Command Center must reach level ${next} first.`;
   }
+  const wh = warehouseNeeded(next);
+  if (building !== 'quartermaster_warehouse' && levels.quartermaster_warehouse < wh) {
+    return `Quartermaster Warehouse must reach level ${wh} first.`;
+  }
   return null;
+}
+
+/** The resources a stock is short of a cost, by kind; empty when it covers it. */
+export function shortfall(stock: Resources, cost: Resources): Partial<Resources> {
+  const out: Partial<Resources> = {};
+  for (const k of RESOURCE_KINDS) if (stock[k] < cost[k]) out[k] = cost[k] - stock[k];
+  return out;
 }
 
 /**
@@ -167,4 +339,20 @@ export function buildingBlock(
  */
 export function rankCeiling(levels: BuildingLevels): number {
   return Math.max(BUILDING_START_LEVEL, levels.command_center);
+}
+
+/* -------------------------------------------------------------------------- */
+/* What an asset building does                                                */
+/* -------------------------------------------------------------------------- */
+
+/** Per level above the first, on every attribute of the category. */
+export const BUILDING_STEP = 1.02;
+
+export function buildingBoost(level: number): number {
+  return BUILDING_STEP ** Math.max(0, Math.floor(level) - BUILDING_START_LEVEL);
+}
+
+export function categoryBoost(levels: BuildingLevels, category: AssetCategory): number {
+  const hub = HUB_OF_CATEGORY[category];
+  return hub ? buildingBoost(levels[hub]) : 1;
 }

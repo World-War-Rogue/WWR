@@ -8,8 +8,9 @@ import {handleAdminRequests} from './admin';
 import {ensureRally, lastRalliedAt, rallyTo, readRally, setRally} from './rally';
 import {assignSlot, ensureRoster, moveSlot, readSquads, squadLiftUsed, squadPower} from './squads';
 import {packageUp, rankUp, resetPackages, settleWallet} from './upgrades';
-import {readBase, startLevel} from './buildings';
-import {rankCeiling} from '../shared/buildings';
+import {buyResource, buySecondTeam, readBase, startLevel} from './buildings';
+import {type LevelledBuilding, rankCeiling} from '../shared/buildings';
+import {BOARD_BUILDING_BY_ID} from '../shared/base';
 import {isPackageKey} from '../shared/upgrades';
 import {type Split} from '../shared/economy';
 import {
@@ -293,27 +294,14 @@ async function settleAndLoad(env: Env, playerId: string, now: number) {
     job = null;
   }
 
-  const rate = productionPerHour(levels);
-  const cap = STORAGE_CAP(levels.command_post);
-  const hours = Math.max(0, now - productionFrom) / 3_600_000;
-  const resources = {
-    fuel: base.fuel,
-    steel: base.steel,
-    munitions: base.munitions,
-    alloy: base.alloy,
-  } as Record<ResourceKind, number>;
-  for (const kind of RESOURCES) {
-    resources[kind] = Math.min(cap, Math.floor(resources[kind] + rate[kind] * hours));
-  }
+  if (writes.length > 0) await env.DB.batch(writes);
 
-  writes.push(
-    env.DB.prepare(
-      `UPDATE bases SET fuel = ?2, steel = ?3, munitions = ?4, alloy = ?5, resources_at = ?6
-        WHERE player_id = ?1`,
-    ).bind(playerId, resources.fuel, resources.steel, resources.munitions, resources.alloy, now),
-  );
-
-  await env.DB.batch(writes);
+  // Resources are the v2 base's now (worker/buildings.ts): produced by the
+  // four producer buildings' levels, capped by the Warehouse, settled there.
+  const v2 = await readBase(env.DB, playerId, now);
+  const resources = v2.resources;
+  const rate = v2.productionPerHour;
+  const cap = v2.storageCap;
 
   return {base, levels, resources, rate, cap, job, completedJob};
 }
@@ -1069,7 +1057,7 @@ async function handleSquads(env: Env, player: PlayerRow): Promise<Response> {
     ),
     // The Command Center and asset-building levels, so every asset card can
     // draw the attributes the building boost gives without a second request.
-    base: {levels: base.levels, job: base.job, season: CURRENT_SEASON},
+    base: {...baseLevelsView(base), season: CURRENT_SEASON, wallet: {tokens: wallet.tokens, credits: wallet.credits}},
     // Echoed so the squad screen can show them without asking for the base
     // separately. They no longer affect what fits in a squad.
     buildings: {
@@ -1110,6 +1098,24 @@ function readSplit(body: Record<string, unknown> | null): Split | null | 'bad' {
 
 /** Which season's cap applies. One place, so nothing reads it off a request. */
 const CURRENT_SEASON = 1;
+
+/** A building's player-facing name, for server messages. */
+function buildingName(b: LevelledBuilding): string {
+  return b === 'command_center' ? 'Command Center' : BOARD_BUILDING_BY_ID[b]?.name ?? b;
+}
+
+/** The base's levelled state as the client reads it. */
+function baseLevelsView(base: Awaited<ReturnType<typeof readBase>>) {
+  return {
+    levels: base.levels,
+    jobs: base.jobs,
+    queues: base.queues,
+    secondTeamAt: base.secondTeamAt,
+    resources: base.resources,
+    productionPerHour: base.productionPerHour,
+    storageCap: base.storageCap,
+  };
+}
 
 async function handleRankUp(
   request: Request,
@@ -1321,48 +1327,6 @@ async function handleAssign(request: Request, env: Env, player: PlayerRow): Prom
   if (!result.ok) return fail(409, result.error);
 
   return handleSquads(env, player);
-}
-
-async function handleStartUpgrade(request: Request, env: Env, player: PlayerRow): Promise<Response> {
-  const body = (await request.json().catch(() => null)) as {kind?: unknown} | null;
-  const kind = body?.kind;
-  if (typeof kind !== 'string' || !isBuildingKind(kind)) return fail(400, 'Unknown structure.');
-
-  const now = Date.now();
-  const state = await settleAndLoad(env, player.id, now);
-  if (!state) return fail(404, 'No base found.');
-  if (state.job) return fail(409, 'Another upgrade is already under way.');
-
-  const level = state.levels[kind];
-  const ceiling = maxAllowedLevel(kind, state.levels.command_post);
-  if (level >= BUILDINGS[kind].maxLevel) return fail(409, 'Already at maximum level.');
-  if (level >= ceiling) return fail(409, 'Command Center level is too low for this upgrade.');
-
-  const cost = upgradeCost(kind, level);
-  const short = RESOURCES.filter((r) => state.resources[r] < cost[r]);
-  if (short.length > 0) return fail(409, `Not enough ${short.join(' and ')}.`);
-
-  const completesAt = now + upgradeDurationMs(kind, level);
-  await env.DB.batch([
-    env.DB.prepare(
-      `UPDATE bases SET fuel = ?2, steel = ?3, munitions = ?4, alloy = ?5, resources_at = ?6
-        WHERE player_id = ?1`,
-    ).bind(
-      player.id,
-      state.resources.fuel - cost.fuel,
-      state.resources.steel - cost.steel,
-      state.resources.munitions - cost.munitions,
-      state.resources.alloy - cost.alloy,
-      now,
-    ),
-    env.DB.prepare(
-      `INSERT INTO build_jobs (id, player_id, kind, to_level, started_at, completes_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
-    ).bind(newId(), player.id, kind, level + 1, now, completesAt),
-  ]);
-
-  const after = await settleAndLoad(env, player.id, now);
-  return json(after ? baseView(after, now) : {error: 'State unavailable.'});
 }
 
 /**
@@ -2648,30 +2612,65 @@ async function route(
   if (endpoint === 'POST /api/assets/rank') return handleRankUp(request, env, player);
 
   if (endpoint === 'GET /api/base/levels') {
-    const base = await readBase(env.DB, player.id, Date.now());
-    return json({levels: base.levels, job: base.job, season: CURRENT_SEASON});
+    const now = Date.now();
+    const [base, wallet] = await Promise.all([
+      readBase(env.DB, player.id, now),
+      settleWallet(env.DB, player.id, now),
+    ]);
+    return json({
+      ...baseLevelsView(base),
+      season: CURRENT_SEASON,
+      wallet: {tokens: wallet.tokens, credits: wallet.credits},
+    });
   }
 
   if (endpoint === 'POST /api/base/level') {
     const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
     const building = typeof body?.building === 'string' ? body.building : '';
+    const result = await startLevel(env.DB, player.id, building, CURRENT_SEASON, Date.now(), buildingName);
+    if (!result.ok) return fail(400, result.error);
+    const wallet = await settleWallet(env.DB, player.id, Date.now());
+    return json({
+      ok: true,
+      ...baseLevelsView(result.base),
+      season: CURRENT_SEASON,
+      wallet: {tokens: wallet.tokens, credits: wallet.credits},
+    });
+  }
+
+  if (endpoint === 'POST /api/depot/resources') {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const kind = typeof body?.resource === 'string' ? body.resource : '';
     const split = readSplit(body);
     if (split === 'bad') return fail(400, 'That payment does not make sense.');
-    const result = await startLevel(env.DB, player.id, building, split, CURRENT_SEASON, Date.now());
+    const result = await buyResource(env.DB, player.id, kind, Number(body?.amount), split, Date.now());
     if (!result.ok) return fail(400, result.error);
     return json({
       ok: true,
+      ...baseLevelsView(result.base),
+      season: CURRENT_SEASON,
       wallet: {tokens: result.wallet.tokens, credits: result.wallet.credits},
-      levels: result.base.levels,
-      job: result.base.job,
+      bought: result.bought,
+    });
+  }
+
+  if (endpoint === 'POST /api/base/second-team') {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const split = readSplit(body);
+    if (split === 'bad') return fail(400, 'That payment does not make sense.');
+    const result = await buySecondTeam(env.DB, player.id, split, Date.now(), buildingName);
+    if (!result.ok) return fail(400, result.error);
+    return json({
+      ok: true,
+      ...baseLevelsView(result.base),
+      season: CURRENT_SEASON,
+      wallet: {tokens: result.wallet.tokens, credits: result.wallet.credits},
     });
   }
 
   if (endpoint === 'POST /api/assets/package') return handlePackageUp(request, env, player);
 
   if (endpoint === 'POST /api/assets/reset') return handlePackageReset(request, env, player);
-
-  if (endpoint === 'POST /api/base/upgrade') return handleStartUpgrade(request, env, player);
 
   if (endpoint === 'GET /api/squads') return handleSquads(env, player);
 

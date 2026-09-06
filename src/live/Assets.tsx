@@ -305,13 +305,10 @@ export default function Assets({
           <div className="mb-3">
             <BuildingPanel
               building={HUB_OF_CATEGORY[only]!}
-              levels={base.levels}
-              job={base.job}
-              season={base.season}
-              wallet={wallet}
+              base={base}
               onChanged={(next) => {
-                setBase((b) => (b ? {...b, levels: next.levels, job: next.job} : b));
-                if (next.wallet) setWallet(next.wallet);
+                setBase(next);
+                setWallet(next.wallet);
               }}
             />
           </div>

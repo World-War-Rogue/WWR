@@ -10,9 +10,11 @@
  * six production buildings still exist in the database and still produce, and
  * until the redesign reset retires them this is where they are upgraded.
  */
-import {type ReactNode, useEffect, useState} from 'react';
+import {type ReactNode, useState} from 'react';
 import BuildingPanel from './BuildingPanel';
-import {type BaseLevelsView, type Wallet, api} from '../net/api';
+import {ResourceShop, SecondTeamPanel, StockPanel} from './ResourcePanels';
+import {useBase} from './useBase';
+import {LEVELLED_BUILDINGS, isLevelledBuilding} from '../../shared/buildings';
 import {type MessageKey, t} from '../i18n';
 import {
   type BaseView,
@@ -94,18 +96,7 @@ export function CommandCenterSheet({
 }) {
   const [tab, setTab] = useState<'departments' | 'events' | 'wars' | 'profile'>('departments');
   // Base levels v2: the Command Center's own level. Read when the sheet opens.
-  const [levels, setLevels] = useState<BaseLevelsView | null>(null);
-  const [wallet, setWallet] = useState<Wallet>(base.wallet);
-  useEffect(() => {
-    let live = true;
-    api
-      .baseLevels()
-      .then((b) => live && setLevels(b))
-      .catch(() => undefined);
-    return () => {
-      live = false;
-    };
-  }, []);
+  const [levels, setLevels] = useBase();
   const tabs = [
     {key: 'departments', label: t('cc.departments')},
     {key: 'events', label: t('cc.events')},
@@ -128,71 +119,31 @@ export function CommandCenterSheet({
         <>
           {levels && (
             <div className="mb-4">
-              <BuildingPanel
-                building="command_center"
-                levels={levels.levels}
-                job={levels.job}
-                season={levels.season}
-                wallet={wallet}
-                onChanged={(next) => {
-                  setLevels((b) => (b ? {...b, levels: next.levels, job: next.job} : b));
-                  if (next.wallet) setWallet(next.wallet);
-                }}
-              />
+              <BuildingPanel building="command_center" base={levels} onChanged={setLevels} />
             </div>
           )}
-          {base.job && (
-            <div className="mb-4 rounded border border-orange-800 bg-orange-950/30 p-4">
-              <p className="text-xs uppercase tracking-widest text-orange-400">Under construction</p>
-              <p className="mt-1 text-neutral-200">
-                {base.buildings.find((b) => b.kind === base.job!.kind)?.name ?? base.job.kind} → level{' '}
-                {base.job.toLevel}
-              </p>
-              <p className="mt-2 font-mono text-2xl text-orange-300">
-                {formatDuration(base.job.completesAt - serverNow())}
-              </p>
-            </div>
-          )}
-          <p className="mb-3 text-xs text-neutral-500">{t('cc.capNote')}</p>
-          <div className="space-y-3">
-            {base.buildings.map((building) => {
-              const busy = pending === building.kind;
-              const blocked = building.blockedByCommandPost;
-              const name = building.kind === 'command_post' ? t('cc.title') : building.name;
-              return (
-                <div
-                  key={building.kind}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded border border-neutral-800 bg-neutral-900/60 p-3"
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-baseline gap-2">
-                      <h3 className="font-semibold text-neutral-100">{name}</h3>
-                      <span className="font-mono text-sm text-orange-500">Lv {building.level}</span>
-                    </div>
-                    <p className="mt-1 text-sm text-neutral-500">{building.blurb}</p>
-                    {building.nextCost && (
-                      <p className="mt-2 font-mono text-xs text-neutral-400">
-                        {RESOURCE_ORDER.filter((r) => building.nextCost![r] > 0)
-                          .map((r) => `${RESOURCE_LABEL[r]} ${formatNumber(building.nextCost![r])}`)
-                          .join('   ')}
-                        {building.nextDurationMs !== null && `   ·   ${formatDuration(building.nextDurationMs)}`}
-                      </p>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => onUpgrade(building.kind)}
-                    disabled={busy || blocked || !building.canUpgrade || Boolean(base.job)}
-                    className="shrink-0 rounded bg-orange-600 px-4 py-2 text-sm font-semibold text-white disabled:bg-neutral-800 disabled:text-neutral-500"
+          {levels && (
+            <div className="space-y-1">
+              {LEVELLED_BUILDINGS.filter((b) => b !== 'command_center').map((b) => {
+                const job = levels.jobs.find((j) => j.building === b);
+                return (
+                  <div
+                    key={b}
+                    className="flex items-center justify-between rounded border border-neutral-800 bg-neutral-900/40 px-3 py-1.5 text-xs"
                   >
-                    {blocked ? `${t('cc.title')} too low` : busy ? 'Starting…' : 'Upgrade'}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-          <p className="mt-6 text-xs text-neutral-600">
-            {t('base.storageCap', {amount: formatNumber(base.storageCap)})}
-          </p>
+                    <span className="text-neutral-200">{t(`building.${b}` as MessageKey)}</span>
+                    <span className="font-mono text-neutral-400">
+                      {job ? <span className="text-orange-300">→ {job.toLevel} </span> : null}
+                      Lv {levels.levels[b]}
+                    </span>
+                  </div>
+                );
+              })}
+              <p className="pt-2 text-[11px] text-neutral-600">
+                Open a building on the base to upgrade it. Nothing can stand above the Command Center.
+              </p>
+            </div>
+          )}
         </>
       )}
     </Sheet>
@@ -201,6 +152,7 @@ export function CommandCenterSheet({
 
 export function DepotSheet({onClose, onCustomise}: {onClose: () => void; onCustomise: () => void}) {
   const [tab, setTab] = useState<'supplies' | 'modules' | 'cosmetics' | 'services'>('supplies');
+  const [base, setBase] = useBase();
   const tabs = [
     {key: 'supplies', label: t('depot.supplies')},
     {key: 'modules', label: t('depot.modules')},
@@ -215,7 +167,15 @@ export function DepotSheet({onClose, onCustomise}: {onClose: () => void; onCusto
       onTab={(k) => setTab(k as typeof tab)}
       onClose={onClose}
     >
-      {tab === 'supplies' && <Soon text={t('depot.suppliesSoon')} />}
+      {tab === 'supplies' &&
+        (base ? (
+          <div className="space-y-3">
+            <BuildingPanel building="depot" base={base} onChanged={setBase} />
+            <ResourceShop base={base} onChanged={setBase} />
+          </div>
+        ) : (
+          <Soon text={t('depot.suppliesSoon')} />
+        ))}
       {tab === 'modules' && <Soon text={t('depot.modulesSoon')} />}
       {tab === 'cosmetics' && (
         <>
@@ -237,10 +197,23 @@ export function DepotSheet({onClose, onCustomise}: {onClose: () => void; onCusto
 export function DepartmentSheet({id, onClose}: {id: string; onClose: () => void}) {
   const name = t(`building.${id}` as MessageKey);
   const blurb = t(`blurb.${id}` as MessageKey);
+  const [base, setBase] = useBase();
+  const levelled = isLevelledBuilding(id) ? id : null;
   return (
-    <Sheet title={name} tabs={[{key: 'about', label: t('department.soon')}]} active="about" onTab={() => undefined} onClose={onClose}>
-      <p className="text-sm text-neutral-200">{blurb}</p>
-      <p className="mt-3 text-xs text-neutral-500">{t('department.soonBody')}</p>
+    <Sheet title={name} tabs={[{key: 'about', label: 'Building'}]} active="about" onTab={() => undefined} onClose={onClose}>
+      {levelled && base ? (
+        <div className="space-y-3">
+          <BuildingPanel building={levelled} base={base} onChanged={setBase} />
+          {levelled === 'quartermaster_warehouse' && <StockPanel base={base} />}
+          {levelled === 'engineer_support_yard' && <SecondTeamPanel base={base} onChanged={setBase} />}
+          <p className="text-xs text-neutral-500">{blurb}</p>
+        </div>
+      ) : (
+        <>
+          <p className="text-sm text-neutral-200">{blurb}</p>
+          <p className="mt-3 text-xs text-neutral-500">{t('department.soonBody')}</p>
+        </>
+      )}
     </Sheet>
   );
 }

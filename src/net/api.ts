@@ -276,10 +276,17 @@ export interface BaseJobView {
   completesAt: number;
 }
 
+/** The levelled base: every building's level, the jobs running, the stock. */
 export interface BaseLevelsView {
   levels: BuildingLevels;
-  job: BaseJobView | null;
+  jobs: BaseJobView[];
+  queues: number;
+  secondTeamAt: number | null;
+  resources: Resources;
+  productionPerHour: Resources;
+  storageCap: number;
   season: number;
+  wallet: Wallet;
 }
 
 export interface RallyPoint {
@@ -404,11 +411,15 @@ export const api = {
    * server spends Credits first without it.
    */
   baseLevels: () => call<BaseLevelsView>('/api/base/levels'),
-  startLevel: (building: string, split?: Wallet) =>
-    call<{ok: true; wallet: Wallet; levels: BuildingLevels; job: BaseJobView | null}>(
-      '/api/base/level',
-      {method: 'POST', body: JSON.stringify({building, split})},
-    ),
+  startLevel: (building: string) =>
+    call<BaseLevelsView>('/api/base/level', {method: 'POST', body: JSON.stringify({building})}),
+  buyResource: (resource: string, amount: number, split?: Wallet) =>
+    call<BaseLevelsView & {bought: number}>('/api/depot/resources', {
+      method: 'POST',
+      body: JSON.stringify({resource, amount, split}),
+    }),
+  buySecondTeam: (split?: Wallet) =>
+    call<BaseLevelsView>('/api/base/second-team', {method: 'POST', body: JSON.stringify({split})}),
   rankUp: (assetId: string, target: number, split?: Wallet) =>
     call<UpgradeResponse>('/api/assets/rank', {
       method: 'POST',

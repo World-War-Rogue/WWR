@@ -829,19 +829,50 @@ if (wanted('buildings')) {
     assert(`buildings.rank${high}`, highWins > lowWins, `building beat ten ranks (${lowWins} v ${highWins})`);
   }
 
-  // 5. Every table row is a positive, rising price and time.
+  // Every table row is a rising cost and time, level 2 through 10.
+  const {LEVELLED_BUILDINGS: ALL, RESOURCE_KINDS, warehouseNeeded, storageCap, NO_BUILDINGS, raidLoot, productionPerHour} = buildings;
   let monotone = true;
-  for (const b of LEVELLED_BUILDINGS) {
-    let prev = {cost: 0, ms: 0};
+  let fits = true;
+  for (const b of ALL) {
+    let prev = {total: 0, ms: 0};
     for (let l = 2; l <= 10; l += 1) {
       const step = buildingStep(b, l);
-      if (step.cost <= prev.cost || step.ms <= prev.ms) monotone = false;
-      prev = step;
+      const total = RESOURCE_KINDS.reduce((n, k) => n + step.cost[k], 0);
+      if (total <= prev.total || step.ms <= prev.ms) monotone = false;
+      prev = {total, ms: step.ms};
+      // BUILDING RESOURCES v1 §7.3: every cost fits the Warehouse the gate
+      // demands for that level (level 1 Warehouse for anything up to 3).
+      const wh = Math.max(1, warehouseNeeded(l));
+      const cap = storageCap({...NO_BUILDINGS, quartermaster_warehouse: wh});
+      if (RESOURCE_KINDS.some((k) => step.cost[k] > cap)) fits = false;
     }
   }
   const cc10 = buildingStep('command_center', 10);
-  console.log(`  Command Center 10: ${cc10.cost} in ${(cc10.ms / 3600000).toFixed(0)}h; tank building 10: ${buildingStep('armour_hub', 10).cost}`);
+  console.log(`  Command Center 10: F${cc10.cost.fuel} S${cc10.cost.steel} M${cc10.cost.munitions} A${cc10.cost.alloy} in ${(cc10.ms / 3600000).toFixed(0)}h`);
   assert('buildings.table', monotone, 'a level costs less or takes less time than the one before it');
+  assert('buildings.fits', fits, 'a level costs more of a resource than its required Warehouse holds');
+
+  // The tables reproduce the document, spot-checked at the corners.
+  const spot = [
+    ['armour_hub', 10, {fuel: 5500, steel: 16500, munitions: 4400, alloy: 5500}],
+    ['rotary_hub', 3, {fuel: 1100, steel: 550, munitions: 550, alloy: 1100}],
+    ['tactical_operations_center', 10, {fuel: 7200, steel: 7200, munitions: 9600, alloy: 4800}],
+    ['fuel_point', 10, {fuel: 2400, steel: 7200, munitions: 2400, alloy: 4800}],
+    ['quartermaster_warehouse', 5, {fuel: 400, steel: 2000, munitions: 400, alloy: 2000}],
+    ['command_center', 2, {fuel: 1350, steel: 1050, munitions: 900, alloy: 750}],
+  ];
+  const spotOk = spot.every(([b, l, want]) => {
+    const got = buildingStep(b, l).cost;
+    return RESOURCE_KINDS.every((k) => got[k] === want[k]);
+  });
+  assert('buildings.doc', spotOk, 'a cost row differs from BUILDING RESOURCES v1');
+
+  // Raids: 5% of the unprotected stock, never the protected share, never more than held.
+  const stock = {fuel: 10000, steel: 10000, munitions: 10000, alloy: 3};
+  const loot = raidLoot(stock, {...NO_BUILDINGS, quartermaster_warehouse: 5});
+  const raidOk = loot.fuel === Math.floor(10000 * 0.6 * 0.05) && loot.alloy === 0;
+  console.log(`  raid on 10,000 at Warehouse 5 takes ${loot.fuel}; production at level 1: ${productionPerHour(NO_BUILDINGS).fuel} F/h`);
+  assert('buildings.raid', raidOk, `raid took ${loot.fuel}/${loot.alloy}`);
 }
 
 /* -------------------------------------------------------------------------- */
