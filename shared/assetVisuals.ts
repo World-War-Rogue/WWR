@@ -41,12 +41,12 @@ export const ART_STAGES: Readonly<Record<string, readonly StageRank[]>> = {
   m270a2: [1, 10, 20, 30, 40, 50],
   mi35m: [1, 10, 20, 30, 40, 50],
   akinci: [1, 10, 20, 30, 40, 50],
-  k2: [1, 10, 20],
-  ch47f: [1, 10, 20],
-  f15ex: [1, 10, 20],
+  k2: [1, 10, 20, 30, 40, 50],
+  ch47f: [1, 10, 20, 30, 40, 50],
+  f15ex: [1, 10, 20, 30, 40, 50],
   merkava: [1, 10, 20],
   phl191: [1, 10, 20],
-  su57: [1, 10, 20],
+  su57: [1, 10, 20, 30, 40, 50],
 };
 
 function stageFile(assetId: string, stage: StageRank): string {
