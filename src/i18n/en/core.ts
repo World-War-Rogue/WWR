@@ -15,6 +15,7 @@ export const CORE = {
   'menu.squads': 'Task Forces',
   'menu.accessRequests': 'Access requests',
   'menu.signOut': 'Sign out',
+  'menu.account': 'Account',
   'menu.noAlliance': 'No alliance',
   'menu.power': 'Power',
   'menu.commandPost': 'Command Center',

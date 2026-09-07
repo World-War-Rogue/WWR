@@ -2,6 +2,7 @@
 export const SETTINGS = {
   'settings.title': 'Settings',
   'settings.close': 'Close',
+  'settings.signOutBlurb': 'Ends this session on this device and returns to the sign-in screen.',
 
   // Bug reports
   'settings.reportBug': 'Report a bug',

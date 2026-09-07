@@ -182,6 +182,11 @@ export default function LiveApp() {
   >('world');
 
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // The account menu: portrait button top-right of the map and the base,
+  // opening the same PlayerPanel the Command Center holds. Sign out and
+  // Settings lived only inside that sheet, which is two taps deep and not
+  // where anybody looks for either - testers reported "no sign out".
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // What General Rider hears. Screens, sheets and the settings panel are
   // reported here, in one place, as they change.
@@ -285,6 +290,15 @@ export default function LiveApp() {
   // in the same element for the same reason - every screen already renders
   // this, so the panel opens over whatever you were looking at without each
   // branch having to know about it.
+  const signOut = async () => {
+    await api.logout();
+    setMenuOpen(false);
+    setSettingsOpen(false);
+    setSheet(null);
+    setPlayer(null);
+    setBase(null);
+  };
+
   const chat = (
     <>
       <Suspense fallback={null}>
@@ -302,10 +316,61 @@ export default function LiveApp() {
         <Settings
           screen={screen === 'world' ? 'map' : screen}
           onClose={() => setSettingsOpen(false)}
+          onSignOut={signOut}
         />
         </Suspense>
       )}
+      {menuOpen && (
+        <div
+          className="fixed inset-0 z-[55]"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setMenuOpen(false);
+          }}
+        >
+          <div
+            className="absolute right-3 w-64 shadow-2xl"
+            style={{top: 'calc(env(safe-area-inset-top) + 3.5rem)'}}
+          >
+            <PlayerPanel
+              player={player}
+              onOpenProfile={() => {
+                setMenuOpen(false);
+                setViewing(null);
+                setSheet(null);
+                setScreen('profile');
+              }}
+              onOpenCustomize={() => {
+                setMenuOpen(false);
+                setSheet(null);
+                setScreen('customize');
+              }}
+              onOpenAlliance={() => {
+                setMenuOpen(false);
+                setSheet(null);
+                setScreen('alliance');
+              }}
+              onOpenSettings={() => {
+                setMenuOpen(false);
+                setSettingsOpen(true);
+              }}
+              onSignOut={signOut}
+            />
+          </div>
+        </div>
+      )}
     </>
+  );
+
+  const accountButton = (
+    <button
+      onClick={() => setMenuOpen((o) => !o)}
+      title={t('menu.account')}
+      aria-label={t('menu.account')}
+      data-guide="account"
+      className="pointer-events-auto h-9 w-9 shrink-0 overflow-hidden rounded-full border border-neutral-600 bg-black/70 backdrop-blur transition hover:border-orange-500"
+    >
+      <Portrait glyph="star" tint="ash" src={`/api/portrait?name=${encodeURIComponent(player.username)}`} size={34} />
+    </button>
   );
 
   if (screen === 'alliance') {
@@ -371,6 +436,7 @@ export default function LiveApp() {
       <>
         <div className="fixed inset-0">
           <WorldMap
+            account={accountButton}
             onOpenBase={() => setScreen('base')}
             onViewProfile={(name) => {
               setViewing(name);
@@ -484,7 +550,7 @@ export default function LiveApp() {
           ARE the Task Forces, and the assets are behind their own buildings.
           A spacer keeps the clock centred and World map on the right.
         */}
-        <div aria-hidden="true" className="w-24" />
+        <div className="pointer-events-auto flex w-24 items-center">{accountButton}</div>
 
         {/* The clock, between the two buttons - the same strip the map uses. */}
         <div className="pointer-events-auto flex flex-col items-center gap-1">
@@ -536,11 +602,7 @@ export default function LiveApp() {
                 setScreen('alliance');
               }}
               onOpenSettings={() => setSettingsOpen(true)}
-              onSignOut={async () => {
-                await api.logout();
-                setPlayer(null);
-                setBase(null);
-              }}
+              onSignOut={signOut}
             />
           }
         />

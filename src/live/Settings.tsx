@@ -18,9 +18,11 @@ import {buildId, recentErrors} from './recentErrors';
 export default function Settings({
   screen,
   onClose,
+  onSignOut,
 }: {
   screen: ReportScreen;
   onClose: () => void;
+  onSignOut?: () => Promise<void>;
 }) {
   useModal();
   const [body, setBody] = useState('');
@@ -180,6 +182,18 @@ export default function Settings({
             </form>
           )}
         </section>
+
+        {onSignOut && (
+          <section className="border-t border-neutral-900 px-4 py-3">
+            <button
+              onClick={() => void onSignOut()}
+              className="rounded border border-neutral-700 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-neutral-400 hover:border-red-700 hover:text-red-300"
+            >
+              {t('menu.signOut')}
+            </button>
+            <p className="mt-1.5 text-[11px] text-neutral-600">{t('settings.signOutBlurb')}</p>
+          </section>
+        )}
       </div>
     </div>
   );

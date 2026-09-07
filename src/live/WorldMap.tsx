@@ -15,7 +15,7 @@ import {guideEvent} from './guide/bus';
 import {useModal} from './guide/useModal';
 import {SHIELD_WORDING, isShielded} from '../../shared/shields';
 import {remaining} from './BuildingPanel';
-import {type RefObject, useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {type ReactNode, type RefObject, useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ApiError,
   formatDuration,
@@ -584,11 +584,14 @@ export default function WorldMap({
   onViewProfile,
   onOpenBattles,
   onOpenSquads,
+  account,
 }: {
   onOpenBase: () => void;
   onViewProfile: (username: string) => void;
   onOpenBattles: () => void;
   onOpenSquads: () => void;
+  /** The account button (portrait), drawn beside My Base. */
+  account?: ReactNode;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const {w, h} = useCanvasSize(canvasRef);
@@ -1392,12 +1395,15 @@ export default function WorldMap({
         </div>
 
         <div className="flex flex-col items-end gap-2 justify-self-end">
-          <button data-guide="my-base"
-            onClick={onOpenBase}
-            className="pointer-events-auto rounded bg-neutral-800 px-3 py-2 text-sm font-medium text-neutral-100 backdrop-blur transition hover:bg-neutral-700"
-          >
-            {t('nav.myBase')}
-          </button>
+          <div className="flex items-center gap-2">
+            {account}
+            <button data-guide="my-base"
+              onClick={onOpenBase}
+              className="pointer-events-auto rounded bg-neutral-800 px-3 py-2 text-sm font-medium text-neutral-100 backdrop-blur transition hover:bg-neutral-700"
+            >
+              {t('nav.myBase')}
+            </button>
+          </div>
 
           {/*
             Where the squads are.
