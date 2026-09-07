@@ -18,11 +18,11 @@ import {type BaseLevelsView, type OwnedAsset, type Wallet, api} from '../net/api
 import BuildingPanel from './BuildingPanel';
 import {HUB_OF_CATEGORY, categoryBoost, rankCeiling} from '../../shared/buildings';
 import {NO_PACKAGES} from '../../shared/upgrades';
-import {unlockWeekOf, weekStart} from '../../shared/season';
+import {unlockWeekOf} from '../../shared/season';
 import {buildState} from '../../shared/construction';
 import {repairBill} from '../../shared/repair';
 import {type BuildingLevels, NO_BUILDINGS} from '../../shared/buildings';
-import {formatClock, formatGameDate} from '../../shared/gametime';
+import {formatClock} from '../../shared/gametime';
 import {buildingLabel, remaining} from './BuildingPanel';
 import {type SeasonState, ApiError} from '../net/api';
 import {t} from '../i18n';
@@ -110,7 +110,7 @@ export function unlockLabel(assetId: string, levels: BuildingLevels | null, buil
   switch (state.kind) {
     case 'locked':
       return {
-        head: `Opens week ${state.week} · ${formatGameDate(weekStart(state.week))} 00:00 RST`,
+        head: `Opens week ${state.week}`,
         body: 'Blueprint not yet available.',
         canBuild: false,
       };
@@ -377,6 +377,9 @@ export default function Assets({
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
+    // In the order they become available: starters first, then week by
+    // week; naval (no week this season) last. Within a week, by name.
+    const week = (a: Asset) => unlockWeekOf(a.id) ?? 99;
     return ASSETS.filter((a) => {
       if (category !== 'all' && a.category !== category) return false;
       if (!q) return true;
@@ -385,7 +388,7 @@ export default function Assets({
         a.code.toLowerCase().includes(q) ||
         a.operator.toLowerCase().includes(q)
       );
-    });
+    }).sort((a, b) => week(a) - week(b) || a.name.localeCompare(b.name));
   }, [category, query]);
 
   return (
