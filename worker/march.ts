@@ -20,6 +20,7 @@ import {type SideSpec, resolve} from '../shared/combat';
 import {readSquads} from './squads';
 import {readBase} from './buildings';
 import {categoryBoost} from '../shared/buildings';
+import {DRONE_WORDING, droneCount, droneNetworkMultiplier, isDrone, paceMobility} from '../shared/drones';
 
 export interface MarchRow {
   id: string;
@@ -221,6 +222,8 @@ export async function launch(
 
   const units = await unitsOf(db, attackerId, squad);
   if (units.length === 0) return {ok: false, error: `Task Force ${squad} is empty.`};
+  // Nothing leaves the base without a drone. DRONE RULES v1.
+  if (droneCount(units.map((u) => u.assetId)) === 0) return {ok: false, error: DRONE_WORDING.needDrone};
 
   // For the message only. The unique index below is what actually decides -
   // this just gets to say WHICH thing is wrong, since one index rejection can
@@ -234,13 +237,16 @@ export async function launch(
   // Through attributesWith, not attributeAtLevel, so a Propulsion package
   // reaches the march. Before this a player bought Propulsion, watched combat
   // mobility rise, and marched exactly as slowly as before.
-  const slowest = Math.min(
-    ...units.map((u) => {
-      const asset = ASSET_BY_ID[u.assetId];
-      return asset ? attributesWith(asset, u.level, u.packages, u.boost ?? 1).mobility : 5;
-    }),
-  );
-  const seconds = marchSeconds(plotsBetween(from.x, from.y, to.x, to.y), slowest);
+  //
+  // Drones never slow the column - they speed it: the Drone Network
+  // (shared/drones.ts) multiplies the pace, paced on the slowest non-drone.
+  const resolved = units.map((u) => {
+    const asset = ASSET_BY_ID[u.assetId];
+    const a = asset ? attributesWith(asset, u.level, u.packages, u.boost ?? 1) : null;
+    return {id: u.assetId, mobility: a?.mobility ?? 5, detection: a?.detection ?? 5};
+  });
+  const network = droneNetworkMultiplier(resolved.filter((r) => isDrone(r.id)));
+  const seconds = marchSeconds(plotsBetween(from.x, from.y, to.x, to.y), paceMobility(resolved) * network);
   const arrivesAt = now + seconds * 1000;
 
   try {

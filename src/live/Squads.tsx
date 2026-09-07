@@ -25,6 +25,9 @@ import {
   type AssetCategory,
 } from '../../shared/assets';
 import {ApiError, type SquadView, api} from '../net/api';
+import {attributesWith} from '../../shared/upgrades';
+import {categoryBoost} from '../../shared/buildings';
+import {DRONE_WORDING, droneNetworkMultiplier, isDrone} from '../../shared/drones';
 import AssetIcon from './AssetIcon';
 import ForcesTabs from './ForcesTabs';
 import {t} from '../i18n';
@@ -347,6 +350,21 @@ export default function Squads({
                 const used = view.lift.used[name] ?? 0;
                 const filled = (view.squads[name] ?? []).filter(Boolean).length;
                 const out = away.has(name);
+                // The Drone Network: what the drones aboard do to the march and
+                // the armour, from their real stats (rank, packages, building).
+                const droneIds = (view.squads[name] ?? []).filter((id): id is string => !!id && isDrone(id));
+                const network = droneNetworkMultiplier(
+                  droneIds.map((id) => {
+                    const held = view.owned.find((o) => o.assetId === id);
+                    const a = attributesWith(
+                      ASSET_BY_ID[id],
+                      held?.level ?? 1,
+                      held?.packages,
+                      categoryBoost(view.base.levels, 'drone'),
+                    );
+                    return {id, mobility: a.mobility, detection: a.detection};
+                  }),
+                );
                 return (
                   <section
                     key={name}
@@ -384,6 +402,16 @@ export default function Squads({
                         style={{width: `${(filled / SQUAD_SLOTS) * 100}%`}}
                       />
                     </span>
+
+                    <p
+                      className={`mt-2 text-[11px] ${
+                        droneIds.length === 0 ? 'text-orange-300' : 'text-neutral-400'
+                      }`}
+                    >
+                      {droneIds.length === 0
+                        ? DRONE_WORDING.needDrone
+                        : DRONE_WORDING.network(network, droneIds.length)}
+                    </p>
 
                     <div className="mt-3 grid grid-cols-3 gap-2">
                       {Array.from({length: SQUAD_SLOTS}, (_, slot) => {
@@ -470,6 +498,9 @@ export default function Squads({
                           slot: acting.slot + 1,
                         })}
                       </p>
+                      {held.category === 'drone' && (
+                        <p className="mt-1 text-[10px] text-neutral-400">{DRONE_WORDING.slotHint}</p>
+                      )}
                     </div>
                   </div>
 

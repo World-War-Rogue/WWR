@@ -59,6 +59,7 @@ const combat = await import(pathToFileURL(resolvePath(root, 'shared/combat.ts'))
 const board = await import(pathToFileURL(resolvePath(root, 'shared/base.ts')).href);
 const buildings = await import(pathToFileURL(resolvePath(root, 'shared/buildings.ts')).href);
 const upgrades = await import(pathToFileURL(resolvePath(root, 'shared/upgrades.ts')).href);
+const drones = await import(pathToFileURL(resolvePath(root, 'shared/drones.ts')).href);
 
 const {
   ASSETS,
@@ -152,14 +153,14 @@ const power = (ids, level) =>
  * defender. Measuring only one orientation would report the attacker's edge as
  * a property of the category.
  */
-function duel(aIds, bIds, {aLevel = 1, bLevel = 1, seeds = SEEDS} = {}) {
+function duel(aIds, bIds, {aLevel = 1, bLevel = 1, seeds = SEEDS, droneRules = true} = {}) {
   let aWins = 0;
   let bWins = 0;
   let draws = 0;
   for (let s = 1; s <= seeds; s += 1) {
     const first = fight(
-      {name: 'A', units: units(aIds, aLevel)},
-      {name: 'B', units: units(bIds, bLevel)},
+      {name: 'A', units: units(aIds, aLevel), droneRules},
+      {name: 'B', units: units(bIds, bLevel), droneRules},
       s,
     );
     if (first.outcome === 'attacker') aWins += 1;
@@ -167,8 +168,8 @@ function duel(aIds, bIds, {aLevel = 1, bLevel = 1, seeds = SEEDS} = {}) {
     else draws += 1;
 
     const second = fight(
-      {name: 'B', units: units(bIds, bLevel)},
-      {name: 'A', units: units(aIds, aLevel)},
+      {name: 'B', units: units(bIds, bLevel), droneRules},
+      {name: 'A', units: units(aIds, aLevel), droneRules},
       s,
     );
     if (second.outcome === 'attacker') bWins += 1;
@@ -512,7 +513,10 @@ if (wanted('counters')) {
       const r = duel(
         Array(SQUAD_SLOTS).fill(`sim_${a}`),
         Array(SQUAD_SLOTS).fill(`sim_${b}`),
-        {seeds: Math.max(200, SEEDS / 4)},
+        // The six-drone armour cost and the front/rear drone rules are a
+        // different mechanic from the counter; off, so only the multiplier
+        // differs between the two sides.
+        {seeds: Math.max(200, SEEDS / 4), droneRules: false},
       );
       seen[tier].push(r.aRate);
       losses.push({matchup: `${a} vs ${b}`, rate: r.bRate});
@@ -873,6 +877,75 @@ if (wanted('buildings')) {
   const raidOk = loot.fuel === Math.floor(10000 * 0.6 * 0.05) && loot.alloy === 0;
   console.log(`  raid on 10,000 at Warehouse 5 takes ${loot.fuel}; production at level 1: ${productionPerHour(NO_BUILDINGS).fuel} F/h`);
   assert('buildings.raid', raidOk, `raid took ${loot.fuel}/${loot.alloy}`);
+}
+
+/* -------------------------------------------------------------------------- */
+/* 11. Drones - DRONE RULES v1 guardrails                                     */
+/* -------------------------------------------------------------------------- */
+
+if (wanted('drones')) {
+  heading('11. Drones');
+  const {droneNetworkMultiplier, droneArmourMultiplier, droneContribution, DRONE_NETWORK_CAP, paceMobility} = drones;
+  const {attributesWith, NO_PACKAGES} = upgrades;
+  const ids = ['rq4', 'akinci', 'mq9a', 'herontp', 'ch5', 'tb2'];
+  const stats = (id, level, prop = 1) => {
+    const a = attributesWith(ASSET_BY_ID[id], level, {...NO_PACKAGES, propulsion: prop});
+    return {id, mobility: a.mobility, detection: a.detection};
+  };
+
+  // 1. Order-independent: any permutation gives the same multiplier.
+  const set = ids.map((id) => stats(id, 1));
+  const m1 = droneNetworkMultiplier(set);
+  const m2 = droneNetworkMultiplier([...set].reverse());
+  const m3 = droneNetworkMultiplier([set[3], set[0], set[5], set[1], set[4], set[2]]);
+  assert('drones.order', m1 === m2 && m1 === m3, `permutations differ: ${m1} ${m2} ${m3}`);
+
+  // 2. Propulsion strictly raises the multiplier below the cap.
+  let monotone = true;
+  for (let p = 1; p < 10; p += 1) {
+    const a = droneNetworkMultiplier([stats('rq4', 10, p)]);
+    const b = droneNetworkMultiplier([stats('rq4', 10, p + 1)]);
+    if (!(b > a)) monotone = false;
+  }
+  assert('drones.propulsion', monotone, 'a Propulsion level did not raise the Network');
+
+  // 3. The caps hold for the strongest legal set.
+  const maxed = ids.map((id) => stats(id, 50, 50));
+  const top = droneNetworkMultiplier(maxed);
+  console.log(`  rq4 alone: x${droneNetworkMultiplier([stats('rq4', 1)]).toFixed(4)}; six rank-1: x${m1.toFixed(4)}; six maxed: x${top.toFixed(4)}; armour x${droneArmourMultiplier(6)}`);
+  assert('drones.cap', top <= DRONE_NETWORK_CAP && droneArmourMultiplier(6) >= 0.58 - 1e-9, `network ${top}, armour ${droneArmourMultiplier(6)}`);
+  assert('drones.pace', paceMobility([{id: 'm1a2', mobility: 4}, {id: 'rq4', mobility: 9}]) === 4 && paceMobility([{id: 'rq4', mobility: 9}]) === 9, 'pace picked a drone with ground present');
+
+  // 4/5/6. Position: a front drone strikes before round 1 and dies sooner; a
+  // rear drone finishes with more HP than the same drone in the centre.
+  const line = ['m1a2', 'leclerc', 'm270a2', 'mi35m', 'f35a'];
+  const withDrone = (slot) => {
+    const units = line.map((assetId, i) => ({assetId, level: 20, slot: i < slot ? i : i + 1}));
+    units.push({assetId: 'rq4', level: 20, slot});
+    return {name: 'x', units};
+  };
+  const foe = {name: 'y', units: line.concat(['rq4']).map((assetId, i) => ({assetId, level: 20, slot: i}))};
+  let frontFirst = 0;
+  let rearHp = 0;
+  let centreHp = 0;
+  let frontDead = 0;
+  let centreDead = 0;
+  const N = 400;
+  for (let seed = 1; seed <= N; seed += 1) {
+    const f = fight(withDrone(0), foe, seed);
+    const c = fight(withDrone(2), foe, seed);
+    const r = fight(withDrone(5), foe, seed);
+    if (f.rounds[0]?.index === 0 && f.rounds[0].attackerDamage > 0) frontFirst += 1;
+    const drone = (res) => res.attacker.units.find((u) => u.assetId === 'rq4');
+    rearHp += drone(r).remaining;
+    centreHp += drone(c).remaining;
+    frontDead += drone(f).damaged ? 1 : 0;
+    centreDead += drone(c).damaged ? 1 : 0;
+  }
+  console.log(`  front drone opened ${pct(frontFirst / N)} of fights; broken ${pct(frontDead / N)} (centre ${pct(centreDead / N)}); rear HP left ${pct(rearHp / N)} vs centre ${pct(centreHp / N)}`);
+  assert('drones.front', frontFirst === N && frontDead >= centreDead, 'front drone did not open first or did not die sooner');
+  assert('drones.rear', rearHp > centreHp, 'rear drone did not outlast the centre');
+  console.log(`  contribution rq4@1 ${droneContribution(5, 8).toFixed(4)}`);
 }
 
 /* -------------------------------------------------------------------------- */

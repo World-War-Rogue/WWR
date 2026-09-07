@@ -17,6 +17,14 @@ import {
 } from './assets';
 import type {AssetRole} from './assets';
 import {type Packages, NO_PACKAGES, assetPowerWith, attributesWith} from './upgrades';
+import {
+  FRONT_DRONE_DRAW,
+  FRONT_DRONE_HP,
+  FRONT_DRONE_WAVE,
+  REAR_DRONE_DAMAGE,
+  REAR_DRONE_HP,
+  droneArmourMultiplier,
+} from './drones';
 
 /* -------------------------------------------------------------------------- */
 /* Tuning - every number is provisional and named; docs/GAME-MATH-v1.md      */
@@ -256,6 +264,12 @@ export interface SideSpec {
    * arena passes 1. The resolver never reads a building.
    */
   modifier?: number;
+  /**
+   * Harness only. The isolated counter test sets this false so six synthetic
+   * drones are not also paying the six-drone armour cost, which is a
+   * different rule from the one being measured. Every real fight leaves it.
+   */
+  droneRules?: boolean;
 }
 
 interface Unit {
@@ -274,6 +288,7 @@ interface Unit {
   role: AssetRole;
   /** Hit this round already - a strike in the centre punishes that. */
   hitThisRound: boolean;
+  drone: boolean;
 }
 
 export interface CombatUnitResult {
@@ -337,15 +352,24 @@ function rng(seed: number): () => number {
 
 function build(spec: SideSpec): Unit[] {
   const units: Unit[] = [];
+  // Every drone carried costs the whole Task Force armour - the escort is
+  // stretched thin covering them. Drones pay it too. DRONE RULES v1 §2.
+  const rules = spec.droneRules ?? true;
+  const drones = spec.units.filter((u) => ASSET_BY_ID[u.assetId]?.category === 'drone').length;
+  const droneArmour = rules ? droneArmourMultiplier(drones) : 1;
   spec.units.forEach((u, i) => {
     const asset = ASSET_BY_ID[u.assetId];
     if (!asset) return;
     const a = attributesWith(asset, u.level, u.packages ?? NO_PACKAGES, u.boost ?? 1);
     const position = positionOfSlot(u.slot ?? 2);
     const pos = POSITION[position];
-    const armour = a.armour * (1 + pos.armour);
+    const drone = asset.category === 'drone';
+    const armour = a.armour * (1 + pos.armour) * droneArmour;
     const detection = a.detection * (1 + pos.detection);
-    const maxHp = HP_SCALE * (HP_BASE + HP_PER_POINT * a.firepower + HP_PER_ARMOUR * armour);
+    // A front drone is fragile by choice; a rear one is built to last. §3-4.
+    const droneHp =
+      drone && rules ? (position === 'front' ? FRONT_DRONE_HP : position === 'rear' ? REAR_DRONE_HP : 1) : 1;
+    const maxHp = HP_SCALE * (HP_BASE + HP_PER_POINT * a.firepower + HP_PER_ARMOUR * armour) * droneHp;
     const frac = Math.max(0, Math.min(1, u.hpFraction ?? 1));
     units.push({
       id: `${u.assetId}#${i}`,
@@ -362,6 +386,7 @@ function build(spec: SideSpec): Unit[] {
       position,
       role: asset.role,
       hitThisRound: false,
+      drone,
     });
   });
   return units;
@@ -389,7 +414,13 @@ function spottingOf(mine: Unit[], theirs: Unit[]): number {
     RECON_SPOTTING_CAP,
     mine.filter((u) => u.role === 'recon' && u.position === 'centre').length * RECON_CENTRE_SPOTTING,
   );
-  return Math.max(SPOTTING_FLOOR, Math.min(1, SPOTTING_BASE + SPOTTING_DELTA * delta + recon));
+  const seen = Math.max(SPOTTING_FLOOR, Math.min(1, SPOTTING_BASE + SPOTTING_DELTA * delta + recon));
+  // No drone, no eyes forward: a side without a living drone never spots
+  // better than base, whatever its detection. That is how a drone-less Task
+  // Force defends at home - it cannot march at all. Decided with DRONE RULES
+  // v1; the floor was tried first and broke the counter ring (six drones beat
+  // rotary 88%, because rotary could not see them).
+  return mine.some((u) => u.drone && u.hp > 0) ? seen : Math.min(seen, SPOTTING_BASE);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -401,7 +432,8 @@ function pickTarget(enemies: Unit[]): Unit | null {
   let bestScore = -1;
   for (const e of enemies) {
     const lost = 1 - e.hp / e.maxHp;
-    const score = POSITION[e.position].targetWeight * (1 + TARGET_DAMAGED * lost);
+    const draw = e.drone && e.position === 'front' ? FRONT_DRONE_DRAW : 1;
+    const score = POSITION[e.position].targetWeight * draw * (1 + TARGET_DAMAGED * lost);
     if (score > bestScore || (score === bestScore && best && e.id < best.id)) {
       best = e;
       bestScore = score;
@@ -418,6 +450,8 @@ function shot(
   modifier: number,
   exposure: number,
   roll: () => number,
+  /** The opening wave fires at a share of a normal shot. 1 for a normal one. */
+  scale = 1,
 ): number {
   const enemyRange = avg(enemies.map((u) => u.range));
   const rangeMult = Math.max(RANGE_MIN, Math.min(RANGE_MAX, 1 + RANGE_DELTA * (shooter.range - enemyRange)));
@@ -445,8 +479,13 @@ function shot(
       ? 1 - SCREEN_FRONT_PROTECTION
       : 1;
 
+  // A rear drone shoots softer for lasting longer. §4.
+  const droneAttack = shooter.drone && shooter.position === 'rear' ? REAR_DRONE_DAMAGE : 1;
+
   const damage =
     DAMAGE_SCALE *
+    scale *
+    droneAttack *
     shooter.firepower *
     rangeMult *
     spotting *
@@ -498,6 +537,49 @@ export function resolve(
   if (expD > 1) notes.push(`${defenderSpec.name} left a band uncovered.`);
   let spotA = SPOTTING_BASE;
   let spotD = SPOTTING_BASE;
+
+  // The opening wave: every front drone fires one shot before round 1, at
+  // FRONT_DRONE_WAVE of a normal one, before anything else moves. Attacker's
+  // drones first, then the defender's; a drone broken by the other side's
+  // wave still fires nothing. DRONE RULES v1 §3.
+  {
+    spotA = spottingOf(alive(A), alive(D));
+    spotD = spottingOf(alive(D), alive(A));
+    let waveA = 0;
+    let waveD = 0;
+    const wave = (side: 'A' | 'D') => {
+      const mine = side === 'A' ? A : D;
+      for (const u of mine) {
+        if (u.hp <= 0 || !u.drone || u.position !== 'front') continue;
+        const enemies = alive(side === 'A' ? D : A);
+        const target = pickTarget(enemies);
+        if (!target) return;
+        const dealt = shot(
+          u,
+          target,
+          enemies,
+          side === 'A' ? spotA : spotD,
+          ((side === 'A' ? attackerSpec.modifier : defenderSpec.modifier) ?? 1) * (side === 'A' ? swingA : swingD),
+          side === 'A' ? expD : expA,
+          roll,
+          FRONT_DRONE_WAVE,
+        );
+        if (side === 'A') waveA += dealt;
+        else waveD += dealt;
+      }
+    };
+    wave('A');
+    wave('D');
+    if (waveA > 0 || waveD > 0) {
+      for (const u of [...A, ...D]) u.hitThisRound = false;
+      rounds.push({
+        index: 0,
+        summary: 'Opening wave: drones strike first.',
+        attackerDamage: Math.round(waveA),
+        defenderDamage: Math.round(waveD),
+      });
+    }
+  }
 
   for (let r = 1; r <= ROUNDS; r += 1) {
     const liveA = alive(A);

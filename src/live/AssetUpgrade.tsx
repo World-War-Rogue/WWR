@@ -18,6 +18,7 @@
  */
 import {useState} from 'react';
 import {assetArtUrl, assetStageArtUrl, nextVisualStage, visualStage} from '../../shared/assetVisuals';
+import {DRONE_WORDING} from '../../shared/drones';
 
 import {
   type Asset,
@@ -440,7 +441,11 @@ export default function AssetUpgrade({
                     ? 'Not enough to cover that'
                     : null
               }
-              note={ATTR_LABEL[PACKAGE_ATTRIBUTE[key]]}
+              note={
+                key === 'propulsion' && asset.category === 'drone'
+                  ? `${ATTR_LABEL[PACKAGE_ATTRIBUTE[key]]} · ${DRONE_WORDING.propulsion}`
+                  : ATTR_LABEL[PACKAGE_ATTRIBUTE[key]]
+              }
               explain={{
                 what:
                   `Specialises this asset: ${PACKAGE_LABEL[key]} adds to ` +
