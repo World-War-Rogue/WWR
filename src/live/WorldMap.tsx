@@ -155,10 +155,28 @@ function drawNameplate(
   let label = base.username;
   let textWidth = ctx.measureText(label).width;
   if (textWidth > textBudget) {
-    while (label.length > 1 && ctx.measureText(`${label}\u2026`).width > textBudget) {
-      label = label.slice(0, -1);
+    // Cut from the middle, not the end. Two hundred farm bots per server are
+    // all "Lieutenant" + six digits, and cutting from the end turned every
+    // one of them into "Lieuten…" - a map of identical labels. The tail is
+    // what tells names apart (the digits, or failing that the last few
+    // letters), so the tail stays and the head gives way.
+    const tailMatch = /\d{3,}$/.exec(label);
+    const tail = tailMatch ? tailMatch[0].slice(-6) : label.slice(-3);
+    let head = label.slice(0, label.length - tail.length);
+    while (head.length > 0 && ctx.measureText(`${head}\u2026${tail}`).width > textBudget) {
+      head = head.slice(0, -1);
     }
-    label = `${label}\u2026`;
+    if (head.length > 0) {
+      label = `${head}\u2026${tail}`;
+    } else {
+      // Not even one leading letter fits beside the tail: fall back to the
+      // tail alone, and cut that from the end if it still will not fit.
+      label = tail;
+      while (label.length > 1 && ctx.measureText(`\u2026${label}`).width > textBudget) {
+        label = label.slice(1);
+      }
+      label = `\u2026${label}`;
+    }
     textWidth = ctx.measureText(label).width;
   }
 
