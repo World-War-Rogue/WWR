@@ -45,7 +45,7 @@ export const ART_STAGES: Readonly<Record<string, readonly StageRank[]>> = {
   ch47f: [1, 10, 20, 30, 40, 50],
   f15ex: [1, 10, 20, 30, 40, 50],
   merkava: [1, 10, 20],
-  phl191: [1, 10, 20],
+  phl191: [1, 10, 20, 30, 40, 50],
   su57: [1, 10, 20, 30, 40, 50],
 };
 
