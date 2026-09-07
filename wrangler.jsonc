@@ -40,7 +40,7 @@
 
   "observability": {
     "enabled": true
-  }
+  },
 
   // The test realm: a second Worker with its own database, so bot raids and
   // reset drills never touch the server real testers are on. Deploy with
