@@ -293,8 +293,22 @@ export default function AssetUpgrade({
   const rankStep = rankCost(held.level, held.level + 1);
   const canAfford = (cost: number) => wallet.credits + wallet.tokens >= cost;
 
+  // Tap the dark outside the sheet, or press Escape, to close it.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/75 p-4 sm:items-center">
+    <div
+      className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/75 p-4 sm:items-center"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div className="w-full max-w-md rounded-lg border border-neutral-800 bg-neutral-950 p-4 shadow-2xl">
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
