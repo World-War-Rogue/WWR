@@ -50,9 +50,12 @@ export const GUIDE_STEPS: GuideStep[] = [
 ];
 
 /** What Rider says when a building is opened out of order: that building's line. */
-export const BUILDING_LINE: Record<string, string> = Object.fromEntries(
-  GUIDE_STEPS.filter((s) => s.advance.startsWith('open:building:')).map((s) => [s.advance.slice('open:building:'.length), s.say]),
-);
+export const BUILDING_LINE: Record<string, string> = {};
+for (const s of GUIDE_STEPS) {
+  // The FIRST step for a building is its introduction; a later step that
+  // sends the player back there (the Depot at 31) is not.
+  if (s.advance.startsWith('open:building:')) BUILDING_LINE[s.advance.slice('open:building:'.length)] ??= s.say;
+}
 
 /** Tips mode: once each, after the walkthrough or alongside it. */
 export const TIPS: Record<string, (v: Record<string, string | number>) => string> = {

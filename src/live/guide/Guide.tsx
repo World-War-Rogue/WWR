@@ -14,7 +14,10 @@ export default function Guide() {
   const [state, setState] = useState<SeasonState['guide'] | null>(null);
   const [aside, setAside] = useState<string | null>(null);
   const [tip, setTip] = useState<string | null>(null);
-  const [hidden, setHidden] = useState(false);
+  // Closed with X: the bubble folds down to the portrait until the step
+  // changes or the portrait is tapped, so it never sits over the Task Force
+  // slabs and the chat bar it is drawn beside.
+  const [collapsed, setCollapsed] = useState(false);
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -41,6 +44,7 @@ export default function Guide() {
     if (!s) return;
     const next = s.step + 1;
     setState({...s, step: next});
+    setCollapsed(false);
     save({step: next});
   };
 
@@ -52,7 +56,7 @@ export default function Guide() {
             .season()
             .then((r) => {
               setState(r.guide);
-              setHidden(false);
+              setCollapsed(false);
             })
             .catch(() => undefined);
           return;
@@ -90,11 +94,12 @@ export default function Guide() {
     [],
   );
 
-  if (!state || !state.enabled || hidden) return null;
+  if (!state || !state.enabled) return null;
   const step = state.completed ? null : GUIDE_STEPS.find((x) => x.id === state.step) ?? null;
   const text = tip ?? aside ?? step?.say ?? null;
   if (!text) return null;
   const highlight = !tip && !aside ? step?.highlight : undefined;
+  const folded = collapsed && !tip && !aside;
 
   return (
     <>
@@ -102,9 +107,14 @@ export default function Guide() {
         <style>{`[data-guide="${highlight}"]{outline:2px solid rgba(103,232,249,.9);outline-offset:2px;animation:wwr-guide-pulse 1.2s ease-in-out infinite}@keyframes wwr-guide-pulse{0%,100%{outline-color:rgba(103,232,249,.9)}50%{outline-color:rgba(103,232,249,.2)}}`}</style>
       )}
       <div className="pointer-events-none fixed inset-x-2 bottom-[calc(3.25rem+env(safe-area-inset-bottom))] z-[60] flex items-end gap-2">
-        <div className="pointer-events-auto flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 border-cyan-400/80 bg-neutral-950 font-semibold text-cyan-200 shadow-lg" title="Admiral Rider">
+        <button
+          onClick={() => setCollapsed((c) => !c)}
+          className="pointer-events-auto flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 border-cyan-400/80 bg-neutral-950 font-semibold text-cyan-200 shadow-lg"
+          title="Admiral Rider"
+        >
           AR
-        </div>
+        </button>
+        {folded ? null : (
         <div className="pointer-events-auto max-w-md flex-1 rounded-lg border border-cyan-800/70 bg-neutral-950/95 px-3 py-2 shadow-lg backdrop-blur">
           <div className="flex items-start justify-between gap-2">
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-400">Admiral Rider</p>
@@ -112,7 +122,7 @@ export default function Guide() {
               onClick={() => {
                 if (tip) setTip(null);
                 else if (aside) setAside(null);
-                else setHidden(true);
+                else setCollapsed(true);
               }}
               className="text-neutral-500 hover:text-neutral-200"
               aria-label="Dismiss"
@@ -149,6 +159,7 @@ export default function Guide() {
             <p className="mt-1 text-[10px] text-neutral-500">Back to where we were when you close this.</p>
           )}
         </div>
+        )}
       </div>
     </>
   );
