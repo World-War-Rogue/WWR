@@ -21,6 +21,7 @@ import {
 } from '../../shared/buildings';
 import {formatClock} from '../../shared/gametime';
 import {buildingLabel, remaining} from './BuildingPanel';
+import WalletLine from './WalletLine';
 
 export function StockPanel({base, only}: {base: BaseLevelsView; only?: ResourceKind}) {
   const safe = protectedShare(base.levels);
@@ -113,12 +114,7 @@ export function ResourceShop({
     <section className="rounded border border-neutral-800 bg-neutral-900/40 p-3">
       <div className="flex items-baseline justify-between">
         <h3 className="text-sm font-semibold text-neutral-100">Supplies</h3>
-        <span className="font-mono text-[11px]">
-          <span className="text-emerald-300">{base.wallet.credits.toLocaleString()}</span>
-          <span className="text-neutral-700"> cr</span>
-          <span className="ml-2 text-amber-300">{base.wallet.tokens.toLocaleString()}</span>
-          <span className="text-neutral-700"> tk</span>
-        </span>
+        <WalletLine credits={base.wallet.credits} tokens={base.wallet.tokens} />
       </div>
       <p className="mt-1 text-[11px] text-neutral-500">
         One Credit or Token buys a fixed amount. Credits are spent first. Daily limits reset at

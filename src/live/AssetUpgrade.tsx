@@ -39,6 +39,7 @@ import {
   systemIntegration,
 } from '../../shared/upgrades';
 import {ApiError, type OwnedAsset, type Wallet, api} from '../net/api';
+import WalletLine from './WalletLine';
 
 const SEASON = 1;
 
@@ -52,12 +53,7 @@ const ATTR_LABEL: Record<string, string> = {
 
 function Money({tokens, credits}: Wallet) {
   return (
-    <span className="font-mono text-[11px]">
-      <span className="text-emerald-300">{credits.toLocaleString()}</span>
-      <span className="text-neutral-700"> cr</span>
-      <span className="ml-2 text-amber-300">{tokens.toLocaleString()}</span>
-      <span className="text-neutral-700"> tk</span>
-    </span>
+    <WalletLine credits={credits} tokens={tokens} />
   );
 }
 
@@ -555,7 +551,7 @@ export default function AssetUpgrade({
         >
           {held.packageCredits === 0
             ? 'Strip packages · nothing fitted yet'
-            : `Strip packages · refunds ${held.packageCredits.toLocaleString()} cr`}
+            : `Strip packages · refunds ${held.packageCredits.toLocaleString()} Credits`}
           <span className="block text-[10px] text-neutral-700">
             Takes all four back to 1 and refunds the whole cost in Command Credits, whatever
             you paid in. Service Rank is untouched.

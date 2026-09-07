@@ -9,6 +9,10 @@ export const CORE = {
   'nav.back': 'Back',
   'nav.close': 'Close',
 
+  // The two currencies, as shown beside a balance
+  'wallet.credits': 'Credits',
+  'wallet.tokens': 'Tokens',
+
   // Player menu
   'menu.viewProfile': 'View full profile',
   'menu.customise': 'Customise base',

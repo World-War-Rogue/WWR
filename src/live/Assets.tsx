@@ -30,6 +30,7 @@ import {taskForceName} from './taskForce';
 import {ASSETS, ASSET_BY_ID, ATTRIBUTE_MAX, type Asset, type AssetCategory, CATEGORY_LABEL, ROLE_BLURB, ROLE_LABEL, SQUAD_NAMES, pointsSpent, assetLabel, SEASON_ASSETS} from '../../shared/assets';
 import {counterWeb} from '../../shared/combat';
 import {PACKAGE_KEYS} from '../../shared/upgrades';
+import WalletLine from './WalletLine';
 
 /** The Season 1 tabs. Naval is not in the game until Season 3. */
 const CATEGORIES: AssetCategory[] = ['armour', 'rotary', 'fixed_wing', 'artillery', 'drone'];
@@ -390,12 +391,7 @@ export default function Assets({
         <ForcesTabs active="assets" onChange={(tab) => tab === 'squads' && onShowSquads()} />
         <span className="text-[12px] text-neutral-500">{shown.length} of {SEASON_ASSETS.length}</span>
         {wallet && (
-          <span className="font-mono text-[11px]">
-            <span className="text-emerald-300">{wallet.credits.toLocaleString()}</span>
-            <span className="text-neutral-700"> cr</span>
-            <span className="ml-2 text-amber-300">{wallet.tokens.toLocaleString()}</span>
-            <span className="text-neutral-700"> tk</span>
-          </span>
+          <WalletLine credits={wallet.credits} tokens={wallet.tokens} />
         )}
         <input
           value={query}

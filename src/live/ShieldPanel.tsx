@@ -8,6 +8,7 @@ import {type SeasonState, type Wallet, api, ApiError} from '../net/api';
 import {SHIELD_OPTIONS, SHIELD_WORDING} from '../../shared/shields';
 import {formatClock} from '../../shared/gametime';
 import {remaining} from './BuildingPanel';
+import WalletLine from './WalletLine';
 
 export default function ShieldPanel({
   season1,
@@ -52,9 +53,7 @@ export default function ShieldPanel({
       <div className="flex items-baseline justify-between">
         <h3 className="text-sm font-semibold text-neutral-100">{paidOnly ? 'Shields' : 'Protection'}</h3>
         {!paidOnly && (
-          <span className="font-mono text-[11px] text-neutral-400">
-            {wallet.credits.toLocaleString()} cr · {wallet.tokens.toLocaleString()} tk
-          </span>
+          <WalletLine credits={wallet.credits} tokens={wallet.tokens} muted />
         )}
       </div>
 
