@@ -16,8 +16,11 @@ import {ApiError, type ArenaAttempt, type ArenaView, api} from '../net/api';
 import {remaining} from './BuildingPanel';
 import {t} from '../i18n';
 import {taskForceName} from './taskForce';
+import {useModal} from './guide/useModal';
 
 export default function Arena({onClose}: {onClose: () => void}) {
+  // A full screen: General Rider stays out of the way while it is open.
+  useModal();
   const [view, setView] = useState<ArenaView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
