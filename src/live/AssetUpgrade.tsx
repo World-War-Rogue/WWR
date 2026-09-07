@@ -89,6 +89,7 @@ function Track({
   onBuy,
   note,
   explain,
+  permanent = false,
 }: {
   label: string;
   rank: number;
@@ -100,8 +101,11 @@ function Track({
   onBuy: () => void;
   note?: string;
   explain: {what: string; gain: string};
+  /** Shown in the confirmation. Rank is permanent; a package can be stripped. */
+  permanent?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   return (
     <div className="border-t border-neutral-900 py-2">
       <div className="flex items-center gap-3">
@@ -126,13 +130,51 @@ function Track({
           {reason && <p className="text-[10px] text-amber-500/80">{reason}</p>}
         </div>
         <button
-          onClick={onBuy}
-          disabled={busy || !!reason || !affordable}
+          onClick={() => setConfirming(true)}
+          disabled={busy || !!reason || !affordable || confirming}
           className="shrink-0 rounded border border-neutral-700 px-3 py-1.5 text-xs font-semibold text-neutral-200 transition hover:border-orange-500 hover:text-orange-200 disabled:border-neutral-900 disabled:text-neutral-700 disabled:hover:border-neutral-900"
         >
-          {reason ? '—' : `+1 · ${cost.toLocaleString()}`}
+          {reason ? '—' : 'Upgrade'}
         </button>
       </div>
+
+      {confirming && (
+        // The cost, what it gives, and what it means - then the button. A
+        // rank is for good; nobody should find that out afterwards.
+        <div className="mt-2 rounded border border-orange-800 bg-neutral-950 p-3">
+          <p className="text-sm font-semibold text-neutral-100">
+            {label} {rank} → {rank + 1}
+          </p>
+          <p className="mt-1 text-[11px] text-neutral-300">
+            Cost: <span className="font-mono text-amber-300">{cost.toLocaleString()}</span> Credits or Tokens
+            (Credits spent first).
+          </p>
+          <p className="mt-0.5 text-[11px] text-emerald-400">{explain.gain}</p>
+          <p className="mt-1 text-[11px] font-semibold text-orange-300">
+            {permanent
+              ? 'This is permanent and cannot be undone.'
+              : 'A package can be stripped later for a refund in Credits; the rank it sits on cannot.'}
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button
+              onClick={() => {
+                setConfirming(false);
+                onBuy();
+              }}
+              disabled={busy}
+              className="flex-1 rounded border border-orange-600 bg-orange-950/40 px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-orange-200 hover:bg-orange-900/40 disabled:opacity-50"
+            >
+              Confirm upgrade
+            </button>
+            <button
+              onClick={() => setConfirming(false)}
+              className="rounded border border-neutral-700 px-3 py-1.5 text-xs uppercase tracking-wider text-neutral-300"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {open && (
         <div className="mt-1.5 rounded border border-neutral-800 bg-neutral-900/40 px-2.5 py-2">
@@ -405,6 +447,7 @@ export default function AssetUpgrade({
 
         <Track
           label="Service Rank"
+          permanent
           rank={held.level}
           ceiling={cap}
           cost={rankStep}

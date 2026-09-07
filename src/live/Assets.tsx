@@ -111,7 +111,7 @@ export function unlockLabel(assetId: string, levels: BuildingLevels | null, buil
     case 'locked':
       return {
         head: `Opens week ${state.week}`,
-        body: 'Blueprint not yet available.',
+        body: 'Unlocks soon.',
         canBuild: false,
       };
     case 'needs_level':
@@ -162,12 +162,12 @@ function Card({
     : 0;
   return (
     <article
-      onClick={!held && onView ? onView : undefined}
+      onClick={held ? onUpgrade ?? undefined : onView ?? undefined}
       className={`relative rounded border p-3 ${
         asset.draftable === false
           ? 'border-neutral-900 bg-neutral-950/60 opacity-70'
           : held
-            ? 'border-neutral-800 bg-neutral-950'
+            ? 'cursor-pointer border-neutral-800 bg-neutral-950 hover:border-orange-700'
             : 'cursor-pointer border-neutral-900 bg-neutral-950/70 hover:border-neutral-700'
       }`}
     >
@@ -269,7 +269,10 @@ function Card({
 
       {held && onUpgrade && (
         <button
-          onClick={onUpgrade}
+          onClick={(e) => {
+            e.stopPropagation();
+            onUpgrade();
+          }}
           className="mt-2 flex w-full items-center gap-2 rounded border border-neutral-800 bg-neutral-900/50 px-2 py-1.5 text-left transition hover:border-orange-600"
         >
           <span className="text-[10px] uppercase tracking-wider text-neutral-600">Rank</span>
