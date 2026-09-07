@@ -277,4 +277,6 @@ Chats get lost; the repo does not. Every commit carries its session link in
   https://claude.ai/code/session_011WwhehTcZ3zWnFfzjzUgiM
 - 2026-09-07 QA fix pass (General Rider, composer clipping, account menu,
   blank map, Skip tour, building tap, nameplates, Credits/Tokens, upgrade
-  dead ends): https://claude.ai/code/session_01Wnmkfu9Lof4ogvFTtYbqyg
+  dead ends), progression registry, Combat Systems, dev tools, Season 1
+  live ops (Daily Operations, map exercises, Arena A, Arena Squad and
+  watchable battles, Warfront): https://claude.ai/code/session_01Wnmkfu9Lof4ogvFTtYbqyg

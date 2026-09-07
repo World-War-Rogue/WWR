@@ -46,7 +46,11 @@ Each item is one or more commits; Claude updates this file in the same commit.
 - [x] Daily Operations: six lanes, 4-of-6 Cache, neutral contract for solo Cooperation
 - [x] Daily map exercises: five NPC target types spawned per player per day (signal_relay, abandoned_convoy, fuel_silo, factory_probe, disabled_mech_patrol) — provisional reward amounts in shared/exercises.ts
 - [x] Arena phase A (weeks 1–4): benchmark squad, three attempts a day, daily/weekly leaderboards, Monday 00:00 RST settlement (d5ad37d; migration 0034). Provisional: Full Engagement bonus 40 Credits, bootstrap benchmark = starters at the week's readiness band, alliance Arena Merit deferred until a treasury exists
-- [ ] Dominion Warfront: Assault / Operations / Support metrics, caps, alliance score, treasury
+- [x] Arena Squad, Dominion Warden, watchable battles (aed58b6; migration 0036): saved six-slot Arena loadout with its own Combat Systems lanes; the benchmark worn as one war machine with six hardpoints; resolver event log; replay view with Pause / 1×2× / Skip / Watch again; persistent reports in Reports → Arena. Placeholder Warden art labelled "temp art" — real art per docs/CHATGPT-DOMINION-WARDEN-ART-BRIEF.md [?] ChatGPT
+- [x] Dominion Warfront (d0b1606; migration 0037): Assault / Operations / Support metrics and caps, 48-hour membership clock, alliance score with active-member and coordinated-op bonuses, Monday settlement into the Operations Treasury and member grants, screen from the TOC. Provisional: exercise points (battle 60 / hold 45), reinforcement 60 Support. Coordinated ops and alliance-operation objectives score once alliance operations exist
+- [ ] Arena Alliance Merit (weekly Arena points per member rank → treasury grant; needs 5 eligible members with 3 attempts) — treasury exists now; design table in docs/SEASON-1-LIVE-OPS-DESIGN-v1.md §Arena Alliance Merit (rank-1 points value is cut off in the doc [?] ChatGPT)
+- [ ] Dominion Impact: the separate individual honor metric (capped damage credit + elite completions → badges/cosmetics/resources) — no numbers yet [?] ChatGPT
+- [ ] Treasury spend path (posted alliance operations only) — lands with alliance operations
 - [ ] Arena phase B (weeks 5–10): head-to-head ladder
 - [ ] Small alliance operations (convoy_escort, relay_triangulation, factory_sabotage)
 - [ ] Weekly settlement job, "Calculating rewards" state
