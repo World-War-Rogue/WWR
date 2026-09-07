@@ -25,7 +25,7 @@ import {
   validName,
   validTag,
 } from '../shared/alliances';
-import {BUILDING_KINDS, type BuildingKind, isBuildingKind, totalPower} from './game';
+import {powerOf} from './power';
 
 export interface AllianceRow {
   id: string;
@@ -110,38 +110,19 @@ export async function rosterOf(db: D1Database, allianceId: string): Promise<Memb
   const rows = members.results ?? [];
   if (rows.length === 0) return [];
 
-  const buildings = await db
-    .prepare(
-      `SELECT b.player_id AS id, b.kind AS kind, b.level AS level
-         FROM buildings b
-         JOIN alliance_members m ON m.player_id = b.player_id
-        WHERE m.alliance_id = ?1`,
-    )
-    .bind(allianceId)
-    .all<{id: string; kind: string; level: number}>();
-
-  const levelsByPlayer = new Map<string, Record<BuildingKind, number>>();
-  for (const row of rows) {
-    levelsByPlayer.set(
-      row.id,
-      Object.fromEntries(BUILDING_KINDS.map((k) => [k, 0])) as Record<BuildingKind, number>,
-    );
-  }
-  for (const b of buildings.results ?? []) {
-    if (isBuildingKind(b.kind)) {
-      const levels = levelsByPlayer.get(b.id);
-      if (levels) levels[b.kind] = b.level;
-    }
-  }
+  const powers = await powerOf(
+    db,
+    rows.map((r) => r.id),
+  );
 
   return rows
     .map((row) => {
-      const levels = levelsByPlayer.get(row.id)!;
+      const mine = powers.get(row.id) ?? {power: 0, commandCenter: 1};
       return {
         username: row.username,
         rank: row.rank,
-        power: totalPower(levels),
-        commandPost: levels.command_post,
+        power: mine.power,
+        commandPost: mine.commandCenter,
         joinedAt: row.joined_at,
         portrait: {glyph: row.glyph, tint: row.tint, hasImage: row.image === 1},
       };

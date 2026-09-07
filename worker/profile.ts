@@ -11,12 +11,7 @@
  * last signed in, and any location beyond the flag they chose to fly. A profile
  * answers "who am I looking at and can I take them", not "who is this person".
  */
-import {
-  BUILDING_KINDS,
-  type BuildingKind,
-  isBuildingKind,
-  totalPower,
-} from './game';
+import {powerOf} from './power';
 import {
   DEFAULT_PORTRAIT,
   isPortraitGlyph,
@@ -105,17 +100,7 @@ export async function loadProfile(
     .first<Row>();
   if (!row) return null;
 
-  const buildingRows = await db
-    .prepare(`SELECT kind, level FROM buildings WHERE player_id = ?1`)
-    .bind(row.id)
-    .all<{kind: string; level: number}>();
-
-  const levels = Object.fromEntries(
-    BUILDING_KINDS.map((k) => [k, 0]),
-  ) as Record<BuildingKind, number>;
-  for (const b of buildingRows.results ?? []) {
-    if (isBuildingKind(b.kind)) levels[b.kind] = b.level;
-  }
+  const mine = (await powerOf(db, [row.id])).get(row.id) ?? {power: 0, commandCenter: 1};
 
   return {
     username: row.username,
@@ -128,8 +113,8 @@ export async function loadProfile(
     country: row.country,
     language: row.locale,
     homeWorldId: row.home_world_id,
-    power: totalPower(levels),
-    commandPost: levels.command_post,
+    power: mine.power,
+    commandPost: mine.commandCenter,
     baseName: row.base_name ?? `${row.username}'s Forward Base`,
     skin: row.skin ?? STARTER_SKIN_IDS[0],
     alliance:

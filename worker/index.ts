@@ -10,6 +10,7 @@ import {assignSlot, ensureRoster, moveSlot, readSquads, squadLiftUsed, squadPowe
 import {packageUp, rankUp, resetPackages, settleWallet} from './upgrades';
 import {buyResource, buySecondTeam, readBase, readLevels, startLevel} from './buildings';
 import {applyShield, readSeasonState, saveGuide, startBuild} from './season1';
+import {powerOf} from './power';
 import {NEW_SHIELD_MS, isShielded} from '../shared/shields';
 import {type LevelledBuilding, rankCeiling, signalsLeadMs} from '../shared/buildings';
 import {BOARD_BUILDING_BY_ID} from '../shared/base';
@@ -1631,39 +1632,24 @@ async function handleBrowseAlliances(env: Env, player: PlayerRow): Promise<Respo
         has_crest: number;
       }>(),
     env.DB.prepare(
-      `SELECT m.alliance_id AS aid, b.player_id AS pid, b.kind AS kind, b.level AS level
+      `SELECT m.alliance_id AS aid, m.player_id AS pid
          FROM alliance_members m
          JOIN alliances a ON a.id = m.alliance_id
-         JOIN buildings b ON b.player_id = m.player_id
         WHERE a.home_world_id = ?1`,
     )
       .bind(home.id)
-      .all<{aid: string; pid: string; kind: string; level: number}>(),
+      .all<{aid: string; pid: string}>(),
   ]);
 
-  // Levels, grouped per player, then power per player, then summed per
-  // alliance. Going straight from rows to a total would double-count, because
-  // power is not linear in level.
-  const byPlayer = new Map<string, {aid: string; levels: Record<BuildingKind, number>}>();
-  for (const row of levels.results ?? []) {
-    if (!isBuildingKind(row.kind)) continue;
-    let entry = byPlayer.get(row.pid);
-    if (!entry) {
-      entry = {
-        aid: row.aid,
-        levels: Object.fromEntries(BUILDING_KINDS.map((k) => [k, 0])) as Record<
-          BuildingKind,
-          number
-        >,
-      };
-      byPlayer.set(row.pid, entry);
-    }
-    entry.levels[row.kind] = row.level;
-  }
-
+  // Power per player (assets held), summed per alliance.
+  const memberRows = levels.results ?? [];
+  const powers = await powerOf(
+    env.DB,
+    memberRows.map((r) => r.pid),
+  );
   const powerByAlliance = new Map<string, number>();
-  for (const {aid, levels: own} of byPlayer.values()) {
-    powerByAlliance.set(aid, (powerByAlliance.get(aid) ?? 0) + totalPower(own));
+  for (const {aid, pid} of memberRows) {
+    powerByAlliance.set(aid, (powerByAlliance.get(aid) ?? 0) + (powers.get(pid)?.power ?? 0));
   }
 
   const alliances = (list.results ?? [])

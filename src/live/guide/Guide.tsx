@@ -109,10 +109,10 @@ export default function Guide() {
       <div className="pointer-events-none fixed inset-x-2 bottom-[calc(3.25rem+env(safe-area-inset-bottom))] z-[60] flex items-end gap-2">
         <button
           onClick={() => setCollapsed((c) => !c)}
-          className="pointer-events-auto flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 border-cyan-400/80 bg-neutral-950 font-semibold text-cyan-200 shadow-lg"
+          className="pointer-events-auto h-12 w-12 shrink-0 overflow-hidden rounded-full border-2 border-cyan-400/80 bg-neutral-950 shadow-lg"
           title="Admiral Rider"
         >
-          AR
+          <img src="/guide/rider-portrait.webp" alt="Admiral Rider" className="h-full w-full object-cover" draggable={false} />
         </button>
         {folded ? null : (
         <div className="pointer-events-auto max-w-md flex-1 rounded-lg border border-cyan-800/70 bg-neutral-950/95 px-3 py-2 shadow-lg backdrop-blur">
