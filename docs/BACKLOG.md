@@ -44,7 +44,7 @@ Each item is one or more commits; Claude updates this file in the same commit.
 - [x] Damage / repair
 - [x] Season skeleton: shared/season1Ops.ts (windows, phase, rewards), event_reward_grants, Events tab, Rewards history
 - [x] Daily Operations: six lanes, 4-of-6 Cache, neutral contract for solo Cooperation
-- [ ] Daily map exercises: five NPC target types spawned per player per day (signal_relay, abandoned_convoy, fuel_silo, factory_probe, disabled_mech_patrol)
+- [x] Daily map exercises: five NPC target types spawned per player per day (signal_relay, abandoned_convoy, fuel_silo, factory_probe, disabled_mech_patrol) — provisional reward amounts in shared/exercises.ts
 - [ ] Arena phase A (weeks 1–4): benchmark squad, three attempts a day, daily/weekly leaderboards, Sunday→Monday settlement
 - [ ] Dominion Warfront: Assault / Operations / Support metrics, caps, alliance score, treasury
 - [ ] Arena phase B (weeks 5–10): head-to-head ladder
