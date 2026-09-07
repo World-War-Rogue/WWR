@@ -17,6 +17,7 @@ const Battles = lazy(() => import('./Battles'));
 const Squads = lazy(() => import('./Squads'));
 const Customize = lazy(() => import('./Customize'));
 const Settings = lazy(() => import('./Settings'));
+const DevTools = lazy(() => import('./DevTools'));
 import {guideEvent} from './guide/bus';
 import {HUB_OF_CATEGORY} from '../../shared/buildings';
 import {remaining} from './BuildingPanel';
@@ -76,6 +77,7 @@ export function PlayerPanel({
   onOpenCustomize,
   onOpenAlliance,
   onOpenSettings,
+  onOpenDev,
   onSignOut,
 }: {
   player: Player;
@@ -83,6 +85,8 @@ export function PlayerPanel({
   onOpenCustomize: () => void;
   onOpenAlliance: () => void;
   onOpenSettings: () => void;
+  /** Present only when the server answered the dev-tools probe (test realm, owner). */
+  onOpenDev?: () => void;
   onSignOut: () => Promise<void>;
 }) {
   const [profile, setProfile] = useState<ProfileData | null>(null);
@@ -141,6 +145,11 @@ export function PlayerPanel({
           {t('menu.accessRequests')}
         </a>
       )}
+      {onOpenDev && (
+        <button onClick={onOpenDev} className={`${item} text-cyan-300`}>
+          Dev · progression seeds
+        </button>
+      )}
       <button onClick={onOpenSettings} className={`${item} border-t border-neutral-800`}>
         {t('settings.title')}
       </button>
@@ -173,7 +182,7 @@ export default function LiveApp() {
   /** Bumped when the language changes, purely to force a redraw. */
   const [, setLangTick] = useState(0);
   const [screen, setScreen] = useState<
-    'base' | 'world' | 'customize' | 'profile' | 'alliance' | 'battles' | 'assets' | 'squads'
+    'base' | 'world' | 'customize' | 'profile' | 'alliance' | 'battles' | 'assets' | 'squads' | 'dev'
     // The map, not the base. A player opening the game wants to see where they
     // are and what is around them - the base screen is a menu, and starting on
     // a menu hides the thing the game is actually about. The map already opens
@@ -187,6 +196,23 @@ export default function LiveApp() {
   // Settings lived only inside that sheet, which is two taps deep and not
   // where anybody looks for either - testers reported "no sign out".
   const [menuOpen, setMenuOpen] = useState(false);
+  // Whether this Worker has the development seed tools on. Probed once per
+  // sign-in for the owner; anyone else never asks. 404 means no.
+  const [devTools, setDevTools] = useState(false);
+  useEffect(() => {
+    if (player?.role !== 'owner') {
+      setDevTools(false);
+      return;
+    }
+    let live = true;
+    api
+      .devStatus()
+      .then((s) => live && setDevTools(!!s.enabled))
+      .catch(() => live && setDevTools(false));
+    return () => {
+      live = false;
+    };
+  }, [player?.role, player?.username]);
 
   // What General Rider hears. Screens, sheets and the settings panel are
   // reported here, in one place, as they change.
@@ -354,6 +380,10 @@ export default function LiveApp() {
                 setMenuOpen(false);
                 setSettingsOpen(true);
               }}
+              onOpenDev={devTools ? () => {
+                setMenuOpen(false);
+                setScreen('dev');
+              } : undefined}
               onSignOut={signOut}
             />
           </div>
@@ -507,6 +537,19 @@ export default function LiveApp() {
 
   // Reports take the whole viewport too: a battle report is a page you read,
   // not a panel you glance at over the map.
+  if (screen === 'dev') {
+    return (
+      <>
+        <div className="fixed inset-0 overflow-y-auto bg-[#0a0906] text-neutral-200">
+          <Suspense fallback={<ScreenLoading />}>
+            <DevTools onClose={() => setScreen('base')} />
+          </Suspense>
+        </div>
+        {chat}
+      </>
+    );
+  }
+
   if (screen === 'battles') {
     return (
       <>

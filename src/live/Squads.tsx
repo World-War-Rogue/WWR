@@ -27,6 +27,8 @@ import AssetIcon from './AssetIcon';
 import ForcesTabs from './ForcesTabs';
 import {t} from '../i18n';
 import {taskForceName} from './taskForce';
+import CombatSystemsPanel from './CombatSystems';
+import {NO_SYSTEMS} from '../../shared/combatSystems';
 
 const ROLE_TINT: Record<string, string> = {
   breach: 'text-red-300',
@@ -604,6 +606,16 @@ export default function Squads({
                         );
                       })}
                     </div>
+
+                    <CombatSystemsPanel
+                      squad={name}
+                      systems={view.systems?.[name] ?? NO_SYSTEMS}
+                      wallet={view.wallet}
+                      commandCenter={cc}
+                      season={view.base.season}
+                      locked={out}
+                      onChanged={(wallet, systems) => setView((v) => (v ? {...v, wallet, systems} : v))}
+                    />
                   </section>
                 );
               })}

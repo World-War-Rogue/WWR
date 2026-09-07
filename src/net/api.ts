@@ -11,6 +11,7 @@ import type {Placement} from '../../shared/base';
 import type {BattleDetail, BattleSummary} from '../../shared/battles';
 import type {Deployment, MarchKind} from '../../shared/march';
 import type {PackageKey, Packages} from '../../shared/upgrades';
+import type {CombatSystemLane, CombatSystems} from '../../shared/combatSystems';
 import type {BuildingLevels} from '../../shared/buildings';
 
 export interface ChatMessage {
@@ -278,6 +279,18 @@ export interface SquadView {
   season1: SeasonState;
   /** Task Force Delta: bought, or earned. */
   deltaOpen: boolean;
+  /** Every Task Force's Combat Systems lanes (shared/combatSystems.ts). */
+  systems: Record<string, CombatSystems>;
+}
+
+export interface DevStatus {
+  enabled: boolean;
+  account: {username: string; id: string; role: string} | null;
+  tracks: Array<{id: string; displayName: string; category: string; placeholderFrom: number | null}>;
+  registryProblems: Array<{track: string; level?: number; problem: string}>;
+  recent: Array<{action: string; params: string; at: number}>;
+  buildings: string[];
+  squads: string[];
 }
 
 export interface SeasonState {
@@ -499,6 +512,15 @@ export const api = {
   tradePost: () => call<TradePostView>('/api/trade-post'),
   tradePostBuy: (body: {purchaseId: string; offerId: string; assetId: string; package: PackageKey; route: 'tokens' | 'credits'}) =>
     call<TradePostBuyResponse>('/api/trade-post/buy', {method: 'POST', body: JSON.stringify(body)}),
+  /** Development-only progression seeds; 404 anywhere but the test realm. */
+  devStatus: () => call<DevStatus>('/api/dev/progression'),
+  devAction: (body: Record<string, unknown>) =>
+    call<{ok: true; message: string; status: DevStatus}>('/api/dev/progression', {method: 'POST', body: JSON.stringify(body)}),
+  systemUp: (squad: string, lane: CombatSystemLane, target: number, split?: Wallet) =>
+    call<{ok: true; wallet: Wallet; systems: Record<string, CombatSystems>}>('/api/squads/systems', {
+      method: 'POST',
+      body: JSON.stringify({squad, lane, target, split}),
+    }),
   resetPackages: (assetId: string) =>
     call<UpgradeResponse>('/api/assets/reset', {
       method: 'POST',

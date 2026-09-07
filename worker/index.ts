@@ -20,6 +20,9 @@ import {
 import {ensureRally, lastRalliedAt, rallyTo, readRally, setRally} from './rally';
 import {assignSlot, deltaOpen, ensureRoster, moveSlot, readSquads, squadPower} from './squads';
 import {packageUp, rankUp, resetPackages, settleWallet} from './upgrades';
+import {readSystems, systemUp} from './combatSystems';
+import {createQaAccount, devAction, devSeedsEnabled, devStatus} from './devProgression';
+import {isCombatSystemLane} from '../shared/combatSystems';
 import {buyResource, buySecondTeam, readBase, readLevels, startLevel} from './buildings';
 import {applyShield, buyDelta, readSeasonState, saveGuide, startBuild} from './season1';
 import {powerOf} from './power';
@@ -169,6 +172,11 @@ export interface Env {
   TEST_BOTS_MAY_ATTACK?: string;
   /** Where Tokens are bought - the website, never the game. Unset = no button. */
   WWR_TOKEN_STORE_URL?: string;
+  /**
+   * "true" turns on the development-only progression seed tools
+   * (worker/devProgression.ts). Set ONLY under env.test in wrangler.jsonc.
+   */
+  ALLOW_DEV_PROGRESSION_SEEDS?: string;
 }
 
 const RESOURCES: ResourceKind[] = ['fuel', 'steel', 'munitions', 'alloy'];
@@ -1139,10 +1147,15 @@ async function handleSquads(env: Env, player: PlayerRow): Promise<Response> {
   ]);
 
   const roster = new Map(owned.map((o) => [o.assetId, o]));
-  const wallet = await settleWallet(env.DB, player.id, now);
+  const [wallet, systems] = await Promise.all([
+    settleWallet(env.DB, player.id, now),
+    readSystems(env.DB, player.id),
+  ]);
 
   return json({
     owned,
+    // Every Task Force's Combat Systems lanes, for the cards on the same screen.
+    systems,
     // The wallet rides along with the roster because the upgrade buttons are on
     // the roster screen, and a second request for two numbers already in hand
     // is a second request for nothing.
@@ -1264,6 +1277,40 @@ async function handlePackageUp(
     ok: true,
     wallet: {tokens: result.wallet.tokens, credits: result.wallet.credits},
     asset: result.asset,
+  });
+}
+
+/**
+ * Raise one Combat Systems lane of one Task Force. Same shape as a rank-up:
+ * the cap is the season's and the Command Center's, read here, never from
+ * the request.
+ */
+async function handleSystemUp(request: Request, env: Env, player: PlayerRow): Promise<Response> {
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const squad = typeof body?.squad === 'string' ? body.squad : '';
+  const lane = body?.lane;
+  if (!isCombatSystemLane(lane)) return fail(400, 'No such Combat System.');
+  const target = Number(body?.target);
+  const split = readSplit(body);
+  if (split === 'bad') return fail(400, 'That payment does not make sense.');
+
+  const base = await readBase(env.DB, player.id, Date.now());
+  const result = await systemUp(
+    env.DB,
+    player.id,
+    squad,
+    lane,
+    target,
+    split,
+    CURRENT_SEASON,
+    Date.now(),
+    rankCeiling(base.levels),
+  );
+  if (!result.ok) return fail(400, result.error);
+  return json({
+    ok: true,
+    wallet: {tokens: result.wallet.tokens, credits: result.wallet.credits},
+    systems: result.systems,
   });
 }
 
@@ -2668,6 +2715,24 @@ async function route(
 
   if (endpoint === 'POST /api/support/report') return handleBugReport(request, env, player);
 
+  // Development-only progression seeds. 404 unless the flag is on AND the
+  // caller is the owner - the same silence as the admin routes.
+  if (url.pathname === '/api/dev/progression') {
+    if (!devSeedsEnabled(env) || player.role !== 'owner') return fail(404, 'No such endpoint.');
+    if (request.method === 'GET') return json({enabled: true, ...(await devStatus(env.DB))});
+    if (request.method === 'POST') {
+      const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+      if (!body) return fail(400, 'Send JSON.');
+      const now = Date.now();
+      const result =
+        body.action === 'create'
+          ? await createQaAccount(env.DB, String(body.password ?? ''), seedBaseFor(env), player.id, now)
+          : await devAction(env.DB, player.id, body, now);
+      if (!result.ok) return fail(400, result.error);
+      return json({...result, status: await devStatus(env.DB)});
+    }
+  }
+
   // Owner-only, and 404 rather than 403 so the endpoint does not announce
   // itself to everyone else - the shape the admin routes already use.
   if (endpoint === 'GET /api/support/reports') {
@@ -2735,6 +2800,8 @@ async function route(
     if (!result.ok) return fail(400, result.error);
     return handleSquads(env, player);
   }
+
+  if (endpoint === 'POST /api/squads/systems') return handleSystemUp(request, env, player);
 
   if (endpoint === 'POST /api/squads/delta') {
     const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;

@@ -6,6 +6,8 @@ import {ASSET_BY_ID} from '../shared/assets';
 import {type Resources, categoryBoost, shortfall} from '../shared/buildings';
 import {packagesFromRow} from '../shared/upgrades';
 import {repairBill} from '../shared/repair';
+import {sustainmentMultiplier} from '../shared/combatSystems';
+import {readSystems} from './combatSystems';
 import {readBase, shortMessage} from './buildings';
 
 /** Finished repairs become whole assets, once. */
@@ -57,7 +59,7 @@ export async function startRepair(
   name: (b: string) => string,
 ): Promise<RepairResult> {
   await settleRepairs(db, playerId, now);
-  const [rows, base, slots] = await Promise.all([
+  const [rows, base, slots, systems] = await Promise.all([
     db
       .prepare(
         `SELECT asset_id AS assetId, level, hp_fraction AS hp, repair_ends_at AS ends,
@@ -80,6 +82,7 @@ export async function startRepair(
       .prepare(`SELECT squad, asset_id AS assetId FROM squad_slots WHERE player_id = ?1`)
       .bind(playerId)
       .all<{squad: string; assetId: string}>(),
+    readSystems(db, playerId),
   ]);
   const squadOf = new Map((slots.results ?? []).map((s) => [s.assetId, s.squad]));
   const wanted = (rows.results ?? []).filter((r) => {
@@ -100,7 +103,11 @@ export async function startRepair(
     cost.fuel += bill.fuel;
     cost.steel += bill.steel;
     cost.munitions += bill.munitions;
-    timers.push({assetId: r.assetId, ms: bill.ms});
+    // Sustainment: the Task Force the asset sits in when repair starts
+    // shortens its timer. An asset in no Task Force gets nothing.
+    const squad = squadOf.get(r.assetId);
+    const sustainment = squad && squad in systems ? systems[squad as keyof typeof systems].sustainment : 1;
+    timers.push({assetId: r.assetId, ms: Math.ceil(bill.ms * sustainmentMultiplier(sustainment))});
   }
   const short = shortfall(base.resources, cost);
   if (Object.keys(short).length > 0) return {ok: false, error: shortMessage(short, name as never)};

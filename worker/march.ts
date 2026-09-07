@@ -18,6 +18,8 @@ import {
   plotsBetween,
 } from '../shared/march';
 import {type SideSpec, resolve} from '../shared/combat';
+import {type CombatSystems} from '../shared/combatSystems';
+import {readSystems} from './combatSystems';
 import {deltaOpen, lockedMessage, readSquads} from './squads';
 import {readBase} from './buildings';
 import {type Resources, RESOURCE_KINDS, categoryBoost, marchMultiplier, raidLoot} from '../shared/buildings';
@@ -107,6 +109,10 @@ export interface UnitSpec {
   hpFraction?: number;
   /** The ally whose roster this reinforcement belongs to. Absent: the defender's own. */
   owner?: string;
+  /** Its Task Force's Combat Systems, frozen with the unit. Absent: level 1. */
+  systems?: CombatSystems;
+  /** Which Task Force it fights in, for the report's modifier lines. */
+  squad?: string;
 }
 
 interface AssetLevelRow {
@@ -168,30 +174,48 @@ async function unitsOf(
   const board = await readSquads(db, playerId);
   const slots = board[squad] ?? [];
   if (!slots.some(Boolean)) return [];
-  const roster = await rosterOf(db, playerId);
+  const [roster, systems] = await Promise.all([rosterOf(db, playerId), readSystems(db, playerId)]);
   // The slot index travels with the unit: it is the formation. Slots 0-1 are
-  // the front, 2-3 the centre, 4-5 the rear, and the resolver reads it.
+  // the front, 2-3 the centre, 4-5 the rear, and the resolver reads it. The
+  // Task Force's Combat Systems ride along the same way, frozen at launch
+  // like packages and boost: what marched is what fights.
   const out: RosterUnit[] = [];
   slots.forEach((id, slot) => {
-    if (id) out.push({...(roster.get(id) ?? {assetId: id, level: 1, packages: BARE, repairing: false}), slot});
+    if (id) {
+      out.push({
+        ...(roster.get(id) ?? {assetId: id, level: 1, packages: BARE, repairing: false}),
+        slot,
+        systems: systems[squad],
+        squad,
+      });
+    }
   });
   return out;
 }
 
 /** Everything the defender still has at home. Squads that marched out are gone. */
 async function homeUnits(db: D1Database, playerId: string): Promise<UnitSpec[]> {
-  const [board, away, roster] = await Promise.all([
+  const [board, away, roster, systems] = await Promise.all([
     readSquads(db, playerId),
     marchingSquads(db, playerId),
     rosterOf(db, playerId),
+    readSystems(db, playerId),
   ]);
   const out: UnitSpec[] = [];
   for (const [squad, slots] of Object.entries(board)) {
     if (away.has(squad)) continue;
     slots.forEach((id, slot) => {
       const r = roster.get(id ?? '');
-      // A unit under repair is in the shop, not on the line.
-      if (id && !(r && r.repairing)) out.push({...(r ?? {assetId: id, level: 1, packages: BARE}), slot});
+      // A unit under repair is in the shop, not on the line. Each home Task
+      // Force defends with its own Combat Systems, read live like its slots.
+      if (id && !(r && r.repairing)) {
+        out.push({
+          ...(r ?? {assetId: id, level: 1, packages: BARE}),
+          slot,
+          systems: systems[squad as keyof typeof systems],
+          squad,
+        });
+      }
     });
   }
   return out;

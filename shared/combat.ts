@@ -18,6 +18,13 @@ import {
 import type {AssetRole} from './assets';
 import {type Packages, NO_PACKAGES, assetPowerWith, attributesWith} from './upgrades';
 import {
+  type CombatSystems,
+  NO_SYSTEMS,
+  describeSystems,
+  fireControlMultiplier,
+  survivabilityMultiplier,
+} from './combatSystems';
+import {
   FRONT_DRONE_DRAW,
   FRONT_DRONE_HP,
   FRONT_DRONE_WAVE,
@@ -253,6 +260,14 @@ export interface CombatantSpec {
   hpFraction?: number;
   /** Its category building's boost (shared/buildings.ts). 1 when absent. */
   boost?: number;
+  /**
+   * The Combat Systems of the Task Force it fights in (shared/combatSystems.ts).
+   * Per unit rather than per side because a defence is every Task Force at
+   * home at once, each with its own lanes. Absent means level 1 everywhere.
+   */
+  systems?: CombatSystems;
+  /** Which Task Force, for the report's modifier lines. */
+  squad?: string;
 }
 
 export interface SideSpec {
@@ -289,6 +304,8 @@ interface Unit {
   /** Hit this round already - a strike in the centre punishes that. */
   hitThisRound: boolean;
   drone: boolean;
+  /** Fire-Control: multiplier on every shot this unit fires. 1 at level 1. */
+  damageMult: number;
 }
 
 export interface CombatUnitResult {
@@ -328,6 +345,11 @@ export interface SideResult {
   units: CombatUnitResult[];
   /** Fraction of the starting pool still standing when it ended. */
   strength: number;
+  /**
+   * Every Task Force-level modifier that took part, one line each, in the
+   * words the report prints. Empty when nothing above level 1 was carried.
+   */
+  modifiers: string[];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -369,7 +391,11 @@ function build(spec: SideSpec): Unit[] {
     // A front drone is fragile by choice; a rear one is built to last. §3-4.
     const droneHp =
       drone && rules ? (position === 'front' ? FRONT_DRONE_HP : position === 'rear' ? REAR_DRONE_HP : 1) : 1;
-    const maxHp = HP_SCALE * (HP_BASE + HP_PER_POINT * a.firepower + HP_PER_ARMOUR * armour) * droneHp;
+    const systems = u.systems ?? NO_SYSTEMS;
+    // Survivability: the whole pool, before damage taken is applied.
+    const maxHp =
+      HP_SCALE * (HP_BASE + HP_PER_POINT * a.firepower + HP_PER_ARMOUR * armour) * droneHp *
+      survivabilityMultiplier(systems.survivability);
     const frac = Math.max(0, Math.min(1, u.hpFraction ?? 1));
     units.push({
       id: `${u.assetId}#${i}`,
@@ -387,12 +413,29 @@ function build(spec: SideSpec): Unit[] {
       role: asset.role,
       hitThisRound: false,
       drone,
+      damageMult: fireControlMultiplier(systems.fire_control),
     });
   });
   return units;
 }
 
 const alive = (units: Unit[]) => units.filter((u) => u.hp > 0);
+
+/**
+ * The Combat Systems lines for a side: one set per Task Force that fought,
+ * in the order its units appear. A defence of two Task Forces prints both.
+ */
+function modifiersOf(spec: SideSpec): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const u of spec.units) {
+    const squad = u.squad ?? '';
+    if (seen.has(squad)) continue;
+    seen.add(squad);
+    out.push(...describeSystems(squad || spec.name, u.systems ?? NO_SYSTEMS));
+  }
+  return out;
+}
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 const avg = (xs: number[]) => (xs.length === 0 ? 0 : sum(xs) / xs.length);
 
@@ -486,6 +529,7 @@ function shot(
     DAMAGE_SCALE *
     scale *
     droneAttack *
+    shooter.damageMult *
     shooter.firepower *
     rangeMult *
     spotting *
@@ -667,6 +711,7 @@ export function resolve(
       damaged: u.hp <= 0,
       remaining: u.maxHp === 0 ? 0 : Math.max(0, u.hp) / u.maxHp,
     })),
+    modifiers: modifiersOf(spec),
   });
 
   const resultA = describe(A, attackerSpec, powerA, spotA, expA, startA);
@@ -678,6 +723,10 @@ export function resolve(
   const actual = strengthA + strengthD === 0 ? 0.5 : strengthA / (strengthA + strengthD);
   resultA.composition = expected === 0 ? 1 : Number((actual / expected).toFixed(3));
   resultD.composition = 1 - expected === 0 ? 1 : Number(((1 - actual) / (1 - expected)).toFixed(3));
+
+  // Modifier lines go into the notes too, so every report reader - the
+  // screen, the harness, a log - sees what took part without a second field.
+  notes.push(...resultA.modifiers, ...resultD.modifiers);
 
   return {outcome, rounds, notes, attacker: resultA, defender: resultD};
 }

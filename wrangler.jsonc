@@ -62,7 +62,10 @@
       "ai": {"binding": "AI"},
       "vars": {
         "DEBUG_ERRORS": "on",
-        "TEST_BOTS_MAY_ATTACK": "on"
+        "TEST_BOTS_MAY_ATTACK": "on",
+        // The qa-progression-max seed tools (worker/devProgression.ts).
+        // Test realm only. Never add this to the top-level vars.
+        "ALLOW_DEV_PROGRESSION_SEEDS": "true"
       }
     }
   }
