@@ -281,7 +281,7 @@ function Detail({
   );
 }
 
-export default function Battles({onClose}: {onClose: () => void}) {
+export default function Battles({onClose, account}: {onClose: () => void; account?: ReactNode}) {
   const [scope, setScope] = useState<Scope>('mine');
   const [list, setList] = useState<BattleSummary[] | null>(null);
   const [open, setOpen] = useState<{summary: BattleSummary; detail: BattleDetail} | null>(null);
@@ -317,7 +317,8 @@ export default function Battles({onClose}: {onClose: () => void}) {
           ‹ {t('battles.toMap')}
         </button>
         <h2 className="font-semibold text-neutral-100">{t('battles.title')}</h2>
-        <div className="ml-auto flex gap-1">
+        <div className="ml-auto flex items-center gap-1">
+          {account}
           {(['mine', 'alliance'] as const).map((which) => (
             <button
               key={which}

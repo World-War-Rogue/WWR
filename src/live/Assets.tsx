@@ -10,7 +10,7 @@
  * against each asset's own maximum. A bar that always fills to the end tells
  * you nothing; the point of the row is comparison.
  */
-import {useEffect, useMemo, useState} from 'react';
+import {type ReactNode, useEffect, useMemo, useState} from 'react';
 import AssetIcon from './AssetIcon';
 import AssetUpgrade from './AssetUpgrade';
 import ForcesTabs from './ForcesTabs';
@@ -288,10 +288,13 @@ export default function Assets({
   onClose,
   onShowSquads,
   onGoTo,
+  account,
   only = null,
 }: {
   onClose: () => void;
   onShowSquads: () => void;
+  /** The account button (portrait), so the menu is reachable here too. */
+  account?: ReactNode;
   /** Leave the catalogue for the building blocking an upgrade. */
   onGoTo?: (where: 'command_center') => void;
   /**
@@ -396,6 +399,7 @@ export default function Assets({
         {wallet && (
           <WalletLine credits={wallet.credits} tokens={wallet.tokens} />
         )}
+        {account}
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}

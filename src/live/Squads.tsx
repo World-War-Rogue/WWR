@@ -14,7 +14,7 @@
  * seeing and lift is still what sets each asset's attribute points, but nothing
  * is refused for it any more and nothing here greys out because of it.
  */
-import {type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {ASSET_BY_ID, CATEGORY_LABEL, ROLE_LABEL, SQUAD_NAMES, SQUAD_SLOTS, type Asset, type AssetCategory, assetLabel} from '../../shared/assets';
 import {ApiError, type SquadView, api} from '../net/api';
 import {attributesWith} from '../../shared/upgrades';
@@ -117,10 +117,13 @@ function Slot({
 export default function Squads({
   onClose,
   onShowAssets,
+  account,
   only = null,
 }: {
   onClose: () => void;
   onShowAssets: () => void;
+  /** The account button (portrait), so the menu is reachable here too. */
+  account?: ReactNode;
   /**
    * Opened from a Task Force slab on the base: just that one Task Force, so
    * the player is editing the thing they tapped and not the whole roster.
@@ -368,10 +371,11 @@ export default function Squads({
         </button>
         <ForcesTabs active="squads" onChange={(tab) => tab === 'assets' && onShowAssets()} />
         {view && (
-          <span className="ml-auto text-[12px] text-neutral-400">
+          <span className="ml-auto hidden text-[12px] text-neutral-400 sm:inline">
             {only ? taskForceName(only) : t('squads.sixSlots')}
           </span>
         )}
+        <div className="ml-auto shrink-0 sm:ml-2">{account}</div>
       </div>
 
       {error && (

@@ -18,7 +18,7 @@ import {useBase, useSeason} from './useBase';
 import ShieldPanel from './ShieldPanel';
 // A separate download: most sessions never open the Trade Post.
 const TradePost = lazy(() => import('./TradePost'));
-import {LEVELLED_BUILDINGS, PRODUCER_OF, RESOURCE_KINDS, isLevelledBuilding} from '../../shared/buildings';
+import {type LevelledBuilding, LEVELLED_BUILDINGS, PRODUCER_OF, RESOURCE_KINDS, isLevelledBuilding} from '../../shared/buildings';
 import {type MessageKey, t} from '../i18n';
 import {
   type BaseView,
@@ -91,6 +91,7 @@ export function CommandCenterSheet({
   onUpgrade,
   onClose,
   profile,
+  onGoTo,
 }: {
   base: BaseView;
   pending: string | null;
@@ -98,6 +99,8 @@ export function CommandCenterSheet({
   onClose: () => void;
   /** The player panel - who you are and the doors you walk through. */
   profile: ReactNode;
+  /** Open another building's sheet (a blocked upgrade's way out). */
+  onGoTo?: (where: LevelledBuilding) => void;
 }) {
   const [tab, setTab] = useState<'departments' | 'protection' | 'events' | 'wars' | 'trade' | 'profile'>('departments');
   // Base levels v2: the Command Center's own level. Read when the sheet opens.
@@ -151,7 +154,7 @@ export function CommandCenterSheet({
         <>
           {levels && (
             <div className="mb-4">
-              <BuildingPanel building="command_center" base={levels} onChanged={setLevels} />
+              <BuildingPanel building="command_center" base={levels} onChanged={setLevels} onGoTo={onGoTo} />
             </div>
           )}
           {levels && (
@@ -182,7 +185,7 @@ export function CommandCenterSheet({
   );
 }
 
-export function DepotSheet({onClose, onCustomise}: {onClose: () => void; onCustomise: () => void}) {
+export function DepotSheet({onClose, onCustomise, onGoTo}: {onClose: () => void; onCustomise: () => void; onGoTo?: (where: LevelledBuilding) => void}) {
   const [tab, setTab] = useState<'supplies' | 'modules' | 'cosmetics' | 'services'>('supplies');
   const [base, setBase] = useBase();
   const [season1, setSeason1] = useSeason();
@@ -203,7 +206,7 @@ export function DepotSheet({onClose, onCustomise}: {onClose: () => void; onCusto
       {tab === 'supplies' &&
         (base ? (
           <div className="space-y-3">
-            <BuildingPanel building="depot" base={base} onChanged={setBase} />
+            <BuildingPanel building="depot" base={base} onChanged={setBase} onGoTo={onGoTo} />
             <ResourceShop base={base} onChanged={setBase} />
           </div>
         ) : (
@@ -242,7 +245,7 @@ export function DepotSheet({onClose, onCustomise}: {onClose: () => void; onCusto
 }
 
 /** A department that has a building but no screen yet: its name and its job. */
-export function DepartmentSheet({id, onClose}: {id: string; onClose: () => void}) {
+export function DepartmentSheet({id, onClose, onGoTo}: {id: string; onClose: () => void; onGoTo?: (where: LevelledBuilding) => void}) {
   const name = t(`building.${id}` as MessageKey);
   const blurb = t(`blurb.${id}` as MessageKey);
   const [base, setBase] = useBase();
@@ -251,7 +254,7 @@ export function DepartmentSheet({id, onClose}: {id: string; onClose: () => void}
     <Sheet title={name} tabs={[{key: 'about', label: 'Building'}]} active="about" onTab={() => undefined} onClose={onClose}>
       {levelled && base ? (
         <div className="space-y-3">
-          <BuildingPanel building={levelled} base={base} onChanged={setBase} />
+          <BuildingPanel building={levelled} base={base} onChanged={setBase} onGoTo={onGoTo} />
           {levelled === 'quartermaster_warehouse' && <StockPanel base={base} />}
           {RESOURCE_KINDS.filter((k) => PRODUCER_OF[k] === levelled).map((k) => (
             <div key={k}>

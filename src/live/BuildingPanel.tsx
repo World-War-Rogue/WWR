@@ -40,14 +40,23 @@ export function buildingLabel(b: LevelledBuilding): string {
   return t(`building.${b}` as MessageKey) || b;
 }
 
+export type GoTo = LevelledBuilding;
+
 export default function BuildingPanel({
   building,
   base,
   onChanged,
+  onGoTo,
 }: {
   building: LevelledBuilding;
   base: BaseLevelsView;
   onChanged: (next: BaseLevelsView) => void;
+  /**
+   * Leave this sheet for the building that clears the block - the Command
+   * Center or Warehouse that gates the level, or the producer / Depot for a
+   * resource shortfall. A blocked upgrade that only says why is a dead end.
+   */
+  onGoTo?: (where: GoTo) => void;
 }) {
   const [now, setNow] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
@@ -153,23 +162,45 @@ export default function BuildingPanel({
               Start Level {next}
             </button>
           </div>
-          {!canStart && (
-            <p className="mt-1 text-[11px] text-neutral-500">
-              {blocked ??
-                (queueFull
-                  ? base.queues === 1
-                    ? 'The engineers are busy. One upgrade at a time.'
-                    : 'Both engineer teams are busy.'
-                  : (() => {
-                      const k = RESOURCE_KINDS.find((x) => short[x]);
-                      return k
-                        ? `Need ${short[k]!.toLocaleString()} more ${RESOURCE_LABEL[k]}. Produce it at ${buildingLabel(
-                            PRODUCER_OF[k],
+          {!canStart && (() => {
+            const shortKind = RESOURCE_KINDS.find((x) => short[x]);
+            const gate: GoTo | null = blocked
+              ? blocked.startsWith('Command Center')
+                ? 'command_center'
+                : blocked.startsWith('Quartermaster')
+                  ? 'quartermaster_warehouse'
+                  : null
+              : null;
+            const go = (where: GoTo, label: string) =>
+              onGoTo && where !== building ? (
+                <button
+                  key={where}
+                  onClick={() => onGoTo(where)}
+                  className="rounded border border-amber-700/70 px-1.5 py-px text-[10px] font-semibold text-amber-300 hover:border-amber-400 hover:text-amber-100"
+                >
+                  {label} ›
+                </button>
+              ) : null;
+            return (
+              <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-neutral-500">
+                <span>
+                  {blocked ??
+                    (queueFull
+                      ? base.queues === 1
+                        ? 'The engineers are busy. One upgrade at a time.'
+                        : 'Both engineer teams are busy.'
+                      : shortKind
+                        ? `Need ${short[shortKind]!.toLocaleString()} more ${RESOURCE_LABEL[shortKind]}. Produce it at ${buildingLabel(
+                            PRODUCER_OF[shortKind],
                           )} or buy it at the Depot.`
-                        : null;
-                    })())}
-            </p>
-          )}
+                        : null)}
+                </span>
+                {gate && go(gate, gate === 'command_center' ? 'Go to Command Center' : 'Go to Warehouse')}
+                {!blocked && !queueFull && shortKind && go(PRODUCER_OF[shortKind], `Go to ${buildingLabel(PRODUCER_OF[shortKind])}`)}
+                {!blocked && !queueFull && shortKind && go('depot', 'Buy at the Depot')}
+              </p>
+            );
+          })()}
         </>
       )}
       {error && <p className="mt-1 text-[11px] text-red-400">{error}</p>}

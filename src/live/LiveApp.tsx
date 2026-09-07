@@ -327,6 +327,13 @@ export default function LiveApp() {
     setBase(null);
   };
 
+  /** Open a building's sheet from another sheet - a blocked upgrade's way out. */
+  const goToBuilding = (where: string) => {
+    if (where === 'command_center') setSheet('command_center');
+    else if (where === 'depot') setSheet('depot');
+    else setSheet({department: where});
+  };
+
   const chat = (
     <>
       <Suspense fallback={null}>
@@ -490,6 +497,7 @@ export default function LiveApp() {
         <div className="fixed inset-0 bg-[#0a0906] text-neutral-200">
           <Suspense fallback={<ScreenLoading />}>
           <Squads
+            account={accountButton}
             only={squadOnly}
             onClose={() => {
               setSquadOnly(null);
@@ -515,6 +523,7 @@ export default function LiveApp() {
         <div className="fixed inset-0 bg-[#0a0906] text-neutral-200">
           <Suspense fallback={<ScreenLoading />}>
           <Assets
+            account={accountButton}
             only={assetOnly}
             onClose={() => {
               setAssetOnly(null);
@@ -575,7 +584,7 @@ export default function LiveApp() {
       <>
         <div className="fixed inset-0 bg-[#0a0906] text-neutral-200">
           <Suspense fallback={<ScreenLoading />}>
-          <Battles onClose={() => setScreen('world')} />
+          <Battles onClose={() => setScreen('world')} account={accountButton} />
           </Suspense>
         </div>
         {chat}
@@ -654,6 +663,7 @@ export default function LiveApp() {
           pending={pending}
           onUpgrade={(kind) => void upgrade(kind)}
           onClose={() => setSheet(null)}
+          onGoTo={goToBuilding}
           profile={
             <PlayerPanel
               player={player}
@@ -677,11 +687,12 @@ export default function LiveApp() {
         />
       )}
       {sheet !== null && typeof sheet === 'object' && (
-        <DepartmentSheet id={sheet.department} onClose={() => setSheet(null)} />
+        <DepartmentSheet id={sheet.department} onClose={() => setSheet(null)} onGoTo={goToBuilding} />
       )}
       {sheet === 'depot' && (
         <DepotSheet
           onClose={() => setSheet(null)}
+          onGoTo={goToBuilding}
           onCustomise={() => {
             setSheet(null);
             setScreen('customize');

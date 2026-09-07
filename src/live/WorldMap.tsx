@@ -154,14 +154,26 @@ function drawNameplate(
 
   let label = base.username;
   let textWidth = ctx.measureText(label).width;
+  if (textWidth > textBudget && fontSize > 8) {
+    // One size down before anything is cut: a whole name in smaller type
+    // beats a cut name in larger type, and most callsigns fit that way.
+    const smaller = Math.max(8, Math.floor(fontSize * 0.85));
+    ctx.font = `600 ${smaller}px ui-sans-serif, system-ui, sans-serif`;
+    textWidth = ctx.measureText(label).width;
+    if (textWidth > textBudget) ctx.font = `600 ${fontSize}px ui-sans-serif, system-ui, sans-serif`;
+    textWidth = ctx.measureText(label).width;
+  }
   if (textWidth > textBudget) {
     // Cut from the middle, not the end. Two hundred farm bots per server are
     // all "Lieutenant" + six digits, and cutting from the end turned every
     // one of them into "Lieuten…" - a map of identical labels. The tail is
     // what tells names apart (the digits, or failing that the last few
     // letters), so the tail stays and the head gives way.
+    // Callsigns are letters only by rule, so a player name has no digits to
+    // keep; four letters of tail tell "SentinelTestA" from "HarrierTestA"
+    // where three did not.
     const tailMatch = /\d{3,}$/.exec(label);
-    const tail = tailMatch ? tailMatch[0].slice(-6) : label.slice(-3);
+    const tail = tailMatch ? tailMatch[0].slice(-6) : label.slice(-4);
     let head = label.slice(0, label.length - tail.length);
     while (head.length > 0 && ctx.measureText(`${head}\u2026${tail}`).width > textBudget) {
       head = head.slice(0, -1);
