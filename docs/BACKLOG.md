@@ -20,7 +20,7 @@ Each item is one or more commits; Claude updates this file in the same commit.
 
 ## P1 — Progression audit (read-only, prerequisite for everything below)
 
-- [~] `docs/progression/progression-inventory.md` + `.json`: every built upgradeable system, caps, cost at 1/10/20/30/40/50, power formulas, 1:1 check, hardcoded prices, not-built list, missing-info list, files that must change
+- [x] `docs/progression/inventory/progression-inventory.md` + `.json`: every built upgradeable system, caps, cost at 1/10/20/30/40/50, power formulas, 1:1 check, hardcoded prices, not-built list, missing-info list, files that must change
 - [ ] Hand the inventory to ChatGPT for the level 1–50 balance matrix (per-level cost, cumulative cost, time, prerequisite, power gain, cumulative power)
 
 ## P2 — Progression framework (build, in dependency order; needs Matt's approval of the plan first)
