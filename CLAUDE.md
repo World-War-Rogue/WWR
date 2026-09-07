@@ -115,6 +115,35 @@ its own database. Deploy and migrate it with `--env test`. Bindings do not
 inherit between environments, so anything added to the top level must be
 added under `env.test` too or that deploy silently runs without it.
 
+## Trade Post
+
+A tab in the Command Center sheet (`src/live/TradePost.tsx`), not a board
+building: no level, no upgrade, no power. The manifest is
+`shared/tradePost.ts`; it holds offers, limits and wording and **no prices**.
+Every offer names an existing grant (`kind`), and its cost is resolved from
+`shared/economy.ts` for the target the player picks - the same number the
+direct screen shows, and the same number in Tokens and Credits (1:1 is a
+locked ruling; a designer draft proposed 1:4 and was withdrawn).
+
+`worker/tradePost.ts` writes the purchase row FIRST (`trade_purchases`, keyed
+by the client's purchase id, limit guarded in the same INSERT), then calls the
+canonical grant (`packageUp`). A refused grant deletes the row; a repeated id
+answers with the standing state and grants nothing. Windows: weekly =
+`gameWeekIndex` (Monday 00:00 RST), monthly = 1st 00:00 RST.
+
+The monthly shelf is empty on purpose and shows its server-provided empty
+text. Do not add greyed "coming soon" cards. `public/trade-post/` holds all
+six designer PNGs unmodified (1254px, ~2 MB each - source only, never
+rendered) beside 512px WebP derivatives (~50 KB) that the cards render; only
+`package-component-selector.webp` is shown until the systems behind the
+others exist. Regenerate a derivative with the PIL one-liner in the commit
+that added them (trim transparent margin, fit 512, quality 82). "Visit Token Store"
+renders only when `WWR_TOKEN_STORE_URL` (https) is set - there is no website
+store yet. Never print a cash amount, pack, bundle or discount in the game.
+
+`npm test` runs `tools/tests/*.test.ts` under node:test via tsx (the first test
+runner in the repo; `npm install` once after pulling).
+
 ## Temporary switches
 
 `ALL_SKINS_UNLOCKED` in `worker/game.ts` is `true` so testers can equip any

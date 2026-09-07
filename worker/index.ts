@@ -6,6 +6,8 @@
  */
 import {handleAdminRequests} from './admin';
 import {handleBotsPage} from './botsAdmin';
+import {buyFromTradePost, readTradePost} from './tradePost';
+import {isRoute} from '../shared/tradePost';
 import {
   FARM_CEILING_SEASON_1,
   PLANT_BATCH_MAX,
@@ -165,6 +167,8 @@ export interface Env {
   TEST_BOT_SECRET?: string;
   /** "on" lets test-bot accounts order attacks. Off on the live server. */
   TEST_BOTS_MAY_ATTACK?: string;
+  /** Where Tokens are bought - the website, never the game. Unset = no button. */
+  WWR_TOKEN_STORE_URL?: string;
 }
 
 const RESOURCES: ResourceKind[] = ['fuel', 'steel', 'munitions', 'alloy'];
@@ -2825,6 +2829,32 @@ async function route(
   }
 
   if (endpoint === 'POST /api/assets/package') return handlePackageUp(request, env, player);
+
+  if (endpoint === 'GET /api/trade-post') {
+    return json(await readTradePost(env.DB, player.id, Date.now(), env.WWR_TOKEN_STORE_URL ?? null));
+  }
+  if (endpoint === 'POST /api/trade-post/buy') {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const key = body?.package;
+    if (!isPackageKey(key)) return fail(400, 'No such package.');
+    if (!isRoute(body?.route)) return fail(400, 'Pick Tokens or Command Credits.');
+    // Note what is NOT read here: no cost, no balance, no limit, no reset. The
+    // client chooses; the server prices, counts and grants.
+    const result = await buyFromTradePost(
+      env.DB,
+      player.id,
+      {
+        purchaseId: typeof body?.purchaseId === 'string' ? body.purchaseId : '',
+        offerId: typeof body?.offerId === 'string' ? body.offerId : '',
+        assetId: typeof body?.assetId === 'string' ? body.assetId : '',
+        key,
+        route: body.route,
+      },
+      Date.now(),
+    );
+    if (!result.ok) return json({error: result.error, code: result.code}, {status: result.code === 'bad-request' ? 400 : 409});
+    return json(result);
+  }
 
   if (endpoint === 'POST /api/assets/reset') return handlePackageReset(request, env, player);
 

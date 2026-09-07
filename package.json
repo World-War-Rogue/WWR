@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "vite build",
+    "build": "vite build && node scripts/budget.mjs",
     "preview": "vite preview",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "lint": "tsc --noEmit && tsc --noEmit -p worker && node scripts/simulate.mjs --only audit && node scripts/terrain-audit.mjs",
+    "test": "node --import tsx --test \"tools/tests/*.test.ts\"",
     "sim": "node scripts/simulate.mjs",
     "terrain": "node scripts/terrain-audit.mjs",
     "db:migrate": "wrangler d1 migrations apply wwr-db --remote",
@@ -27,6 +28,7 @@
     "vite": "^6.2.3"
   },
   "devDependencies": {
+    "tsx": "^4.20.0",
     "@cloudflare/workers-types": "^5.20260903.1",
     "@types/node": "^22.14.0",
     "tailwindcss": "^4.1.14",

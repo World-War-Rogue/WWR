@@ -10,11 +10,13 @@
  * six production buildings still exist in the database and still produce, and
  * until the redesign reset retires them this is where they are upgraded.
  */
-import {type ReactNode, useState} from 'react';
+import {type ReactNode, Suspense, lazy, useState} from 'react';
 import BuildingPanel from './BuildingPanel';
 import {QueuePanel, ResourceShop, SecondTeamPanel, StockPanel} from './ResourcePanels';
 import {useBase, useSeason} from './useBase';
 import ShieldPanel from './ShieldPanel';
+// A separate download: most sessions never open the Trade Post.
+const TradePost = lazy(() => import('./TradePost'));
 import {LEVELLED_BUILDINGS, PRODUCER_OF, RESOURCE_KINDS, isLevelledBuilding} from '../../shared/buildings';
 import {type MessageKey, t} from '../i18n';
 import {
@@ -95,7 +97,7 @@ export function CommandCenterSheet({
   /** The player panel - who you are and the doors you walk through. */
   profile: ReactNode;
 }) {
-  const [tab, setTab] = useState<'departments' | 'protection' | 'events' | 'wars' | 'profile'>('departments');
+  const [tab, setTab] = useState<'departments' | 'protection' | 'events' | 'wars' | 'trade' | 'profile'>('departments');
   // Base levels v2: the Command Center's own level. Read when the sheet opens.
   const [levels, setLevels] = useBase();
   const [season1, setSeason1] = useSeason();
@@ -104,6 +106,8 @@ export function CommandCenterSheet({
     {key: 'protection', label: 'Protection'},
     {key: 'events', label: t('cc.events')},
     {key: 'wars', label: t('cc.wars')},
+    // The Trade Post is a door, not a department: no level, no upgrade.
+    {key: 'trade', label: t('cc.tradePost')},
     {key: 'profile', label: t('cc.profile')},
   ] as const;
 
@@ -130,6 +134,16 @@ export function CommandCenterSheet({
         ))}
       {tab === 'events' && <Soon text={t('cc.eventsSoon')} />}
       {tab === 'wars' && <Soon text={t('cc.warsSoon')} />}
+      {tab === 'trade' && (
+        <Suspense fallback={<Soon text="Loading…" />}>
+          <TradePost
+            onWallet={(wallet) => {
+              // A purchase moved the wallet; the Departments tab shows it too.
+              if (levels) setLevels({...levels, wallet});
+            }}
+          />
+        </Suspense>
+      )}
       {tab === 'profile' && profile}
       {tab === 'departments' && (
         <>

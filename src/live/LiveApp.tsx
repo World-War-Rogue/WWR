@@ -6,25 +6,29 @@
  * keeps running whether or not this tab is open. The tactical UI in App.tsx
  * gets wired to these same endpoints once the foundation is trusted.
  */
-import Guide from './guide/Guide';
+// Screens a player may never open in a session are separate downloads
+// (React.lazy): the entry bundle carries the map, the base and chat, and the
+// rest arrives the first time it is asked for. Five-year-old phones on slow
+// links are the floor; every kilobyte on first paint is paid by all of them.
+const Guide = lazy(() => import('./guide/Guide'));
+const Alliance = lazy(() => import('./Alliance'));
+const Assets = lazy(() => import('./Assets'));
+const Battles = lazy(() => import('./Battles'));
+const Squads = lazy(() => import('./Squads'));
+const Customize = lazy(() => import('./Customize'));
+const Settings = lazy(() => import('./Settings'));
 import {guideEvent} from './guide/bus';
 import {HUB_OF_CATEGORY} from '../../shared/buildings';
 import {remaining} from './BuildingPanel';
-import {useCallback, useEffect, useState} from 'react';
+import {Suspense, lazy, useCallback, useEffect, useState} from 'react';
 import {setLanguage, t} from '../i18n';
-import Alliance from './Alliance';
-import Assets from './Assets';
 import BaseBoard from './BaseBoard';
 import {CommandCenterSheet, DepartmentSheet, DepotSheet} from './BaseSheets';
-import Battles from './Battles';
-import Squads from './Squads';
 import Chat from './Chat';
-import Customize from './Customize';
 import Profile, {Portrait} from './Profile';
 import Gate from './Gate';
 import {GameClock} from './GameClock';
 import {noteServerTime, serverNow} from './serverClock';
-import Settings from './Settings';
 import {installErrorTap} from './recentErrors';
 import WorldMap from './WorldMap';
 import {
@@ -150,6 +154,11 @@ export function PlayerPanel({
   );
 }
 
+/** What a lazily loaded screen shows for the moment its code is in flight. */
+function ScreenLoading() {
+  return <div className="p-10 text-sm text-neutral-500">Loading…</div>;
+}
+
 export default function LiveApp() {
   const [player, setPlayer] = useState<Player | null>(null);
   const [base, setBase] = useState<BaseView | null>(null);
@@ -224,9 +233,9 @@ export default function LiveApp() {
   // context because it is also called from canvas drawing code, which has no
   // component around it to read a context from.
   useEffect(() => {
-    setLanguage(player?.language ?? 'en');
-    // Nudge a re-render so screens already mounted redraw in the new language
-    // rather than waiting for the next thing that happens to change.
+    // The dictionary is a separate download the first time; screens render in
+    // English until it lands, then redraw - the tick below is what redraws them.
+    void setLanguage(player?.language ?? 'en').then(() => setLangTick((n) => n + 1));
     setLangTick((n) => n + 1);
   }, [player?.language]);
 
@@ -278,7 +287,9 @@ export default function LiveApp() {
   // branch having to know about it.
   const chat = (
     <>
-      <Guide />
+      <Suspense fallback={null}>
+        <Guide />
+      </Suspense>
       <Chat
         me={player.username}
         onViewProfile={(name) => {
@@ -287,10 +298,12 @@ export default function LiveApp() {
         }}
       />
       {settingsOpen && (
+        <Suspense fallback={null}>
         <Settings
           screen={screen === 'world' ? 'map' : screen}
           onClose={() => setSettingsOpen(false)}
         />
+        </Suspense>
       )}
     </>
   );
@@ -299,6 +312,7 @@ export default function LiveApp() {
     return (
       <>
         <div className="pb-16">
+          <Suspense fallback={<ScreenLoading />}>
           <Alliance
             me={player.username}
             onClose={() => setScreen('base')}
@@ -307,6 +321,7 @@ export default function LiveApp() {
               setScreen('profile');
             }}
           />
+          </Suspense>
         </div>
         {chat}
       </>
@@ -336,12 +351,14 @@ export default function LiveApp() {
     return (
       <>
         <div className="pb-16">
+          <Suspense fallback={<ScreenLoading />}>
           <Customize
             onClose={() => {
               setScreen('base');
               void refresh();
             }}
           />
+          </Suspense>
         </div>
         {chat}
       </>
@@ -372,6 +389,7 @@ export default function LiveApp() {
     return (
       <>
         <div className="fixed inset-0 bg-[#0a0906] text-neutral-200">
+          <Suspense fallback={<ScreenLoading />}>
           <Squads
             only={squadOnly}
             onClose={() => {
@@ -383,6 +401,7 @@ export default function LiveApp() {
               setScreen('assets');
             }}
           />
+          </Suspense>
         </div>
         {chat}
       </>
@@ -395,6 +414,7 @@ export default function LiveApp() {
     return (
       <>
         <div className="fixed inset-0 bg-[#0a0906] text-neutral-200">
+          <Suspense fallback={<ScreenLoading />}>
           <Assets
             only={assetOnly}
             onClose={() => {
@@ -406,6 +426,7 @@ export default function LiveApp() {
               setScreen('squads');
             }}
           />
+          </Suspense>
         </div>
         {chat}
       </>
@@ -418,7 +439,9 @@ export default function LiveApp() {
     return (
       <>
         <div className="fixed inset-0 bg-[#0a0906] text-neutral-200">
+          <Suspense fallback={<ScreenLoading />}>
           <Battles onClose={() => setScreen('world')} />
+          </Suspense>
         </div>
         {chat}
       </>

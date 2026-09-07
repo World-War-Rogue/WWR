@@ -328,6 +328,35 @@ export interface Player {
   language?: string;
 }
 
+/** GET /api/trade-post. Everything priced and counted by the server. */
+export interface TradePostView {
+  serverTime: number;
+  wallet: Wallet;
+  /** Present only when the website store is configured. No button otherwise. */
+  tokenStoreUrl: string | null;
+  shelves: Array<{
+    shelf: 'weekly' | 'monthly';
+    resetAt: number;
+    emptyText: string;
+    offers: Array<{id: string; kind: string; name: string; description: string; art: string; limit: number; remaining: number}>;
+  }>;
+  targets: Array<{
+    assetId: string;
+    code: string;
+    name: string;
+    level: number;
+    eligible: boolean;
+    packages: Record<PackageKey, {current: number; target: number; cost: number} | null>;
+  }>;
+}
+
+export interface TradePostBuyResponse {
+  ok: true;
+  duplicate: boolean;
+  wallet: Wallet;
+  remaining: number;
+}
+
 export class ApiError extends Error {
   readonly status: number;
 
@@ -467,6 +496,9 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({assetId, package: pkg, target, split}),
     }),
+  tradePost: () => call<TradePostView>('/api/trade-post'),
+  tradePostBuy: (body: {purchaseId: string; offerId: string; assetId: string; package: PackageKey; route: 'tokens' | 'credits'}) =>
+    call<TradePostBuyResponse>('/api/trade-post/buy', {method: 'POST', body: JSON.stringify(body)}),
   resetPackages: (assetId: string) =>
     call<UpgradeResponse>('/api/assets/reset', {
       method: 'POST',

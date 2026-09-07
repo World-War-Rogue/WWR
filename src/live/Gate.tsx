@@ -82,9 +82,11 @@ export default function Gate({onAuthed}: {onAuthed: (player: Player) => void}) {
   useEffect(() => {
     const guess = (navigator.language || 'en').split('-')[0];
     if (!LANGUAGE_CODES.includes(guess)) return;
-    setLanguage(guess);
+    void setLanguage(guess).then(() => setLangTick((n) => n + 1));
     setLangTick((n) => n + 1);
-    return () => setLanguage('en');
+    return () => {
+      void setLanguage('en');
+    };
   }, []);
 
   useEffect(() => {

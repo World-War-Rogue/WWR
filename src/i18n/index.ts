@@ -16,12 +16,26 @@
  * Rollout is screen by screen. A key that has no translation falls back to its
  * English source, so a half-converted interface is a mixed one rather than a
  * broken one, and there is never a moment where this has to land all at once.
+ *
+ * ONE LANGUAGE PER DOWNLOAD. The dictionaries live in generated/<code>.json
+ * and each is its own chunk, fetched the first time that language is chosen.
+ * Shipping all of them in the entry bundle was 337 KB of source - the largest
+ * single thing a player downloaded - for twenty-one languages they would never
+ * read. English is inline; it is the source text and the fallback.
  */
 import {LANGUAGE_CODES} from '../../shared/chat';
 import {EN} from './en';
-import {TRANSLATIONS} from './generated';
+import COVERAGE from './coverage.json';
 
 export type MessageKey = keyof typeof EN;
+
+type Table = Record<string, string>;
+
+/** Every dictionary, as a lazy loader keyed by its path. Vite splits each into a chunk. */
+const LOADERS = import.meta.glob<{default: Table}>('./generated/*.json');
+
+const loaded = new Map<string, Table>();
+const listeners = new Set<() => void>();
 
 /**
  * The language the interface is drawn in.
@@ -33,8 +47,32 @@ export type MessageKey = keyof typeof EN;
  */
 let current = 'en';
 
-export function setLanguage(code: string): void {
+/**
+ * Switch language. Resolves once the dictionary is in memory; until then `t`
+ * answers in English, and subscribers are told when the words change so a
+ * screen already drawn re-draws in the new language.
+ */
+export async function setLanguage(code: string): Promise<void> {
   current = LANGUAGE_CODES.includes(code) ? code : 'en';
+  if (current !== 'en' && !loaded.has(current)) {
+    const load = LOADERS[`./generated/${current}.json`];
+    if (load) {
+      try {
+        loaded.set(current, (await load()).default);
+      } catch {
+        // Offline, or the chunk failed: English stays up. Nothing is lost.
+      }
+    }
+  }
+  for (const fn of listeners) fn();
+}
+
+/** Called after a language finishes loading or changes. Returns the unsubscribe. */
+export function onLanguageChange(fn: () => void): () => void {
+  listeners.add(fn);
+  return () => {
+    listeners.delete(fn);
+  };
 }
 
 export function language(): string {
@@ -50,9 +88,7 @@ export function language(): string {
  * has lost the button.
  */
 export function t(key: MessageKey, vars?: Record<string, string | number>): string {
-  const table = TRANSLATIONS[current as keyof typeof TRANSLATIONS] as
-    | Record<string, string>
-    | undefined;
+  const table = current === 'en' ? undefined : loaded.get(current);
   let text = table?.[key] ?? EN[key];
 
   if (vars) {
@@ -63,13 +99,12 @@ export function t(key: MessageKey, vars?: Record<string, string | number>): stri
   return text;
 }
 
-/** How many of the interface's strings exist in a language. For the picker. */
+/**
+ * How many of the interface's strings exist in a language. For the picker.
+ * Read from a generated count so describing a language never downloads it.
+ */
 export function coverage(code: string): number {
-  const table = TRANSLATIONS[code as keyof typeof TRANSLATIONS] as
-    | Record<string, string>
-    | undefined;
   if (code === 'en') return 1;
-  if (!table) return 0;
-  const keys = Object.keys(EN);
-  return keys.filter((k) => typeof table[k] === 'string' && table[k].length > 0).length / keys.length;
+  const n = (COVERAGE as Record<string, number>)[code] ?? 0;
+  return n / Object.keys(EN).length;
 }
