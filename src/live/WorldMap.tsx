@@ -122,17 +122,17 @@ function drawNameplate(
   const fontSize = Math.min(13, Math.max(8, scale * 0.2));
   ctx.font = `600 ${fontSize}px ui-sans-serif, system-ui, sans-serif`;
 
-  const levelText = String(base.level);
+  // No level on the plate. A base's level is shown only after tapping it -
+  // the owner's ruling: nothing about a base is given away from across the
+  // map. The plate is the callsign and nothing else.
   const padX = fontSize * 0.55;
-  const badgeD = fontSize * 1.3;
-  const gap = fontSize * 0.3;
   const boxH = fontSize * 1.7;
 
-  // The width budget. Everything but the name is fixed, so the name is what
-  // gives: a long callsign is cut with an ellipsis rather than allowed to push
-  // the plate out over the neighbouring plots.
+  // The width budget. The name is what gives: a long callsign is cut with an
+  // ellipsis rather than allowed to push the plate out over the neighbouring
+  // plots.
   const maxW = scale * 0.96;
-  const chrome = padX * 2 + badgeD + gap;
+  const chrome = padX * 2;
   const textBudget = Math.max(0, maxW - chrome);
 
   let label = base.username;
@@ -198,22 +198,6 @@ function drawNameplate(
   ctx.textAlign = 'left';
   ctx.fillText(label, boxX + padX, boxY + boxH / 2);
 
-  // Level badge, hard against the right end.
-  const badgeX = boxX + boxW - padX * 0.6 - badgeD / 2;
-  const badgeY = boxY + boxH / 2;
-  ctx.fillStyle = isYou ? '#7c2d12' : '#000';
-  ctx.beginPath();
-  ctx.arc(badgeX, badgeY, badgeD / 2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = isYou ? '#ffb37a' : 'rgba(255,255,255,0.28)';
-  ctx.beginPath();
-  ctx.arc(badgeX, badgeY, badgeD / 2, 0, Math.PI * 2);
-  ctx.stroke();
-
-  ctx.fillStyle = '#f5f5f4';
-  ctx.textAlign = 'center';
-  ctx.font = `700 ${fontSize * 0.8}px ui-sans-serif, system-ui, sans-serif`;
-  ctx.fillText(levelText, badgeX, badgeY + 0.5);
 }
 
 /**
