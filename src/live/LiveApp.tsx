@@ -19,6 +19,7 @@ const Customize = lazy(() => import('./Customize'));
 const Settings = lazy(() => import('./Settings'));
 const DevTools = lazy(() => import('./DevTools'));
 const PowerBreakdownScreen = lazy(() => import('./PowerBreakdown'));
+const ArenaScreen = lazy(() => import('./Arena'));
 import {guideEvent} from './guide/bus';
 import {HUB_OF_CATEGORY} from '../../shared/buildings';
 import {remaining} from './BuildingPanel';
@@ -183,7 +184,7 @@ export default function LiveApp() {
   /** Bumped when the language changes, purely to force a redraw. */
   const [, setLangTick] = useState(0);
   const [screen, setScreen] = useState<
-    'base' | 'world' | 'customize' | 'profile' | 'alliance' | 'battles' | 'assets' | 'squads' | 'dev' | 'power'
+    'base' | 'world' | 'customize' | 'profile' | 'alliance' | 'battles' | 'assets' | 'squads' | 'dev' | 'power' | 'arena'
     // The map, not the base. A player opening the game wants to see where they
     // are and what is around them - the base screen is a menu, and starting on
     // a menu hides the thing the game is actually about. The map already opens
@@ -548,6 +549,24 @@ export default function LiveApp() {
 
   // Reports take the whole viewport too: a battle report is a page you read,
   // not a panel you glance at over the map.
+  if (screen === 'arena') {
+    return (
+      <>
+        <div className="fixed inset-0 overflow-y-auto bg-[#0a0906] pb-16 text-neutral-200">
+          <Suspense fallback={<ScreenLoading />}>
+            <ArenaScreen
+              onClose={() => {
+                setScreen('base');
+                setSheet({department: 'tactical_operations_center'});
+              }}
+            />
+          </Suspense>
+        </div>
+        {chat}
+      </>
+    );
+  }
+
   if (screen === 'power') {
     return (
       <>
@@ -687,7 +706,15 @@ export default function LiveApp() {
         />
       )}
       {sheet !== null && typeof sheet === 'object' && (
-        <DepartmentSheet id={sheet.department} onClose={() => setSheet(null)} onGoTo={goToBuilding} />
+        <DepartmentSheet
+          id={sheet.department}
+          onClose={() => setSheet(null)}
+          onGoTo={goToBuilding}
+          onOpenArena={() => {
+            setSheet(null);
+            setScreen('arena');
+          }}
+        />
       )}
       {sheet === 'depot' && (
         <DepotSheet

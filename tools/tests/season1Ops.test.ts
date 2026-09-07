@@ -185,3 +185,81 @@ test('exercise rewards are Credits and resources only, scaled by the week like D
   assert.equal(exerciseReward('fuel_silo', 1).fuel, 300);
   assert.equal(exerciseReward('fuel_silo', 10).fuel, Math.round(300 * 1.54));
 });
+
+/* -------------------------------------------------------------------------- */
+/* Iron Dominion Arena, phase A (shared/arena.ts)                              */
+/* -------------------------------------------------------------------------- */
+
+import {
+  ARENA_ATTEMPTS_PER_DAY,
+  FIELD_CACHE,
+  FULL_ENGAGEMENT_BONUS,
+  MAX_ATTEMPT_SCORE,
+  RANK_BANDS,
+  anonymise,
+  bandForRank,
+  bootstrapBenchmark,
+  lethalityIndex,
+  rankStandings,
+  scoreAttempt,
+  squadPowerOf,
+} from '../../shared/arena';
+import {resolve as resolveFight} from '../../shared/combat';
+import {NO_PACKAGES as BARE_PACKAGES} from '../../shared/upgrades';
+
+test('rank bands cover every rank once, 1 to 101+, and pay Credits and resources only', () => {
+  for (let rank = 1; rank <= 300; rank += 1) {
+    const hits = RANK_BANDS.filter((b) => rank >= b.from && (b.to === null || rank <= b.to));
+    assert.equal(hits.length, 1, `rank ${rank}`);
+    assert.ok(!('tokens' in bandForRank(rank).reward));
+  }
+  assert.equal(bandForRank(50).label, '21–50');
+  assert.equal(bandForRank(51).label, '51–100');
+  assert.equal(bandForRank(101).label, '101+');
+  assert.ok(bandForRank(1).reward.credits > bandForRank(2).reward.credits);
+  assert.ok(!('tokens' in FIELD_CACHE) && !('tokens' in FULL_ENGAGEMENT_BONUS));
+  assert.equal(ARENA_ATTEMPTS_PER_DAY, 3);
+});
+
+test('attempt score is the spec formula, itemised, between 0 and the maximum', () => {
+  const six = ['m1a2', 'leclerc', 'f35a', 'rq4', 'm270a2', 'mi35m'];
+  const side = (level: number) => six.map((assetId, slot) => ({assetId, level, packages: BARE_PACKAGES, slot}));
+  const win = resolveFight({name: 'A', units: side(10)}, {name: 'B', units: side(2)}, 3);
+  const loss = resolveFight({name: 'A', units: side(2)}, {name: 'B', units: side(10)}, 3);
+  for (const r of [win, loss]) {
+    const s = scoreAttempt(r);
+    const sum = Math.floor(s.terms.enemyDamage + s.terms.enemyEliminated + s.terms.ownRemaining + s.terms.roundEfficiency + s.terms.clearBonus);
+    assert.equal(s.score, sum);
+    assert.ok(s.score >= 0 && s.score <= MAX_ATTEMPT_SCORE);
+    for (const pct of [s.enemyDamagePct, s.enemyEliminatedPct, s.ownRemainingPct, s.roundEfficiencyPct]) assert.ok(pct >= 0 && pct <= 1);
+  }
+  assert.ok(scoreAttempt(win).score > scoreAttempt(loss).score);
+  assert.equal(scoreAttempt(win).cleared, win.outcome === 'attacker');
+  assert.equal(scoreAttempt(loss).terms.clearBonus, 0);
+});
+
+test('the benchmark is anonymised to the same category, role and metrics, and the bootstrap follows the band', () => {
+  const src = [{assetId: 'm1a2', level: 7, packages: {...BARE_PACKAGES, armament: 4}, slot: 0, boost: 1.1}];
+  const out = anonymise(src, seeded(5));
+  assert.equal(out.length, 1);
+  assert.notEqual(out[0].assetId, 'm1a2', 'a different chassis');
+  assert.equal(out[0].level, 7);
+  assert.deepEqual(out[0].packages, src[0].packages);
+  assert.equal(out[0].boost, 1.1);
+  assert.equal(squadPowerOf(out), squadPowerOf(src), 'same power');
+  assert.ok(lethalityIndex(out) > 0);
+  assert.equal(bootstrapBenchmark(1)[0].level, 2);
+  assert.equal(bootstrapBenchmark(4)[0].level, 5);
+  assert.equal(bootstrapBenchmark(10).length, 6);
+});
+
+test('standings order: score, then best attempt, then who got there first, then id', () => {
+  const rows = [
+    {playerId: 'b', username: 'b', score: 100, best: 60, attempts: 3, reachedAt: 10},
+    {playerId: 'a', username: 'a', score: 100, best: 60, attempts: 3, reachedAt: 10},
+    {playerId: 'c', username: 'c', score: 100, best: 70, attempts: 3, reachedAt: 20},
+    {playerId: 'd', username: 'd', score: 120, best: 50, attempts: 2, reachedAt: 30},
+    {playerId: 'e', username: 'e', score: 100, best: 60, attempts: 3, reachedAt: 5},
+  ];
+  assert.deepEqual(rankStandings(rows).map((r) => r.playerId), ['d', 'c', 'e', 'a', 'b']);
+});

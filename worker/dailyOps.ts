@@ -171,6 +171,26 @@ export async function grantExerciseReward(
   await noteDailyProgress(db, playerId, lane, now);
 }
 
+/**
+ * A generic reward grant for any season system (Arena caches and weekly
+ * ranks, later Warfront): paid once per key through the same table and
+ * the same guarded statements. Returns true when this call paid it.
+ */
+export async function grantReward(
+  db: D1Database,
+  playerId: string,
+  key: string,
+  source: string,
+  reward: Reward,
+  detail: string,
+  now: number,
+): Promise<boolean> {
+  if (rewardIsEmpty(reward)) return false;
+  const day = dailyWindow(now);
+  const results = await db.batch(await grantStatements(db, playerId, key, source, day.key, reward, detail, now));
+  return (results[0].meta.changes ?? 0) > 0;
+}
+
 export interface DailyView {
   season: number;
   week: number;

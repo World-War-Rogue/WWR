@@ -25,6 +25,7 @@ import {powerBreakdown} from '../shared/powerBreakdown';
 import {createQaAccount, devAction, devSeedsEnabled, devStatus} from './devProgression';
 import {claimCache, listGrants, noteDailyProgress, readDaily} from './dailyOps';
 import {ensureExercises, readExercise, viewOf} from './exercises';
+import {arenaView, makeAttempt} from './arena';
 import {seasonPhase} from '../shared/season1Ops';
 import {FARM_ROLE} from './bots';
 import {isCombatSystemLane} from '../shared/combatSystems';
@@ -3044,6 +3045,21 @@ async function route(
     return json({ok: true, reward: result.reward, daily: await readDaily(env.DB, player.id, Date.now())});
   }
   if (endpoint === 'GET /api/ops/grants') return json({grants: await listGrants(env.DB, player.id)});
+
+  // Iron Dominion Arena: the screen, and one attempt.
+  if (endpoint === 'GET /api/arena' || endpoint === 'POST /api/arena/attempt') {
+    const now = Date.now();
+    const worlds = await reachableWorlds(env.DB, player.id, now);
+    const world = worlds.find((entry) => entry.kind === 'home') ?? worlds[0];
+    if (!world) return fail(409, 'You have not been deployed yet.');
+    const away = await marchingSquads(env.DB, player.id);
+    if (endpoint === 'POST /api/arena/attempt') {
+      const result = await makeAttempt(env.DB, player.id, player.username, world.id, away, now, newId);
+      if (!result.ok) return fail(409, result.error);
+      return json({...result, view: await arenaView(env.DB, player.id, world.id, away, now)});
+    }
+    return json(await arenaView(env.DB, player.id, world.id, away, now));
+  }
 
   // March a Task Force to one of today's map exercises. No Fuel, no defender.
   if (endpoint === 'POST /api/ops/exercise') {

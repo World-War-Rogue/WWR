@@ -15,6 +15,8 @@ import type {CombatSystemLane, CombatSystems} from '../../shared/combatSystems';
 import type {PowerBreakdown} from '../../shared/powerBreakdown';
 import type {Lane, Reward} from '../../shared/season1Ops';
 import type {ExerciseView} from '../../shared/exercises';
+import type {ScoreBreakdown} from '../../shared/arena';
+import type {CombatantSpec} from '../../shared/combat';
 import type {BuildingLevels} from '../../shared/buildings';
 
 export interface ChatMessage {
@@ -302,6 +304,46 @@ export interface DailyView {
   industryMs: number;
 }
 
+export interface ArenaAttempt {
+  id: string;
+  n: number;
+  squad: string;
+  score: number;
+  outcome: string;
+  breakdown: ScoreBreakdown | null;
+  units: CombatantSpec[];
+  rounds: Array<{index: number; summary: string; attackerDamage: number; defenderDamage: number}>;
+  notes: string[];
+  createdAt: number;
+}
+
+export interface ArenaBoardRow {
+  username: string;
+  score: number;
+  best: number;
+  attempts: number;
+  reachedAt: number;
+  rank: number;
+}
+
+export interface ArenaView {
+  phase: 'pre' | 'proving_ground' | 'head_to_head' | 'offseason';
+  seasonWeek: number;
+  dayKey: string;
+  resetAt: number;
+  closesAt: number;
+  attemptsUsed: number;
+  attemptsPerDay: number;
+  force: {squad: string; power: number; units: Array<{assetId: string; level: number; slot: number}>} | null;
+  benchmark: {units: Array<{assetId: string; category: string; level: number}>; power: number};
+  attempts: ArenaAttempt[];
+  daily: ArenaBoardRow[];
+  myDaily: {rank: number; best: number} | null;
+  weekly: ArenaBoardRow[];
+  myWeekly: {rank: number; score: number; attempts: number} | null;
+  lastSettlement: {at: number; ranked: number} | null;
+}
+
 export interface RewardGrant {
   id: string;
   source: string;
@@ -567,6 +609,12 @@ export const api = {
       body: JSON.stringify({squad, x, y, contract}),
     }),
   daily: () => call<DailyView>('/api/ops/daily'),
+  arena: () => call<ArenaView>('/api/arena'),
+  arenaAttempt: () =>
+    call<{ok: true; attempt: ArenaAttempt; fieldCache: boolean; fullEngagement: boolean; view: ArenaView}>('/api/arena/attempt', {
+      method: 'POST',
+      body: '{}',
+    }),
   exercise: (id: string, squad: string) =>
     call<{arrivesAt: number; seconds: number}>('/api/ops/exercise', {method: 'POST', body: JSON.stringify({id, squad})}),
   claimDailyCache: () => call<{ok: true; reward: Reward; daily: DailyView}>('/api/ops/daily/claim', {method: 'POST', body: '{}'}),
