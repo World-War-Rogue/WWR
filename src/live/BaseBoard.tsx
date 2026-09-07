@@ -53,8 +53,6 @@ import {
   padTakesBuildings,
 } from '../../shared/base';
 
-/** A second tap after this is a new selection, not an open. */
-const DOUBLE_TAP_MS = 650;
 /** Hold a building this long and it lifts. Shorter than a browser long-press. */
 const HOLD_MS = 320;
 /** A press that travels further than this before the hold is a pan. */
@@ -94,7 +92,6 @@ export default function BaseBoard({
   const [lifted, setLifted] = useState<{id: string; x: number; y: number} | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [forces, setForces] = useState<SquadView | null>(null);
-  const lastTap = useRef<{id: string; at: number}>({id: '', at: 0});
 
   // The Task Force line: which of Alpha-Delta are home. Read when the base
   // opens; a march launched from the map is a screen away and refreshes it.
@@ -155,10 +152,12 @@ export default function BaseBoard({
         ? COMMAND_CENTER_ENTRY
         : BOARD_BUILDING_BY_ID[id]?.entry;
     if (!entry) return;
-    const at = Date.now();
-    const prev = lastTap.current;
-    lastTap.current = {id, at};
-    if (selected === id && prev.id === id && at - prev.at < DOUBLE_TAP_MS) {
+    // The label under a selected building says "Tap again to open", so a
+    // second tap on it opens it - however long the player took to read the
+    // label. This used to require the second tap inside 650ms, which turned
+    // a slow second tap into a silent re-select and read as "the building
+    // needs a double-click that sometimes works".
+    if (selected === id) {
       onOpen(entry);
       return;
     }
