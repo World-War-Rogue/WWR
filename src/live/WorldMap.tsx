@@ -13,6 +13,8 @@
 import {attackFuel} from '../../shared/march';
 import {guideEvent} from './guide/bus';
 import {useModal} from './guide/useModal';
+import {type ExerciseView} from '../../shared/exercises';
+import {describeReward} from '../../shared/season1Ops';
 import {SHIELD_WORDING, isShielded} from '../../shared/shields';
 import {remaining} from './BuildingPanel';
 import {type ReactNode, type RefObject, useCallback, useEffect, useMemo, useRef, useState} from 'react';
@@ -107,6 +109,64 @@ const lastMap: {camera: Camera | null; view: WorldView | null} = {camera: null, 
 export function forgetMap(): void {
   lastMap.camera = null;
   lastMap.view = null;
+}
+
+/** A daily map exercise target: a marked plot with a short label. */
+function drawExercise(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  scale: number,
+  e: ExerciseView,
+  time: number,
+  selected: boolean,
+) {
+  const colour =
+    e.state === 'settled'
+      ? 'rgba(52,211,153,0.9)'
+      : e.state === 'failed'
+        ? 'rgba(248,113,113,0.9)'
+        : e.state === 'marching'
+          ? 'rgba(103,232,249,0.9)'
+          : 'rgba(251,191,36,0.95)';
+  const cx = x + scale / 2;
+  const cy = y + scale / 2;
+  const pulse = e.state === 'available' ? 0.85 + 0.15 * Math.sin(time / 400) : 1;
+  const r = scale * 0.28 * pulse;
+  ctx.save();
+  // Diamond on the plot, dashed ring while available, solid once taken.
+  ctx.strokeStyle = colour;
+  ctx.lineWidth = Math.max(1.5, scale * 0.03);
+  ctx.setLineDash(e.state === 'available' ? [scale * 0.08, scale * 0.06] : []);
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - r);
+  ctx.lineTo(cx + r, cy);
+  ctx.lineTo(cx, cy + r);
+  ctx.lineTo(cx - r, cy);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = colour.replace('0.9', '0.18').replace('0.95', '0.2');
+  ctx.fill();
+  if (selected) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 2, y + 2, scale - 4, scale - 4);
+  }
+  // Label under the diamond, inside the plot.
+  const fontSize = Math.min(12, Math.max(8, scale * 0.18));
+  ctx.font = `600 ${fontSize}px ui-sans-serif, system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const label = e.state === 'settled' ? '✓ ' + e.name : e.state === 'failed' ? '✕ ' + e.name : e.name;
+  const w = ctx.measureText(label).width + fontSize;
+  const h = fontSize * 1.6;
+  const ly = y + scale - h / 2 - scale * 0.04;
+  ctx.fillStyle = 'rgba(0,0,0,0.75)';
+  ctx.fillRect(cx - w / 2, ly - h / 2, w, h);
+  ctx.fillStyle = colour;
+  ctx.fillText(label, cx, ly);
+  ctx.restore();
 }
 
 /**
@@ -579,7 +639,9 @@ function DeployedRow({
         ? t('map.dReinforce', {target: d.target})
         : d.kind === 'garrison'
           ? t('map.dGarrison', {target: d.target})
-          : t('map.dReturn');
+          : d.kind === 'exercise'
+            ? t('map.dExercise')
+            : t('map.dReturn');
 
   const deadline = d.kind === 'garrison' ? d.until : d.arrivesAt;
   const left = deadline === null ? '' : formatDuration(Math.max(0, deadline - clock));
@@ -659,7 +721,7 @@ export default function WorldMap({
   const [moving, setMoving] = useState(false);
   const [rallying, setRallying] = useState(false);
   /** The plot an attack is being aimed at, while a squad is chosen. */
-  const [attacking, setAttacking] = useState<{x: number; y: number; contract?: boolean} | null>(null);
+  const [attacking, setAttacking] = useState<{x: number; y: number; contract?: boolean; exercise?: ExerciseView} | null>(null);
   // The composer is a modal: Rider steps aside while it is up.
   useModal(attacking !== null);
   const [squads, setSquads] = useState<SquadView | null>(null);
@@ -724,6 +786,13 @@ export default function WorldMap({
    * no existing base is invalidated by terrain arriving underneath it.
    */
   const occupiedPlots = useMemo(() => new Set(basesByPlot.keys()), [basesByPlot]);
+
+  /** Today's map exercises by plot - the player's own, nobody else's. */
+  const exercisesByPlot = useMemo(() => {
+    const map = new Map<string, ExerciseView>();
+    for (const e of view?.exercises ?? []) map.set(`${e.x},${e.y}`, e);
+    return map;
+  }, [view]);
 
   const load = useCallback(async (cam: Camera, width: number, height: number) => {
     if (width === 0 || height === 0) return;
@@ -949,6 +1018,9 @@ export default function WorldMap({
   const selectedBase: PlacedBase | null = selected
     ? basesByPlot.get(`${selected.x},${selected.y}`) ?? null
     : null;
+  const selectedExercise: ExerciseView | null = selected
+    ? exercisesByPlot.get(`${selected.x},${selected.y}`) ?? null
+    : null;
   // General Rider's step 2: the player found their own base.
   useEffect(() => {
     if (selectedBase && selectedBase.username === view?.you.username) guideEvent('tap:own-base');
@@ -1137,6 +1209,15 @@ export default function WorldMap({
           base.username === you,
           zoom,
         );
+      }
+    }
+
+    // Today's map exercises: personal targets, drawn as marked plots with a
+    // short label. Amber while available, cyan while a column is on the way
+    // or holding, green once taken, red if a battle was lost.
+    if (!strategic) {
+      for (const e of view?.exercises ?? []) {
+        drawExercise(ctx, toScreenX(e.x), toScreenY(e.y), zoom, e, time, selected?.x === e.x && selected?.y === e.y);
       }
     }
 
@@ -1349,7 +1430,8 @@ export default function WorldMap({
     setSending(true);
     setError(null);
     try {
-      await api.attack(squad, attacking.x, attacking.y, attacking.contract === true);
+      if (attacking.exercise) await api.exercise(attacking.exercise.id, squad);
+      else await api.attack(squad, attacking.x, attacking.y, attacking.contract === true);
       guideEvent('tip:march');
       setAttacking(null);
       setSelected(null);
@@ -1571,6 +1653,11 @@ export default function WorldMap({
                       {selectedBase.level}
                     </p>
                   </>
+                ) : selectedExercise ? (
+                  <>
+                    <p className="truncate font-semibold text-amber-200">{selectedExercise.name}</p>
+                    <p className="text-xs text-neutral-400">Daily map exercise · {selectedExercise.action}</p>
+                  </>
                 ) : (
                   <p className="font-semibold text-emerald-400">{t('map.openGround')}</p>
                 )}
@@ -1583,7 +1670,46 @@ export default function WorldMap({
               </button>
             </div>
 
-            {occupied ? (
+            {selectedExercise && !occupied ? (
+              <>
+                <p className="mt-2 text-[11px] leading-snug text-neutral-300">{selectedExercise.blurb}</p>
+                <p className="mt-1 text-[11px] text-neutral-400">
+                  Reward: <span className="font-mono text-emerald-300">{describeReward(selectedExercise.reward)}</span>
+                  <span className="text-neutral-600"> · Daily Operations: {selectedExercise.lane}</span>
+                </p>
+                {selectedExercise.patrolPower !== null && (
+                  <p className="text-[11px] text-neutral-400">
+                    Dominion patrol · power <span className="font-mono text-red-300">{selectedExercise.patrolPower.toLocaleString()}</span>
+                  </p>
+                )}
+                <p className="text-[10px] text-neutral-600">No Fuel. The Task Force marches there and comes home by itself.</p>
+                {selectedExercise.state === 'available' ? (
+                  <button
+                    onClick={() => {
+                      setAttacking({x: selected.x, y: selected.y, exercise: selectedExercise});
+                      void api.squads().then(setSquads).catch(() => undefined);
+                    }}
+                    className="mt-2 w-full rounded border border-amber-700 bg-amber-950/40 px-3 py-2 text-sm font-semibold text-amber-200 hover:border-amber-400"
+                  >
+                    Deploy a Task Force
+                  </button>
+                ) : (
+                  <p className={`mt-2 rounded border px-2 py-1 text-xs ${
+                    selectedExercise.state === 'settled'
+                      ? 'border-emerald-800 bg-emerald-950/30 text-emerald-200'
+                      : selectedExercise.state === 'failed'
+                        ? 'border-red-900 bg-red-950/30 text-red-200'
+                        : 'border-cyan-800 bg-cyan-950/30 text-cyan-200'
+                  }`}>
+                    {selectedExercise.state === 'settled'
+                      ? 'Secured. Reward paid.'
+                      : selectedExercise.state === 'failed'
+                        ? 'The patrol held. Take another target today.'
+                        : `Task Force ${selectedExercise.squad ?? ''} is on it.`}
+                  </p>
+                )}
+              </>
+            ) : occupied ? (
               <>
                 <button
                   onClick={() => onViewProfile(selectedBase.username)}
@@ -1790,7 +1916,13 @@ export default function WorldMap({
           <div className="max-h-[70vh] overflow-y-auto rounded-t-xl border-t border-neutral-700 bg-neutral-950 p-3 shadow-2xl">
             <div className="flex items-center gap-2 pb-3">
               <h3 className="text-sm font-semibold text-neutral-100">
-                {allied ? t('map.chooseSquadReinforce') : attacking.contract ? 'Neutral contract · choose a Task Force' : t('map.chooseSquad')}
+                {attacking.exercise
+                  ? `${attacking.exercise.name} · choose a Task Force`
+                  : allied
+                    ? t('map.chooseSquadReinforce')
+                    : attacking.contract
+                      ? 'Neutral contract · choose a Task Force'
+                      : t('map.chooseSquad')}
               </h3>
               <span className="font-mono text-[11px] text-neutral-500">
                 {attacking.x}, {attacking.y}
@@ -1809,7 +1941,7 @@ export default function WorldMap({
                 const filled = (squads?.squads[name] ?? []).filter(Boolean).length;
                 const power = squads?.power[name] ?? 0;
                 // What the attack burns: Fuel by column size. Distance is free.
-                const fuel = !allied && attacking ? attackFuel(filled) : null;
+                const fuel = !allied && attacking && !attacking.exercise ? attackFuel(filled) : null;
                 const haveFuel = squads?.base.resources.fuel ?? 0;
                 // A squad that is out cannot be sent, and an empty one has
                 // nothing to send. Both are said rather than merely disabled -

@@ -29,6 +29,8 @@ export const MAP = {
   'map.dReinforce': 'reinforcing {target}',
   'map.dGarrison': 'holding {target}',
   'map.dReturn': 'coming home',
+  'map.dExercise': 'on exercise',
+  'map.holdsFor': 'holds for {time}',
   'map.hits': 'hits in {time}',
   'map.arrives': 'arrives in {time}',
   'map.homeIn': 'home in {time}',

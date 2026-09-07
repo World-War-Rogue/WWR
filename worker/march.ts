@@ -21,6 +21,9 @@ import {type SideSpec, resolve} from '../shared/combat';
 import {type CombatSystems} from '../shared/combatSystems';
 import {readSystems} from './combatSystems';
 import {noteDailyProgress} from './dailyOps';
+import {type ExerciseRow, markMarching, readExercise, settleExercise} from './exercises';
+import {EXERCISES, PATROL_NAME, isExerciseType} from '../shared/exercises';
+import type {CombatantSpec} from '../shared/combat';
 import {deltaOpen, lockedMessage, readSquads} from './squads';
 import {readBase} from './buildings';
 import {capFor, type Resources, RESOURCE_KINDS, categoryBoost, marchMultiplier, raidLoot} from '../shared/buildings';
@@ -227,6 +230,61 @@ export type LaunchResult =
   | {ok: false; error: string};
 
 /**
+ * Everything a column needs before it can leave: the units, every readiness
+ * rule, and the pace. Shared by attacks, reinforcements and exercises so the
+ * drone rule and the repair rule cannot drift between them.
+ */
+async function readyColumn(
+  db: D1Database,
+  attackerId: string,
+  squad: SquadName,
+  now: number,
+): Promise<{ok: true; units: RosterUnit[]; speed: number} | {ok: false; error: string}> {
+  const units = await unitsOf(db, attackerId, squad);
+  if (units.length === 0) return {ok: false, error: `Task Force ${squad} is empty.`};
+  // Nothing marches broken. A disabled asset is repaired first; one in the
+  // shop waits or is moved out. GAME-MATH v1 §5.
+  for (const u of units) {
+    const label = ASSET_BY_ID[u.assetId]?.code ?? u.assetId;
+    if (u.repairing) return {ok: false, error: REPAIR_WORDING.repairing(label)};
+    if (isDisabled(u.hpFraction ?? 1)) return {ok: false, error: REPAIR_WORDING.disabled(label)};
+  }
+  const levels = await readLevels(db, attackerId);
+  if (!taskForceOpen(squad, levels.command_center, squad === 'Delta' && (await deltaOpen(db, attackerId, levels.command_center, now)))) {
+    return {ok: false, error: lockedMessage(squad)};
+  }
+  // Nothing leaves the base without a drone. DRONE RULES v1.
+  if (droneCount(units.map((u) => u.assetId)) === 0) return {ok: false, error: DRONE_WORDING.needDrone};
+
+  // For the message only. The unique index below is what actually decides -
+  // this just gets to say WHICH thing is wrong, since one index rejection can
+  // mean either "that squad is out" or "you already reinforced them".
+  const busy = await marchingSquads(db, attackerId);
+  if (busy.has(squad)) return {ok: false, error: `Task Force ${squad} is already out.`};
+
+  // The column moves at the pace of its slowest vehicle, which is a real cost
+  // of bringing heavy armour and a real reason to keep one fast squad.
+  //
+  // Through attributesWith, not attributeAtLevel, so a Propulsion package
+  // reaches the march. Before this a player bought Propulsion, watched combat
+  // mobility rise, and marched exactly as slowly as before.
+  //
+  // Drones never slow the column - they speed it: the Drone Network
+  // (shared/drones.ts) multiplies the pace, paced on the slowest non-drone.
+  const resolved = units.map((u) => {
+    const asset = ASSET_BY_ID[u.assetId];
+    const a = asset ? attributesWith(asset, u.level, u.packages, u.boost ?? 1) : null;
+    // A damaged vehicle limps: its pace is scaled by what it has left.
+    return {id: u.assetId, mobility: (a?.mobility ?? 5) * marchHpFactor(u.hpFraction ?? 1), detection: a?.detection ?? 5};
+  });
+  const network = droneNetworkMultiplier(resolved.filter((r) => isDrone(r.id)));
+  // The Tactical Operations Center speeds every march; the whole bonus is
+  // capped at MARCH_TOTAL_CAP. BUILDING EFFECTS v1.
+  const speed = paceMobility(resolved) * marchMultiplier(network, levels.tactical_operations_center);
+  return {ok: true, units, speed};
+}
+
+/**
  * Squads standing at this player's base as reinforcements.
  *
  * Counted as part of the defence, which is the whole point of sending them.
@@ -293,47 +351,9 @@ export async function launch(
     if (isShielded(target?.until, now)) return {ok: false, error: SHIELD_WORDING.targetBlocked};
   }
 
-  const units = await unitsOf(db, attackerId, squad);
-  if (units.length === 0) return {ok: false, error: `Task Force ${squad} is empty.`};
-  // Nothing marches broken. A disabled asset is repaired first; one in the
-  // shop waits or is moved out. GAME-MATH v1 §5.
-  for (const u of units) {
-    const label = ASSET_BY_ID[u.assetId]?.code ?? u.assetId;
-    if (u.repairing) return {ok: false, error: REPAIR_WORDING.repairing(label)};
-    if (isDisabled(u.hpFraction ?? 1)) return {ok: false, error: REPAIR_WORDING.disabled(label)};
-  }
-  const levels = await readLevels(db, attackerId);
-  if (!taskForceOpen(squad, levels.command_center, squad === 'Delta' && (await deltaOpen(db, attackerId, levels.command_center, now)))) {
-    return {ok: false, error: lockedMessage(squad)};
-  }
-  // Nothing leaves the base without a drone. DRONE RULES v1.
-  if (droneCount(units.map((u) => u.assetId)) === 0) return {ok: false, error: DRONE_WORDING.needDrone};
-
-  // For the message only. The unique index below is what actually decides -
-  // this just gets to say WHICH thing is wrong, since one index rejection can
-  // mean either "that squad is out" or "you already reinforced them".
-  const busy = await marchingSquads(db, attackerId);
-  if (busy.has(squad)) return {ok: false, error: `Task Force ${squad} is already out.`};
-
-  // The column moves at the pace of its slowest vehicle, which is a real cost
-  // of bringing heavy armour and a real reason to keep one fast squad.
-  //
-  // Through attributesWith, not attributeAtLevel, so a Propulsion package
-  // reaches the march. Before this a player bought Propulsion, watched combat
-  // mobility rise, and marched exactly as slowly as before.
-  //
-  // Drones never slow the column - they speed it: the Drone Network
-  // (shared/drones.ts) multiplies the pace, paced on the slowest non-drone.
-  const resolved = units.map((u) => {
-    const asset = ASSET_BY_ID[u.assetId];
-    const a = asset ? attributesWith(asset, u.level, u.packages, u.boost ?? 1) : null;
-    // A damaged vehicle limps: its pace is scaled by what it has left.
-    return {id: u.assetId, mobility: (a?.mobility ?? 5) * marchHpFactor(u.hpFraction ?? 1), detection: a?.detection ?? 5};
-  });
-  const network = droneNetworkMultiplier(resolved.filter((r) => isDrone(r.id)));
-  // The Tactical Operations Center speeds every march; the whole bonus is
-  // capped at MARCH_TOTAL_CAP. BUILDING EFFECTS v1.
-  const speed = paceMobility(resolved) * marchMultiplier(network, levels.tactical_operations_center);
+  const column = await readyColumn(db, attackerId, squad, now);
+  if (!column.ok) return column;
+  const {units, speed} = column;
   const plots = plotsBetween(from.x, from.y, to.x, to.y);
   const seconds = marchSeconds(plots, speed);
   const arrivesAt = now + seconds * 1000;
@@ -410,6 +430,70 @@ export async function launch(
       .run();
   }
 
+  return {ok: true, arrivesAt, seconds};
+}
+
+/**
+ * March a Task Force to one of the player's own daily map targets.
+ *
+ * The same column rules as an attack - readiness, the drone rule, the pace -
+ * and none of the rest: no defender, no shield check, no Fuel, no shield
+ * drop. The march row names the target through exercise_id and the
+ * defender_id is the player themself, so every reader of marches (the map,
+ * the deployments panel, the settle) keeps working without a special case.
+ */
+export async function launchExercise(
+  db: D1Database,
+  worldId: number,
+  playerId: string,
+  squad: SquadName,
+  exercise: ExerciseRow,
+  from: {x: number; y: number},
+  now: number,
+  newId: () => string,
+): Promise<LaunchResult> {
+  if (exercise.state !== 'available') return {ok: false, error: 'That target is already taken or gone for today.'};
+  const column = await readyColumn(db, playerId, squad, now);
+  if (!column.ok) return column;
+  const {units, speed} = column;
+  const to = {x: exercise.plot_x, y: exercise.plot_y};
+  const plots = plotsBetween(from.x, from.y, to.x, to.y);
+  const seconds = marchSeconds(plots, speed);
+  const arrivesAt = now + seconds * 1000;
+  const id = newId();
+  try {
+    await db
+      .prepare(
+        `INSERT INTO marches
+           (id, world_id, attacker_id, squad, defender_id, units,
+            from_x, from_y, to_x, to_y, departed_at, arrives_at, kind, exercise_id)
+         VALUES (?1, ?2, ?3, ?4, ?3, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'exercise', ?12)`,
+      )
+      .bind(
+        id,
+        worldId,
+        playerId,
+        squad,
+        JSON.stringify(units.map(({repairing: _r, ...u}) => u)),
+        from.x,
+        from.y,
+        to.x,
+        to.y,
+        now,
+        arrivesAt,
+        exercise.id,
+      )
+      .run();
+  } catch {
+    return {ok: false, error: `Task Force ${squad} is already marching.`};
+  }
+  // The target is taken by this march. If somebody's second tap got here
+  // first, the march above already refused on the squad index; if the target
+  // was taken by another squad in between, turn this column straight home.
+  if (!(await markMarching(db, exercise.id, id, squad, now))) {
+    await db.prepare(`UPDATE marches SET resolved_at = ?2 WHERE id = ?1`).bind(id, now).run();
+    return {ok: false, error: 'That target is already taken.'};
+  }
   return {ok: true, arrivesAt, seconds};
 }
 
@@ -511,7 +595,7 @@ export async function settleArrivals(
   const due = await db
     .prepare(
       `SELECT m.id, m.world_id, m.attacker_id, a.username AS attacker, m.squad, m.units,
-              m.defender_id, d.username AS defender, m.kind, m.contract,
+              m.defender_id, d.username AS defender, m.kind, m.contract, m.exercise_id,
               m.from_x, m.from_y, m.to_x, m.to_y, m.departed_at, m.arrives_at
          FROM marches m
          JOIN players a ON a.id = m.attacker_id
@@ -556,6 +640,13 @@ export async function settleArrivals(
     // A squad coming home is simply home. The row stops being a march and the
     // squad stops being away - which is the whole of what the return leg does.
     if (march.kind === 'return') {
+      fought += 1;
+      continue;
+    }
+
+    // A daily map exercise: the column has reached its own target.
+    if (march.kind === 'exercise') {
+      await settleExerciseMarch(db, march as MarchRow & {units: string; exercise_id?: string | null}, now, newId);
       fought += 1;
       continue;
     }
@@ -865,6 +956,146 @@ export async function settleArrivals(
     fought += 1;
   }
   return fought;
+}
+
+/**
+ * Settle an exercise march that has arrived.
+ *
+ * Hold targets settle at once and the column stands for HOLD_MS before its
+ * return leg departs. Battle targets fight the patrol stored at spawn - never
+ * one sized to the force that came - through the ordinary resolver, write an
+ * ordinary battle report against "Dominion Patrol", apply damage to the
+ * column, and settle on the outcome: a win pays and ticks the lane, a loss
+ * is a report and a walk home. Either way the column returns through the
+ * normal march flow.
+ */
+async function settleExerciseMarch(
+  db: D1Database,
+  march: MarchRow & {units: string; exercise_id?: string | null},
+  now: number,
+  newId: () => string,
+): Promise<void> {
+  const row = march.exercise_id ? await readExercise(db, march.attacker_id, march.exercise_id) : null;
+  let units: UnitSpec[] = [];
+  try {
+    const parsed = JSON.parse(march.units) as UnitSpec[];
+    if (Array.isArray(parsed)) units = parsed;
+  } catch {
+    units = [];
+  }
+  const travel = Math.max(0, march.arrives_at - march.departed_at);
+  let departHome = now;
+  let won = true;
+
+  if (row && isExerciseType(row.type) && EXERCISES[row.type].kind === 'battle' && row.patrol) {
+    let patrol: CombatantSpec[] = [];
+    try {
+      patrol = JSON.parse(row.patrol) as CombatantSpec[];
+    } catch {
+      patrol = [];
+    }
+    const attacker: SideSpec = {name: march.attacker, units};
+    const defender: SideSpec = {name: PATROL_NAME, units: patrol};
+    const seed = Math.abs(hash(march.id)) % 2147483647;
+    const result = resolve(attacker, defender, seed);
+    won = result.outcome === 'attacker';
+    const battleId = newId();
+    const power = (us: CombatantSpec[]) =>
+      us.reduce((sum, u) => {
+        const asset = ASSET_BY_ID[u.assetId];
+        return sum + (asset ? assetPowerWith(asset, u.level, u.packages ?? BARE, u.boost ?? 1) : 0);
+      }, 0);
+    await db.batch([
+      db
+        .prepare(
+          `INSERT INTO battles
+             (id, world_id, plot_x, plot_y, fought_at, attacker_id, defender_id,
+              attacker_name, defender_name, outcome,
+              attacker_power, defender_power, attacker_losses, defender_losses, detail)
+           VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)`,
+        )
+        .bind(
+          battleId,
+          march.world_id,
+          march.to_x,
+          march.to_y,
+          now,
+          march.attacker_id,
+          march.attacker_id,
+          march.attacker,
+          PATROL_NAME,
+          result.outcome,
+          power(units),
+          power(patrol),
+          result.attacker.losses,
+          result.defender.losses,
+          JSON.stringify({
+            version: 1,
+            rounds: result.rounds,
+            squads: [
+              {
+                side: 'attacker',
+                squad: march.squad,
+                heroes: units.map((u) => ASSET_BY_ID[u.assetId]?.code ?? u.assetId),
+                losses: result.attacker.losses,
+                survived: result.outcome !== 'defender',
+              },
+              {
+                side: 'defender',
+                squad: PATROL_NAME,
+                heroes: patrol.map((u) => ASSET_BY_ID[u.assetId]?.code ?? u.assetId),
+                losses: result.defender.losses,
+                survived: result.outcome !== 'attacker',
+              },
+            ],
+            notes: [
+              `Daily map exercise: ${EXERCISES[row.type].name}. ${won ? 'Objective secured.' : 'Objective not taken - the target stands for another attempt today with a different force, or another target.'}`,
+              ...result.notes,
+              `Detection: ${Math.round(result.attacker.spotting * 100)}% to ${march.attacker}.`,
+            ],
+          }),
+        ),
+      db
+        .prepare(`INSERT INTO battle_participants (battle_id, player_id, side, alliance_id) VALUES (?1, ?2, 'attacker', NULL)`)
+        .bind(battleId, march.attacker_id),
+      db.prepare(`UPDATE marches SET battle_id = ?2 WHERE id = ?1`).bind(march.id, battleId),
+    ]);
+    const hits: Array<{playerId: string; assetId: string; remaining: number}> = [];
+    result.attacker.units.forEach((u, i) => {
+      const spec = units[i];
+      if (spec && spec.assetId === u.assetId) hits.push({playerId: march.attacker_id, assetId: u.assetId, remaining: u.remaining});
+    });
+    await applyDamage(db, hits);
+  }
+
+  if (row) {
+    const settled = await settleExercise(db, row, won, now);
+    if (settled.holdUntil) departHome = settled.holdUntil;
+  }
+
+  // Home, the way it came. A hold leaves after the hold.
+  await db
+    .prepare(
+      `INSERT INTO marches
+         (id, world_id, attacker_id, squad, defender_id, units,
+          from_x, from_y, to_x, to_y, departed_at, arrives_at, kind)
+       VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,'return')`,
+    )
+    .bind(
+      newId(),
+      march.world_id,
+      march.attacker_id,
+      march.squad,
+      march.attacker_id,
+      march.units,
+      march.to_x,
+      march.to_y,
+      march.from_x,
+      march.from_y,
+      departHome,
+      departHome + travel,
+    )
+    .run();
 }
 
 function hash(s: string): number {

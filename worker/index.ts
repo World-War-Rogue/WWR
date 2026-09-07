@@ -24,6 +24,8 @@ import {readSystems, systemUp} from './combatSystems';
 import {powerBreakdown} from '../shared/powerBreakdown';
 import {createQaAccount, devAction, devSeedsEnabled, devStatus} from './devProgression';
 import {claimCache, listGrants, noteDailyProgress, readDaily} from './dailyOps';
+import {ensureExercises, readExercise, viewOf} from './exercises';
+import {seasonPhase} from '../shared/season1Ops';
 import {FARM_ROLE} from './bots';
 import {isCombatSystemLane} from '../shared/combatSystems';
 import {buyResource, buySecondTeam, readBase, readLevels, startLevel} from './buildings';
@@ -35,7 +37,7 @@ import {type LevelledBuilding, rankCeiling, signalsLeadMs} from '../shared/build
 import {BOARD_BUILDING_BY_ID} from '../shared/base';
 import {isPackageKey} from '../shared/upgrades';
 import {type Split} from '../shared/economy';
-import {
+import {launchExercise, 
   deployments,
   launch,
   marchingSquads,
@@ -797,6 +799,15 @@ async function handleWorld(request: Request, env: Env, player: PlayerRow): Promi
     readLevels(env.DB, player.id),
   ]);
 
+  // Today's daily map exercises, spawned on the first look after 00:00 RST.
+  // Personal: read for the viewer only, on their home world only.
+  const exercises =
+    world.kind === 'home' && self
+      ? (await ensureExercises(env.DB, player.id, world.id, self, world.extent, await marchingSquads(env.DB, player.id), now))
+          .map((r) => viewOf(r, seasonPhase(now).week))
+          .filter((v): v is NonNullable<typeof v> => v !== null)
+      : [];
+
   return json({
     viewport: {x, y, w, h},
     world: {
@@ -833,6 +844,9 @@ async function handleWorld(request: Request, env: Env, player: PlayerRow): Promi
       // once it is within your Signals Center's lead time of landing -
       // BUILDING EFFECTS v1: visibleAt = max(sentAt, arrivalAt - lead).
       .filter((m) => m.attacker_id === player.id || m.arrives_at - signalsLeadMs(viewerLevels.signals_center) <= now)
+      // An exercise column is personal, like its target: nobody else sees a
+      // Task Force walking to an empty plot. The return leg is a return leg.
+      .filter((m) => m.kind !== 'exercise' || m.attacker_id === player.id)
       .map((m) => ({
       id: m.id,
       attacker: m.attacker,
@@ -847,6 +861,7 @@ async function handleWorld(request: Request, env: Env, player: PlayerRow): Promi
       kind: m.kind,
     })),
     skins: SKINS,
+    exercises,
     // A shield shows on the map only while it is up; the instant itself is
     // public, since the popup says how long is left.
     // `contract` marks a Dominion outpost a solo commander may take a neutral
@@ -3029,6 +3044,24 @@ async function route(
     return json({ok: true, reward: result.reward, daily: await readDaily(env.DB, player.id, Date.now())});
   }
   if (endpoint === 'GET /api/ops/grants') return json({grants: await listGrants(env.DB, player.id)});
+
+  // March a Task Force to one of today's map exercises. No Fuel, no defender.
+  if (endpoint === 'POST /api/ops/exercise') {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const id = typeof body?.id === 'string' ? body.id : '';
+    const squad = body?.squad;
+    if (!isSquadName(squad)) return fail(400, 'No such Task Force.');
+    const now = Date.now();
+    const exercise = await readExercise(env.DB, player.id, id);
+    if (!exercise) return fail(404, 'No such target.');
+    const mine = await env.DB.prepare(`SELECT plot_x AS x, plot_y AS y FROM placements WHERE world_id = ?1 AND player_id = ?2`)
+      .bind(exercise.world_id, player.id)
+      .first<{x: number; y: number}>();
+    if (!mine) return fail(409, 'You are not standing anywhere yet.');
+    const result = await launchExercise(env.DB, exercise.world_id, player.id, squad, exercise, mine, now, newId);
+    if (!result.ok) return fail(409, result.error);
+    return json({arrivesAt: result.arrivesAt, seconds: result.seconds, kind: 'exercise'});
+  }
 
   // Where your own power comes from: the same inputs worker/power.ts sums,
   // itemised per asset and per source (shared/powerBreakdown.ts).

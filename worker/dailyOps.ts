@@ -149,6 +149,28 @@ export async function meterProduction(db: D1Database, playerId: string, elapsedM
   if ((row?.produced_ms ?? 0) >= INDUSTRY_HOUR_MS) await noteDailyProgress(db, playerId, 'industry', now);
 }
 
+/**
+ * A map exercise's reward: paid once per target (the target id is the key),
+ * then its lane ticked. Two grants, one transaction each, both idempotent -
+ * a replay pays nothing and the lane row is INSERT OR IGNORE.
+ */
+export async function grantExerciseReward(
+  db: D1Database,
+  playerId: string,
+  exerciseId: string,
+  type: string,
+  lane: Lane,
+  reward: Reward,
+  detail: string,
+  now: number,
+): Promise<void> {
+  const day = dailyWindow(now);
+  if (!rewardIsEmpty(reward)) {
+    await db.batch(await grantStatements(db, playerId, `exercise:${exerciseId}`, `exercise:${type}`, day.key, reward, `Map exercise · ${detail} · ${describeReward(reward)}`, now));
+  }
+  await noteDailyProgress(db, playerId, lane, now);
+}
+
 export interface DailyView {
   season: number;
   week: number;

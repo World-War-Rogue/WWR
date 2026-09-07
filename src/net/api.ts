@@ -14,6 +14,7 @@ import type {PackageKey, Packages} from '../../shared/upgrades';
 import type {CombatSystemLane, CombatSystems} from '../../shared/combatSystems';
 import type {PowerBreakdown} from '../../shared/powerBreakdown';
 import type {Lane, Reward} from '../../shared/season1Ops';
+import type {ExerciseView} from '../../shared/exercises';
 import type {BuildingLevels} from '../../shared/buildings';
 
 export interface ChatMessage {
@@ -209,6 +210,8 @@ export interface WorldView {
   rally: RallyPoint | null;
   /** Squads in transit, so a defender can see what is coming. */
   marches: MarchView[];
+  /** Today's daily map exercises - yours alone, on your home world. */
+  exercises: ExerciseView[];
   /** The server's clock at the moment this was built. */
   serverTime: number;
 }
@@ -564,6 +567,8 @@ export const api = {
       body: JSON.stringify({squad, x, y, contract}),
     }),
   daily: () => call<DailyView>('/api/ops/daily'),
+  exercise: (id: string, squad: string) =>
+    call<{arrivesAt: number; seconds: number}>('/api/ops/exercise', {method: 'POST', body: JSON.stringify({id, squad})}),
   claimDailyCache: () => call<{ok: true; reward: Reward; daily: DailyView}>('/api/ops/daily/claim', {method: 'POST', body: '{}'}),
   rewardGrants: () => call<{grants: RewardGrant[]}>('/api/ops/grants'),
   recall: (squad: string) =>

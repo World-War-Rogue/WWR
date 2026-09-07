@@ -54,7 +54,12 @@ export function marchProgress(departedAt: number, arrivesAt: number, now: number
  * trip rather than only the journey out, which is most of what attacking
  * actually costs.
  */
-export type MarchKind = 'attack' | 'reinforce' | 'return';
+/**
+ * 'exercise' is a march to one of the player's own daily map targets
+ * (shared/exercises.ts): no defender, no Fuel, resolved against a stored
+ * Dominion patrol or held for a while, then home like any other.
+ */
+export type MarchKind = 'attack' | 'reinforce' | 'return' | 'exercise';
 
 /**
  * How long a reinforcing squad stands at an ally's base before coming home.

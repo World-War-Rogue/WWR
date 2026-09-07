@@ -117,3 +117,71 @@ test('the server never pays Tokens or reads a client figure for a Daily Operatio
   assert.ok(/INSERT OR IGNORE INTO daily_ops/.test(src), 'lanes are idempotent inserts');
   assert.ok(!/body\./.test(src), 'no request body is read here - amounts come from shared/season1Ops.ts');
 });
+
+/* -------------------------------------------------------------------------- */
+/* Daily map exercises (shared/exercises.ts)                                   */
+/* -------------------------------------------------------------------------- */
+
+import {
+  EXERCISES,
+  EXERCISES_PER_DAY,
+  EXERCISE_TYPES,
+  PATROL_POWER_RATIO,
+  exerciseReward,
+  generatePatrol,
+  hashSeed,
+  patrolPower,
+  pickDailyTypes,
+  seeded,
+} from '../../shared/exercises';
+
+test('five exercise types: two battles on Engagement, three holds on Mobilization, one lane each', () => {
+  assert.equal(EXERCISE_TYPES.length, 5);
+  const battles = EXERCISE_TYPES.filter((t) => EXERCISES[t].kind === 'battle');
+  const holds = EXERCISE_TYPES.filter((t) => EXERCISES[t].kind === 'hold');
+  assert.deepEqual(battles.sort(), ['disabled_mech_patrol', 'factory_probe']);
+  assert.deepEqual(holds.sort(), ['abandoned_convoy', 'fuel_silo', 'signal_relay']);
+  for (const t of battles) assert.equal(EXERCISES[t].lane, 'engagement');
+  for (const t of holds) assert.equal(EXERCISES[t].lane, 'mobilization');
+  for (const t of EXERCISE_TYPES) assert.ok(!['cooperation', 'readiness'].includes(EXERCISES[t].lane));
+});
+
+test('a day is three distinct targets; no battle target without an eligible Task Force; same seed, same day', () => {
+  for (let seed = 1; seed < 200; seed += 1) {
+    const withForce = pickDailyTypes(seeded(seed), true);
+    const without = pickDailyTypes(seeded(seed), false);
+    assert.equal(withForce.length, EXERCISES_PER_DAY);
+    assert.equal(new Set(withForce).size, EXERCISES_PER_DAY, 'distinct');
+    assert.ok(withForce.some((t) => EXERCISES[t].kind === 'battle'), 'at least one battle with a force');
+    assert.ok(without.every((t) => EXERCISES[t].kind === 'hold'), 'holds only without a force');
+    assert.deepEqual(pickDailyTypes(seeded(seed), true), withForce, 'deterministic');
+  }
+  assert.equal(hashSeed('p1:d:1'), hashSeed('p1:d:1'));
+  assert.notEqual(hashSeed('p1:d:1'), hashSeed('p1:d:2'));
+});
+
+test('the patrol is sized at 70% of the snapshot and never above it, from a two-unit starter to a maxed force', () => {
+  for (const tf of [360, 1080, 2000, 5000, 12804, 31866]) {
+    const target = Math.ceil(tf * PATROL_POWER_RATIO);
+    const patrol = generatePatrol(target, seeded(tf));
+    const p = patrolPower(patrol);
+    assert.ok(p <= target + 1, `${tf}: patrol ${p} over target ${target}`);
+    assert.ok(p >= target * 0.9, `${tf}: patrol ${p} far under target ${target}`);
+    assert.ok(patrol.length >= 1 && patrol.length <= 6);
+    assert.ok(patrol.every((u) => u.level >= 1 && u.level <= 50));
+    assert.ok(new Set(patrol.map((u) => u.assetId)).size === patrol.length, 'distinct chassis');
+  }
+  // Same target, same seed: the same patrol every read. It is stored at spawn anyway.
+  assert.deepEqual(generatePatrol(756, seeded(3)), generatePatrol(756, seeded(3)));
+});
+
+test('exercise rewards are Credits and resources only, scaled by the week like Daily Operations', () => {
+  for (const t of EXERCISE_TYPES) {
+    const r = exerciseReward(t, 1);
+    assert.ok(!('tokens' in r));
+    assert.ok(!/intel|fragment/i.test(EXERCISES[t].name + EXERCISES[t].blurb + EXERCISES[t].action));
+    assert.ok(exerciseReward(t, 10).credits >= r.credits);
+  }
+  assert.equal(exerciseReward('fuel_silo', 1).fuel, 300);
+  assert.equal(exerciseReward('fuel_silo', 10).fuel, Math.round(300 * 1.54));
+});
