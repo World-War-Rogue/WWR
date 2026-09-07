@@ -12,6 +12,7 @@
  */
 import {attackFuel} from '../../shared/march';
 import {guideEvent} from './guide/bus';
+import {useModal} from './guide/useModal';
 import {SHIELD_WORDING, isShielded} from '../../shared/shields';
 import {remaining} from './BuildingPanel';
 import {type RefObject, useCallback, useEffect, useMemo, useRef, useState} from 'react';
@@ -604,6 +605,8 @@ export default function WorldMap({
   const [rallying, setRallying] = useState(false);
   /** The plot an attack is being aimed at, while a squad is chosen. */
   const [attacking, setAttacking] = useState<{x: number; y: number} | null>(null);
+  // The composer is a modal: Rider steps aside while it is up.
+  useModal(attacking !== null);
   const [squads, setSquads] = useState<SquadView | null>(null);
   const [sending, setSending] = useState(false);
   const [centred, setCentred] = useState(false);
@@ -1687,13 +1690,21 @@ export default function WorldMap({
         the screen and the options have to arrive over it.
       */}
       {attacking && (
-        <div className="absolute inset-0 z-50 flex flex-col bg-black/70 backdrop-blur-sm">
+        // The map wrapper is position:fixed, which makes it a stacking
+        // context, so z-50 here only orders things WITHIN the map: the chat
+        // bar (a sibling of the map, fixed, z-40) still paints on top of the
+        // bottom of this overlay. The bottom padding is the chat bar's height,
+        // so the sheet's last row of buttons never ends up underneath it -
+        // that was the "controls clipped until you zoom out" report. The
+        // sheet scrolls inside itself if a short viewport cannot fit four
+        // Task Forces above the bar.
+        <div className="absolute inset-0 z-50 flex flex-col bg-black/70 pb-[calc(3.5rem+env(safe-area-inset-bottom))] backdrop-blur-sm">
           <button
             aria-label={t('squads.cancel')}
             onClick={() => setAttacking(null)}
             className="min-h-[3rem] flex-1 cursor-default"
           />
-          <div className="rounded-t-xl border-t border-neutral-700 bg-neutral-950 p-3 shadow-2xl">
+          <div className="max-h-[70vh] overflow-y-auto rounded-t-xl border-t border-neutral-700 bg-neutral-950 p-3 shadow-2xl">
             <div className="flex items-center gap-2 pb-3">
               <h3 className="text-sm font-semibold text-neutral-100">
                 {allied ? t('map.chooseSquadReinforce') : t('map.chooseSquad')}

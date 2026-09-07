@@ -11,6 +11,7 @@ import {type FormEvent, useEffect, useRef, useState} from 'react';
 import {REPORT_MAX, type ReportScreen} from '../../shared/support';
 import {ApiError, api} from '../net/api';
 import {guideEvent} from './guide/bus';
+import {useModal} from './guide/useModal';
 import {t} from '../i18n';
 import {buildId, recentErrors} from './recentErrors';
 
@@ -21,6 +22,7 @@ export default function Settings({
   screen: ReportScreen;
   onClose: () => void;
 }) {
+  useModal();
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
   const [sentId, setSentId] = useState<string | null>(null);

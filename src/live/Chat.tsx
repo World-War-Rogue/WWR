@@ -14,6 +14,7 @@
  * first if chat ever becomes the reason people are here.
  */
 import {guideEvent} from './guide/bus';
+import {useModal} from './guide/useModal';
 import {type FormEvent, useCallback, useEffect, useRef, useState} from 'react';
 import {CHAT_TABS, type ChatTab, MESSAGE_MAX} from '../../shared/chat';
 import {RANK_KEY} from './ranks';
@@ -149,6 +150,8 @@ export default function Chat({
   onViewProfile: (username: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  // Full-screen chat is a modal too: Rider waits until it closes.
+  useModal(open);
   const [tab, setTab] = useState<ChatTab>('server');
   const [info, setInfo] = useState<ChatChannels | null>(null);
   const [thread, setThread] = useState<string | null>(null);

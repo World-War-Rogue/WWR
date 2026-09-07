@@ -20,6 +20,7 @@ import {useEffect, useState} from 'react';
 import {assetArtUrl, assetStageArtUrl, nextVisualStage, visualStage} from '../../shared/assetVisuals';
 import {DRONE_WORDING} from '../../shared/drones';
 import {guideEvent} from './guide/bus';
+import {useModal} from './guide/useModal';
 import {unlockWeekOf} from '../../shared/season';
 
 import {type Asset, ASSET_MAX_LEVEL, ATTRIBUTE_MAX, RANK_GROWTH, isMilestone, attributeAtLevel, maxRankForSeason, assetLabel, CATEGORY_LABEL, ROLE_LABEL} from '../../shared/assets';
@@ -204,6 +205,7 @@ export default function AssetUpgrade({
   /** Set when the asset is not the player's yet: everything shows, nothing buys. */
   locked?: string | null;
 }) {
+  useModal();
   // A locked asset is looked at, never bought: every button is held busy.
   const [busyState, setBusy] = useState(false);
   useEffect(() => {

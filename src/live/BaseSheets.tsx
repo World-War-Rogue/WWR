@@ -11,6 +11,7 @@
  * until the redesign reset retires them this is where they are upgraded.
  */
 import {type ReactNode, Suspense, lazy, useState} from 'react';
+import {useModal} from './guide/useModal';
 import BuildingPanel from './BuildingPanel';
 import {QueuePanel, ResourceShop, SecondTeamPanel, StockPanel} from './ResourcePanels';
 import {useBase, useSeason} from './useBase';
@@ -43,6 +44,7 @@ function Sheet({
   onClose: () => void;
   children: ReactNode;
 }) {
+  useModal();
   return (
     <div className="fixed inset-x-0 bottom-16 z-30 mx-auto flex max-h-[72vh] w-full max-w-3xl flex-col rounded-t-xl border border-b-0 border-neutral-700 bg-neutral-950 shadow-2xl">
       <div className="flex shrink-0 items-center justify-between border-b border-neutral-800 px-4 py-3">

@@ -22,6 +22,7 @@ import {categoryBoost} from '../../shared/buildings';
 import {DRONE_WORDING, droneNetworkMultiplier, isDrone} from '../../shared/drones';
 import {DELTA_BUY_LEVEL, DELTA_FREE_RANK, DELTA_PRICE, TASK_FORCE_UNLOCK, taskForceOpen} from '../../shared/season';
 import {guideEvent} from './guide/bus';
+import {useModal} from './guide/useModal';
 import AssetIcon from './AssetIcon';
 import ForcesTabs from './ForcesTabs';
 import {t} from '../i18n';
@@ -131,6 +132,7 @@ export default function Squads({
   const [pickQuery, setPickQuery] = useState('');
   /** A filled slot that was tapped: remove it, or replace it. */
   const [acting, setActing] = useState<{squad: string; slot: number} | null>(null);
+  useModal(acting !== null);
   /** The slot being dragged, and the slot the pointer is currently over. */
   const [drag, setDrag] = useState<{squad: string; slot: number} | null>(null);
   /** The slot the pointer is over mid-drag. Not `over` - that name is taken

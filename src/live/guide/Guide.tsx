@@ -7,7 +7,7 @@
  */
 import {useEffect, useRef, useState} from 'react';
 import {type SeasonState, api} from '../../net/api';
-import {onGuideEvent} from './bus';
+import {anyModalOpen, onGuideEvent, onModalChange} from './bus';
 import {BUILDING_LINE, GUIDE_STEPS, TIPS} from './script';
 
 export default function Guide() {
@@ -18,6 +18,11 @@ export default function Guide() {
   // changes or the portrait is tapped, so it never sits over the Task Force
   // slabs and the chat bar it is drawn beside.
   const [collapsed, setCollapsed] = useState(false);
+  // A sheet, composer or panel is open: Rider steps aside entirely rather
+  // than sit over its buttons (see modalOpened in bus.ts). His step is kept,
+  // so he is back saying the same thing the moment the modal closes.
+  const [modal, setModal] = useState(() => anyModalOpen());
+  useEffect(() => onModalChange(setModal), []);
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -94,7 +99,7 @@ export default function Guide() {
     [],
   );
 
-  if (!state || !state.enabled) return null;
+  if (!state || !state.enabled || modal) return null;
   const step = state.completed ? null : GUIDE_STEPS.find((x) => x.id === state.step) ?? null;
   const text = tip ?? aside ?? step?.say ?? null;
   if (!text) return null;
