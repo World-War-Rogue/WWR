@@ -136,13 +136,31 @@ export default function Guide() {
             </button>
           </div>
           <p className="mt-0.5 text-xs leading-snug text-neutral-100">{text}</p>
-          {!tip && !aside && step && step.advance === 'next' && (
-            <button
-              onClick={advance}
-              className="mt-1.5 rounded border border-cyan-700 bg-cyan-950/40 px-3 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-cyan-200 hover:bg-cyan-900/40"
-            >
-              Next
-            </button>
+          {!tip && !aside && step && step.advance !== 'finish' && (
+            <div className="mt-1.5 flex items-center gap-3">
+              {step.advance === 'next' && (
+                <button
+                  onClick={advance}
+                  className="rounded border border-cyan-700 bg-cyan-950/40 px-3 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-cyan-200 hover:bg-cyan-900/40"
+                >
+                  Next
+                </button>
+              )}
+              {/*
+                Ends the walkthrough for good - saved on the server, so it
+                does not come back next login. Rider himself stays on for
+                tips until Settings turns him off; X only folds the bubble.
+              */}
+              <button
+                onClick={() => {
+                  setCollapsed(false);
+                  save({completed: true});
+                }}
+                className="text-[11px] uppercase tracking-wider text-neutral-500 hover:text-neutral-200"
+              >
+                Skip tour
+              </button>
+            </div>
           )}
           {!tip && !aside && step && step.advance === 'finish' && (
             <div className="mt-1.5 flex gap-2">
