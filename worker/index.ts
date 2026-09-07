@@ -6,10 +6,10 @@
  */
 import {handleAdminRequests} from './admin';
 import {ensureRally, lastRalliedAt, rallyTo, readRally, setRally} from './rally';
-import {assignSlot, ensureRoster, moveSlot, readSquads, squadLiftUsed, squadPower} from './squads';
+import {assignSlot, deltaOpen, ensureRoster, moveSlot, readSquads, squadLiftUsed, squadPower} from './squads';
 import {packageUp, rankUp, resetPackages, settleWallet} from './upgrades';
 import {buyResource, buySecondTeam, readBase, readLevels, startLevel} from './buildings';
-import {applyShield, readSeasonState, saveGuide, startBuild} from './season1';
+import {applyShield, buyDelta, readSeasonState, saveGuide, startBuild} from './season1';
 import {powerOf} from './power';
 import {settleRepairs, startRepair} from './repair';
 import {NEW_SHIELD_MS, isShielded} from '../shared/shields';
@@ -1079,6 +1079,7 @@ async function handleSquads(env: Env, player: PlayerRow): Promise<Response> {
     // draw the attributes the building boost gives without a second request.
     base: {...baseLevelsView(base), season: CURRENT_SEASON, wallet: {tokens: wallet.tokens, credits: wallet.credits}},
     season1: await readSeasonState(env.DB, player.id, now),
+    deltaOpen: await deltaOpen(env.DB, player.id, base.levels.command_center, now),
     // Echoed so the squad screen can show them without asking for the base
     // separately. They no longer affect what fits in a squad.
     buildings: {
@@ -2644,6 +2645,16 @@ async function route(
       Date.now(),
       (b) => buildingName(b as LevelledBuilding),
     );
+    if (!result.ok) return fail(400, result.error);
+    return handleSquads(env, player);
+  }
+
+  if (endpoint === 'POST /api/squads/delta') {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const split = readSplit(body);
+    if (split === 'bad') return fail(400, 'That payment does not make sense.');
+    const levels = await readLevels(env.DB, player.id);
+    const result = await buyDelta(env.DB, player.id, levels.command_center, split, Date.now());
     if (!result.ok) return fail(400, result.error);
     return handleSquads(env, player);
   }

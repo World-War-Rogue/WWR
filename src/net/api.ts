@@ -278,6 +278,8 @@ export interface SquadView {
   base: BaseLevelsView;
   /** Construction, shield and guide state. */
   season1: SeasonState;
+  /** Task Force Delta: bought, or earned. */
+  deltaOpen: boolean;
 }
 
 export interface SeasonState {
@@ -426,6 +428,8 @@ export const api = {
     ),
   squads: () => call<SquadView>('/api/squads'),
   season: () => call<SeasonState>('/api/season'),
+  buyDelta: (split?: Wallet) =>
+    call<SquadView>('/api/squads/delta', {method: 'POST', body: JSON.stringify({split})}),
   repair: (assetId: string | 'all') =>
     call<SquadView>('/api/assets/repair', {method: 'POST', body: JSON.stringify({assetId})}),
   buildAsset: (assetId: string) =>

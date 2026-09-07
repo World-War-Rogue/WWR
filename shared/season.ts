@@ -62,14 +62,37 @@ export function isUnlocked(assetId: string, now: number, commandCenter = 1): boo
   return w !== null && Math.max(seasonWeek(now), commandCenter) >= w;
 }
 
-/** Task Forces open by Command Center level: Bravo 5, Charlie 10, Delta 25. */
+/**
+ * Task Forces open by Command Center level: Bravo 5, Charlie 10. Delta is
+ * different (owner's decision 2026-09-07): free at Command Center 20 once
+ * Alpha, Bravo and Charlie are full and every asset in them is Service
+ * Rank 20 or better - or bought at Command Center 10.
+ */
 export const TASK_FORCE_UNLOCK: Record<SquadName, number> = {
   Alpha: 1,
   Bravo: 5,
   Charlie: 10,
-  Delta: 25,
+  Delta: 20,
 };
+export const DELTA_BUY_LEVEL = 10;
+export const DELTA_PRICE = 2500;
+export const DELTA_FREE_RANK = 20;
 
-export function taskForceOpen(squad: SquadName, commandCenter: number): boolean {
+/** Whether Delta is earned: the three before it full and all at rank 20+. */
+export function deltaEarned(
+  commandCenter: number,
+  board: Record<string, Array<string | null>>,
+  rankOf: (assetId: string) => number,
+): boolean {
+  if (commandCenter < TASK_FORCE_UNLOCK.Delta) return false;
+  return (['Alpha', 'Bravo', 'Charlie'] as const).every((name) => {
+    const slots = board[name] ?? [];
+    const ids = slots.filter((id): id is string => !!id);
+    return ids.length === 6 && ids.every((id) => rankOf(id) >= DELTA_FREE_RANK);
+  });
+}
+
+export function taskForceOpen(squad: SquadName, commandCenter: number, deltaOpen = false): boolean {
+  if (squad === 'Delta') return deltaOpen;
   return commandCenter >= TASK_FORCE_UNLOCK[squad];
 }

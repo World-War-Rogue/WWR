@@ -33,7 +33,7 @@ import {
 } from '../shared/assets';
 import {type Packages, assetPowerWith, packagesFromRow} from '../shared/upgrades';
 import {type BuildingLevels, NO_BUILDINGS, categoryBoost} from '../shared/buildings';
-import {STARTER_ASSETS, TASK_FORCE_UNLOCK, taskForceOpen} from '../shared/season';
+import {STARTER_ASSETS, TASK_FORCE_UNLOCK, deltaEarned, taskForceOpen} from '../shared/season';
 
 export interface OwnedAsset {
   assetId: string;
@@ -126,6 +126,39 @@ export async function ensureRoster(
   return owned(after.results ?? []);
 }
 
+/**
+ * Whether Delta is open to this player: bought, or earned. Earning it is
+ * checked live (the three before it full, every asset rank 20+) and, the
+ * first time it holds, written down so a later swap cannot close it again.
+ */
+export async function deltaOpen(db: D1Database, playerId: string, commandCenter: number, now: number): Promise<boolean> {
+  const row = await db
+    .prepare(`SELECT delta_at AS at FROM players WHERE id = ?1`)
+    .bind(playerId)
+    .first<{at: number | null}>();
+  if (row?.at) return true;
+  if (commandCenter < TASK_FORCE_UNLOCK.Delta) return false;
+  const [board, ranks] = await Promise.all([
+    readSquads(db, playerId),
+    db
+      .prepare(`SELECT asset_id AS assetId, level FROM player_assets WHERE player_id = ?1`)
+      .bind(playerId)
+      .all<{assetId: string; level: number}>(),
+  ]);
+  const rank = new Map((ranks.results ?? []).map((r) => [r.assetId, r.level]));
+  if (!deltaEarned(commandCenter, board, (id) => rank.get(id) ?? 1)) return false;
+  await db.prepare(`UPDATE players SET delta_at = ?2 WHERE id = ?1 AND delta_at IS NULL`).bind(playerId, now).run();
+  return true;
+}
+
+/** Why a Task Force is closed, in the player's words. */
+export function lockedMessage(squad: SquadName): string {
+  if (squad === 'Delta') {
+    return 'Task Force Delta opens at Command Center 20 with Alpha, Bravo and Charlie full at Service Rank 20 - or can be bought at Command Center 10.';
+  }
+  return `Task Force ${squad} opens at Command Center level ${TASK_FORCE_UNLOCK[squad]}.`;
+}
+
 export async function readSquads(db: D1Database, playerId: string): Promise<SquadBoard> {
   const rows = await db
     .prepare(`SELECT squad, slot, asset_id AS assetId FROM squad_slots WHERE player_id = ?1`)
@@ -173,8 +206,8 @@ export async function assignSlot(
   commandCenter: number,
 ): Promise<AssignResult> {
   if (slot < 0 || slot >= SQUAD_SLOTS) return {ok: false, error: 'No such slot.'};
-  if (!taskForceOpen(squad, commandCenter)) {
-    return {ok: false, error: `Task Force ${squad} opens at Command Center level ${TASK_FORCE_UNLOCK[squad]}.`};
+  if (!taskForceOpen(squad, commandCenter, squad === 'Delta' && (await deltaOpen(db, playerId, commandCenter, Date.now())))) {
+    return {ok: false, error: lockedMessage(squad)};
   }
   if (away.has(squad)) return {ok: false, error: `Task Force ${squad} is out. Bring it home first.`};
 
@@ -284,8 +317,8 @@ export async function moveSlot(
   if (from.slot < 0 || from.slot >= SQUAD_SLOTS) return {ok: false, error: 'No such slot.'};
   if (to.slot < 0 || to.slot >= SQUAD_SLOTS) return {ok: false, error: 'No such slot.'};
   for (const name of [from.squad, to.squad]) {
-    if (!taskForceOpen(name, commandCenter)) {
-      return {ok: false, error: `Task Force ${name} opens at Command Center level ${TASK_FORCE_UNLOCK[name]}.`};
+    if (!taskForceOpen(name, commandCenter, name === 'Delta' && (await deltaOpen(db, playerId, commandCenter, Date.now())))) {
+      return {ok: false, error: lockedMessage(name)};
     }
   }
   // Both ends. A swap edits two squads, so one of them being in the field is

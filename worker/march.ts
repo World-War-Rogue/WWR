@@ -18,13 +18,13 @@ import {
   plotsBetween,
 } from '../shared/march';
 import {type SideSpec, resolve} from '../shared/combat';
-import {readSquads} from './squads';
+import {deltaOpen, lockedMessage, readSquads} from './squads';
 import {readBase} from './buildings';
 import {type Resources, RESOURCE_KINDS, categoryBoost, marchMultiplier, raidLoot} from '../shared/buildings';
 import {REPAIR_WORDING, isDisabled, marchHpFactor} from '../shared/repair';
 import {applyDamage, settleRepairs} from './repair';
 import {readLevels} from './buildings';
-import {TASK_FORCE_UNLOCK, taskForceOpen} from '../shared/season';
+import {taskForceOpen} from '../shared/season';
 import {SHIELD_COOLDOWN_MS, SHIELD_WORDING, isShielded} from '../shared/shields';
 import {DRONE_WORDING, droneCount, droneNetworkMultiplier, isDrone, paceMobility} from '../shared/drones';
 
@@ -270,8 +270,8 @@ export async function launch(
     if (isDisabled(u.hpFraction ?? 1)) return {ok: false, error: REPAIR_WORDING.disabled(label)};
   }
   const levels = await readLevels(db, attackerId);
-  if (!taskForceOpen(squad, levels.command_center)) {
-    return {ok: false, error: `Task Force ${squad} opens at Command Center level ${TASK_FORCE_UNLOCK[squad]}.`};
+  if (!taskForceOpen(squad, levels.command_center, squad === 'Delta' && (await deltaOpen(db, attackerId, levels.command_center, now)))) {
+    return {ok: false, error: lockedMessage(squad)};
   }
   // Nothing leaves the base without a drone. DRONE RULES v1.
   if (droneCount(units.map((u) => u.assetId)) === 0) return {ok: false, error: DRONE_WORDING.needDrone};

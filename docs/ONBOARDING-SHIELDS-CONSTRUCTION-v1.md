@@ -208,3 +208,4 @@ Final tips copy:
 - Admiral Rider's portrait is a placeholder badge until art lands.
 - Tips wired: shortfall, first march, locked asset. Shield-expiry warning waits for a timer surface.
 - **Task Forces and asset tiers by Command Center (2026-09-07).** Charlie opens at Command Center **10** (was 15); Bravo 5 and Delta 25 unchanged. An asset's tier (the schedule's week number) opens when EITHER the season week OR the player's Command Center reaches it — a fast base gets its assets early; the weekly drip still carries everyone else. The construction gate (category building ≥ tier) is unchanged.
+- **Delta (2026-09-07).** Free at Command Center 20 once Alpha, Bravo and Charlie are each full with every asset at Service Rank 20+ (checked live, then recorded so it never closes again); or bought at Command Center 10 for 2,500 Credits/Tokens (`DELTA_PRICE`, `shared/season.ts`). `players.delta_at` (migration 0027).

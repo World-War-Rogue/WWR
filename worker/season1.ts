@@ -10,6 +10,7 @@ import {type Resources, shortfall} from '../shared/buildings';
 import {buildState} from '../shared/construction';
 import {type Split, defaultSplit, splitIsValid} from '../shared/economy';
 import {formatClock, gameWeekIndex} from '../shared/gametime';
+import {DELTA_BUY_LEVEL, DELTA_PRICE} from '../shared/season';
 import {
   type ShieldKind,
   SHIELD_COOLDOWN_MS,
@@ -322,3 +323,38 @@ export async function saveGuide(
   await db.prepare(`UPDATE players SET ${sets.join(', ')} WHERE id = ?1`).bind(...binds).run();
 }
 
+
+/* -------------------------------------------------------------------------- */
+/* Task Force Delta, bought                                                   */
+/* -------------------------------------------------------------------------- */
+
+export async function buyDelta(
+  db: D1Database,
+  playerId: string,
+  commandCenter: number,
+  split: Split | null,
+  now: number,
+): Promise<ShieldResult> {
+  if (commandCenter < DELTA_BUY_LEVEL) {
+    return {ok: false, error: `Task Force Delta can be bought at Command Center level ${DELTA_BUY_LEVEL}.`};
+  }
+  const have = await db.prepare(`SELECT delta_at AS at FROM players WHERE id = ?1`).bind(playerId).first<{at: number | null}>();
+  if (have?.at) return {ok: false, error: 'Task Force Delta is already yours.'};
+  const wallet = await settleWallet(db, playerId, now);
+  const chosen = split ?? defaultSplit(DELTA_PRICE, wallet.credits);
+  if (!splitIsValid(chosen, DELTA_PRICE)) return {ok: false, error: `That does not add up to ${DELTA_PRICE}.`};
+  if (chosen.tokens > wallet.tokens || chosen.credits > wallet.credits) return {ok: false, error: 'Not enough to cover that.'};
+  await db.batch([
+    claimWallet(db, playerId, wallet, chosen),
+    db
+      .prepare(`UPDATE players SET delta_at = ?2 WHERE id = ?1 AND delta_at IS NULL AND wallet_rev = ?3`)
+      .bind(playerId, now, wallet.rev + 1),
+    ledger(db, playerId, 'delta', chosen, 'delta', 'Task Force Delta', now, wallet.rev),
+  ]);
+  const after = await db
+    .prepare(`SELECT tokens, credits, wallet_rev AS rev FROM players WHERE id = ?1`)
+    .bind(playerId)
+    .first<Wallet>();
+  if (!after || after.rev === wallet.rev) return {ok: false, error: 'Your balance changed. Try that again.'};
+  return {ok: true, wallet: after};
+}

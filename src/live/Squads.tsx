@@ -28,7 +28,7 @@ import {ApiError, type SquadView, api} from '../net/api';
 import {attributesWith} from '../../shared/upgrades';
 import {categoryBoost} from '../../shared/buildings';
 import {DRONE_WORDING, droneNetworkMultiplier, isDrone} from '../../shared/drones';
-import {TASK_FORCE_UNLOCK, taskForceOpen} from '../../shared/season';
+import {DELTA_BUY_LEVEL, DELTA_FREE_RANK, DELTA_PRICE, TASK_FORCE_UNLOCK, taskForceOpen} from '../../shared/season';
 import {guideEvent} from './guide/bus';
 import AssetIcon from './AssetIcon';
 import ForcesTabs from './ForcesTabs';
@@ -292,6 +292,20 @@ export default function Squads({
     }
   }
 
+  const [confirmDelta, setConfirmDelta] = useState(false);
+  async function buyDelta() {
+    setBusy(true);
+    setError(null);
+    try {
+      setView(await api.buyDelta());
+      setConfirmDelta(false);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'That did not stick.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function repairAll() {
     setBusy(true);
     setError(null);
@@ -383,8 +397,10 @@ export default function Squads({
                 const used = view.lift.used[name] ?? 0;
                 const filled = (view.squads[name] ?? []).filter(Boolean).length;
                 const out = away.has(name);
-                // Bravo, Charlie and Delta open with the Command Center (5/15/25).
-                const lockedAt = taskForceOpen(name, view.base.levels.command_center) ? null : TASK_FORCE_UNLOCK[name];
+                // Bravo and Charlie open with the Command Center (5/10); Delta is
+                // earned at 20 or bought at 10.
+                const cc = view.base.levels.command_center;
+                const lockedAt = taskForceOpen(name, cc, name === 'Delta' && view.deltaOpen) ? null : TASK_FORCE_UNLOCK[name];
                 // The Drone Network: what the drones aboard do to the march and
                 // the armour, from their real stats (rank, packages, building).
                 const droneIds = (view.squads[name] ?? []).filter((id): id is string => !!id && isDrone(id));
@@ -407,9 +423,47 @@ export default function Squads({
                       className="rounded border border-dashed border-neutral-800 bg-neutral-950/60 p-3"
                     >
                       <h3 className="text-sm font-semibold text-neutral-400">{taskForceName(name)}</h3>
-                      <p className="mt-1 text-[11px] text-neutral-500">
-                        Opens at Command Center level {lockedAt}.
-                      </p>
+                      {name === 'Delta' ? (
+                        <>
+                          <p className="mt-1 text-[11px] text-neutral-500">
+                            Free at Command Center {lockedAt} once Alpha, Bravo and Charlie are full with every asset at
+                            Service Rank {DELTA_FREE_RANK}. Or buy it at Command Center {DELTA_BUY_LEVEL} for{' '}
+                            {DELTA_PRICE.toLocaleString()} Credits or Tokens.
+                          </p>
+                          {cc >= DELTA_BUY_LEVEL &&
+                            (confirmDelta ? (
+                              <div className="mt-2 rounded border border-orange-800 bg-neutral-950 p-2">
+                                <p className="text-[11px] text-neutral-300">
+                                  Buy Task Force Delta for {DELTA_PRICE.toLocaleString()} Credits or Tokens? Permanent.
+                                </p>
+                                <div className="mt-2 flex gap-2">
+                                  <button
+                                    onClick={() => void buyDelta()}
+                                    disabled={busy}
+                                    className="flex-1 rounded border border-orange-600 bg-orange-950/40 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-orange-200"
+                                  >
+                                    Confirm
+                                  </button>
+                                  <button
+                                    onClick={() => setConfirmDelta(false)}
+                                    className="rounded border border-neutral-700 px-3 py-1 text-[11px] uppercase tracking-wider text-neutral-300"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setConfirmDelta(true)}
+                                className="mt-2 rounded border border-orange-600 bg-orange-950/40 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-orange-200 hover:bg-orange-900/40"
+                              >
+                                Buy Delta · {DELTA_PRICE.toLocaleString()}
+                              </button>
+                            ))}
+                        </>
+                      ) : (
+                        <p className="mt-1 text-[11px] text-neutral-500">Opens at Command Center level {lockedAt}.</p>
+                      )}
                     </section>
                   );
                 }
