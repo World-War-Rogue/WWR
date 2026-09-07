@@ -145,10 +145,12 @@ function drawNameplate(
   const padX = fontSize * 0.55;
   const boxH = fontSize * 1.7;
 
-  // The width budget. The name is what gives: a long callsign is cut with an
-  // ellipsis rather than allowed to push the plate out over the neighbouring
-  // plots.
-  const maxW = scale * 0.96;
+  // The width budget. A plate may run wider than the plot it names - it is
+  // drawn on the ground, and two bases are rarely on touching plots - so most
+  // callsigns show whole. Only a name longer than that is cut, and it is cut
+  // from the middle so the tail that tells names apart survives. Nameplate
+  // ruling 2026-09-07: room for the name rather than an invented number.
+  const maxW = scale * 1.6;
   const chrome = padX * 2;
   const textBudget = Math.max(0, maxW - chrome);
 
