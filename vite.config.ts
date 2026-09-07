@@ -11,8 +11,10 @@ export default defineConfig(() => {
       // update does not make every phone re-download the framework.
       rollupOptions: {
         output: {
-          manualChunks: {
-            react: ['react', 'react-dom'],
+          manualChunks(id: string) {
+            // Matched by path so react-dom/client and scheduler land here too.
+            if (/node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return 'react';
+            return undefined;
           },
         },
       },

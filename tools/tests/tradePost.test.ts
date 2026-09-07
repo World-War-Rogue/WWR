@@ -154,7 +154,10 @@ test('no cash, bundle, discount or 1:4 wording in the store source', () => {
     for (const name of readdirSync(dist)) {
       if (!name.endsWith('.js')) continue;
       const js = readFileSync(join(dist, name), 'utf8');
-      assert.ok(!/\$\d+(\.\d\d)?\b/.test(js), 'built client prints a dollar amount');
+      // Price shapes only ($10, $4.99, $1,000): a lone $1 is a minifier's
+      // regex-replacement token, not money.
+      const price = js.match(/\$\d{2,}(?:,\d{3})*(?:\.\d\d)?\b|\$\d\.\d\d\b/);
+      assert.ok(!price, `built client prints a dollar amount: ${price?.[0]}`);
       assert.ok(!/1\s*Token\s*=\s*4/i.test(js), 'built client mentions a 1:4 rate');
     }
   } catch (e) {

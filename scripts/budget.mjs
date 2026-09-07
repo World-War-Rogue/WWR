@@ -18,6 +18,11 @@ import {gzipSync} from 'node:zlib';
 const ENTRY_GZIP_KB = 200;
 const CSS_GZIP_KB = 30;
 const IMAGE_KB = 150;
+// The two full-screen atlases, named so nothing else can hide under the
+// bigger number. props-v1 (705 KB, 340px frames drawn at ~1/3 that size) is
+// on the list to regenerate tighter; when it is, lower this.
+const ATLAS_KB = 800;
+const ATLASES = new Set(['public/base/board-v5.webp', 'public/terrain/props-v1.webp']);
 
 const html = readFileSync('dist/index.html', 'utf8');
 const entry = html.match(/src="\/assets\/(index-[^"]+\.js)"/)?.[1];
@@ -57,7 +62,8 @@ for (const p of walk('public')) {
   // Designer source PNGs beside their WebP derivatives are never rendered.
   if (/^public[\\/]trade-post[\\/].*\.png$/i.test(p)) continue;
   const kb = Math.round(statSync(p).size / 1024);
-  if (kb > IMAGE_KB) failures.push(`${p} is ${kb} KB > ${IMAGE_KB} KB`);
+  const limit = ATLASES.has(p.replace(/\\/g, '/')) ? ATLAS_KB : IMAGE_KB;
+  if (kb > limit) failures.push(`${p} is ${kb} KB > ${limit} KB`);
 }
 
 if (failures.length) {
