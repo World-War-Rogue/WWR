@@ -12,22 +12,17 @@ import {type BaseLevelsView, api, ApiError} from '../net/api';
 import {type MessageKey, t} from '../i18n';
 import {
   type LevelledBuilding,
-  BUILDING_STEP,
   CATEGORY_OF_HUB,
-  NO_BUILDINGS,
   PRODUCER_OF,
   RESOURCE_KINDS,
   RESOURCE_LABEL,
   buildingBlock,
-  buildingBoost,
   buildingCapForSeason,
   buildingStep,
-  productionPerHour,
-  protectedShare,
+  effectLine,
+  engineerMultiplier,
   shortfall,
-  storageCap,
 } from '../../shared/buildings';
-import {CATEGORY_LABEL} from '../../shared/assets';
 import {formatClock} from '../../shared/gametime';
 
 export function remaining(ms: number): string {
@@ -42,38 +37,6 @@ export function remaining(ms: number): string {
 
 export function buildingLabel(b: LevelledBuilding): string {
   return t(`building.${b}` as MessageKey) || b;
-}
-
-/** What a level of this building is worth, in one line. */
-function effectLine(building: LevelledBuilding, level: number): string {
-  const category = CATEGORY_OF_HUB[building];
-  const pct = Math.round((BUILDING_STEP - 1) * 100);
-  if (category) {
-    const total = Math.round((buildingBoost(level) - 1) * 1000) / 10;
-    return `All ${CATEGORY_LABEL[category]} assets: +${pct}% Firepower, Armour, Mobility, Range and Detection per level.${
-      total > 0 ? ` Now +${total}%.` : ''
-    }`;
-  }
-  const probe = {...NO_BUILDINGS, [building]: level};
-  switch (building) {
-    case 'command_center':
-      return 'The ceiling for everything. No building, Service Rank or package can stand above this level.';
-    case 'quartermaster_warehouse':
-      return `Stores ${storageCap(probe).toLocaleString()} of each resource and protects ${Math.round(
-        protectedShare(probe) * 100,
-      )}% of it from raids.`;
-    case 'fuel_point':
-    case 'fabrication_shop':
-    case 'garrison_barracks':
-    case 'recovery_yard': {
-      const kind = RESOURCE_KINDS.find((k) => PRODUCER_OF[k] === building)!;
-      return `Produces ${productionPerHour(probe)[kind].toLocaleString()} ${RESOURCE_LABEL[kind]} an hour.`;
-    }
-    case 'engineer_support_yard':
-      return 'Faster construction. At level 10 the Second Engineer Team can be hired: a permanent second build queue.';
-    default:
-      return t(`blurb.${building}` as MessageKey) || '';
-  }
 }
 
 export default function BuildingPanel({
@@ -150,7 +113,7 @@ export default function BuildingPanel({
         </span>
       </div>
 
-      <p className="mt-1 text-[11px] leading-relaxed text-neutral-400">{effectLine(building, level)}</p>
+      <p className="mt-1 text-[11px] leading-relaxed text-neutral-400">{effectLine(building, level, cap)}</p>
 
       {mine && mine.completesAt > now ? (
         <div className="mt-2 flex items-center justify-between rounded border border-orange-900/60 bg-orange-950/20 px-2 py-1.5 text-[11px]">
@@ -173,7 +136,9 @@ export default function BuildingPanel({
                 <span className="text-neutral-600">/{base.resources[k].toLocaleString()}</span>
               </span>
             ))}
-            <span className="font-mono text-neutral-300">{remaining(step.ms)}</span>
+            <span className="font-mono text-neutral-300">
+              {remaining(Math.round(step.ms * engineerMultiplier(base.levels.engineer_support_yard)))}
+            </span>
             <button
               onClick={() => void start()}
               disabled={busy || !canStart}

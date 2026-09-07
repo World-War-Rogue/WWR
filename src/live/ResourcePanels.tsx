@@ -7,7 +7,9 @@
 import {useState} from 'react';
 import {type BaseLevelsView, api, ApiError} from '../net/api';
 import {
+  type ResourceKind,
   DAILY_RESOURCE_CAP,
+  depotCapMultiplier,
   RESOURCE_KINDS,
   RESOURCE_LABEL,
   RESOURCE_PER_UNIT,
@@ -19,20 +21,22 @@ import {
 import {formatClock} from '../../shared/gametime';
 import {buildingLabel, remaining} from './BuildingPanel';
 
-export function StockPanel({base}: {base: BaseLevelsView}) {
+export function StockPanel({base, only}: {base: BaseLevelsView; only?: ResourceKind}) {
   const safe = protectedShare(base.levels);
+  const kinds = only ? [only] : RESOURCE_KINDS;
   return (
     <section className="rounded border border-neutral-800 bg-neutral-900/40 p-3">
       <div className="flex items-baseline justify-between">
-        <h3 className="text-sm font-semibold text-neutral-100">Stock</h3>
+        <h3 className="text-sm font-semibold text-neutral-100">{only ? `${RESOURCE_LABEL[only]} stock` : 'Stock'}</h3>
         <span className="text-[10px] uppercase tracking-[0.2em] text-neutral-500">
           {Math.round(safe * 100)}% raid-protected
         </span>
       </div>
       <div className="mt-2 space-y-1.5">
-        {RESOURCE_KINDS.map((k) => {
+        {kinds.map((k) => {
           const have = base.resources[k];
           const full = have >= base.storageCap;
+          const hoursToFull = full ? 0 : (base.storageCap - have) / Math.max(1, base.productionPerHour[k]);
           return (
             <div key={k} className="text-[11px]">
               <div className="flex items-baseline justify-between">
@@ -42,6 +46,7 @@ export function StockPanel({base}: {base: BaseLevelsView}) {
                   <span className="text-neutral-600"> / {base.storageCap.toLocaleString()}</span>
                   <span className="ml-2 text-neutral-500">
                     +{base.productionPerHour[k].toLocaleString()}/h
+                    {!full && ` · full in ${hoursToFull >= 1 ? `${Math.ceil(hoursToFull)}h` : `${Math.ceil(hoursToFull * 60)}m`}`}
                   </span>
                 </span>
               </div>
@@ -61,10 +66,12 @@ export function StockPanel({base}: {base: BaseLevelsView}) {
           );
         })}
       </div>
-      <p className="mt-2 text-[10px] text-neutral-600">
-        Produced at{' '}
-        {RESOURCE_KINDS.map((k) => `${buildingLabel(PRODUCER_OF[k])} (${RESOURCE_LABEL[k]})`).join(', ')}.
-      </p>
+      {!only && (
+        <p className="mt-2 text-[10px] text-neutral-600">
+          Produced at{' '}
+          {RESOURCE_KINDS.map((k) => `${buildingLabel(PRODUCER_OF[k])} (${RESOURCE_LABEL[k]})`).join(', ')}.
+        </p>
+      )}
     </section>
   );
 }
@@ -117,7 +124,8 @@ export function ResourceShop({
             <div key={k} className="flex items-center gap-2 text-[11px]">
               <span className="w-20 text-neutral-300">{RESOURCE_LABEL[k]}</span>
               <span className="text-neutral-500">
-                {RESOURCE_PER_UNIT[k]} each · cap {DAILY_RESOURCE_CAP[k].toLocaleString()}/day
+                {RESOURCE_PER_UNIT[k]} each · cap{' '}
+                {Math.floor(DAILY_RESOURCE_CAP[k] * depotCapMultiplier(base.levels.depot)).toLocaleString()}/day
               </span>
               <input
                 type="number"
@@ -210,6 +218,37 @@ export function SecondTeamPanel({
         </>
       )}
       {error && <p className="mt-1 text-[11px] text-red-400">{error}</p>}
+    </section>
+  );
+}
+
+/** Engineer Support Yard: what is building, and its fixed completion. */
+export function QueuePanel({base}: {base: BaseLevelsView}) {
+  const now = Date.now();
+  return (
+    <section className="rounded border border-neutral-800 bg-neutral-900/40 p-3">
+      <div className="flex items-baseline justify-between">
+        <h3 className="text-sm font-semibold text-neutral-100">Build queue</h3>
+        <span className="text-[10px] uppercase tracking-[0.2em] text-neutral-500">
+          {base.jobs.length} / {base.queues} in use
+        </span>
+      </div>
+      {base.jobs.length === 0 ? (
+        <p className="mt-1 text-[11px] text-neutral-500">Nothing is building.</p>
+      ) : (
+        <ul className="mt-2 space-y-1 text-[11px]">
+          {base.jobs.map((j) => (
+            <li key={j.id} className="flex items-center justify-between">
+              <span className="text-neutral-200">
+                {buildingLabel(j.building as never)} → {j.toLevel}
+              </span>
+              <span className="font-mono text-neutral-400">
+                {formatClock(j.completesAt)} RST · {remaining(j.completesAt - now)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

@@ -880,6 +880,26 @@ if (wanted('buildings')) {
 }
 
 /* -------------------------------------------------------------------------- */
+/* 10b. Department effects - BUILDING EFFECTS v1 guardrails                   */
+/* -------------------------------------------------------------------------- */
+
+if (wanted('effects')) {
+  heading('10b. Department effects');
+  const {tocMultiplier, marchMultiplier, engineerMultiplier, depotCapMultiplier, signalsLeadMs, MARCH_TOTAL_CAP} = buildings;
+  const {DRONE_NETWORK_CAP} = drones;
+  const total = marchMultiplier(DRONE_NETWORK_CAP, 10);
+  console.log(`  TOC 10 x${tocMultiplier(10).toFixed(3)}; with Drone Network cap: x${total.toFixed(3)}; Engineer 10 x${engineerMultiplier(10).toFixed(2)}; Depot 10 x${depotCapMultiplier(10).toFixed(2)}; Signals 10 ${signalsLeadMs(10) / 60000}m`);
+  assert('effects.start', tocMultiplier(1) === 1 && engineerMultiplier(1) === 1 && depotCapMultiplier(1) === 1, 'level 1 is not the start');
+  assert('effects.march', Math.abs(total - MARCH_TOTAL_CAP) < 1e-9 && marchMultiplier(DRONE_NETWORK_CAP, 50) <= MARCH_TOTAL_CAP, `march total ${total}`);
+  assert('effects.engineer', Math.abs(engineerMultiplier(10) - 0.7) < 1e-9 && engineerMultiplier(50) >= 0.7, 'engineer timer outside x0.70');
+  let rising = true;
+  for (let l = 1; l < 10; l += 1) {
+    if (!(tocMultiplier(l + 1) > tocMultiplier(l) && engineerMultiplier(l + 1) < engineerMultiplier(l) && signalsLeadMs(l + 1) > signalsLeadMs(l))) rising = false;
+  }
+  assert('effects.monotone', rising, 'an effect did not improve with a level');
+}
+
+/* -------------------------------------------------------------------------- */
 /* 11. Drones - DRONE RULES v1 guardrails                                     */
 /* -------------------------------------------------------------------------- */
 

@@ -19,7 +19,8 @@ import {
 import {type SideSpec, resolve} from '../shared/combat';
 import {readSquads} from './squads';
 import {readBase} from './buildings';
-import {categoryBoost} from '../shared/buildings';
+import {categoryBoost, marchMultiplier} from '../shared/buildings';
+import {readLevels} from './buildings';
 import {DRONE_WORDING, droneCount, droneNetworkMultiplier, isDrone, paceMobility} from '../shared/drones';
 
 export interface MarchRow {
@@ -246,7 +247,11 @@ export async function launch(
     return {id: u.assetId, mobility: a?.mobility ?? 5, detection: a?.detection ?? 5};
   });
   const network = droneNetworkMultiplier(resolved.filter((r) => isDrone(r.id)));
-  const seconds = marchSeconds(plotsBetween(from.x, from.y, to.x, to.y), paceMobility(resolved) * network);
+  // The Tactical Operations Center speeds every march; the whole bonus is
+  // capped at MARCH_TOTAL_CAP. BUILDING EFFECTS v1.
+  const levels = await readLevels(db, attackerId);
+  const speed = paceMobility(resolved) * marchMultiplier(network, levels.tactical_operations_center);
+  const seconds = marchSeconds(plotsBetween(from.x, from.y, to.x, to.y), speed);
   const arrivesAt = now + seconds * 1000;
 
   try {

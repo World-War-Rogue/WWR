@@ -35,6 +35,8 @@ import {
   SECOND_TEAM,
   buildingBlock,
   buildingStep,
+  depotCapMultiplier,
+  engineerMultiplier,
   isLevelledBuilding,
   productionPerHour,
   shortfall,
@@ -71,7 +73,7 @@ export interface BaseState {
 /* Reading                                                                    */
 /* -------------------------------------------------------------------------- */
 
-async function readLevels(db: D1Database, playerId: string): Promise<BuildingLevels> {
+export async function readLevels(db: D1Database, playerId: string): Promise<BuildingLevels> {
   const rows = await db
     .prepare(`SELECT building, level FROM base_levels WHERE player_id = ?1`)
     .bind(playerId)
@@ -258,6 +260,9 @@ export async function startLevel(
 
   const toLevel = base.levels[building] + 1;
   const step = buildingStep(building, toLevel);
+  // The Engineer Support Yard shortens timers started after its level is
+  // complete; a timer already running never changes. BUILDING EFFECTS v1.
+  const ms = Math.round(step.ms * engineerMultiplier(base.levels.engineer_support_yard));
   const short = shortfall(base.resources, step.cost);
   if (Object.keys(short).length > 0) return {ok: false, error: shortMessage(short, name)};
 
@@ -273,7 +278,7 @@ export async function startLevel(
           WHERE ${DEBITED}
             AND (SELECT COUNT(*) FROM base_jobs WHERE player_id = ?2 AND applied_at IS NULL) < ?7`,
       )
-      .bind(id, playerId, building, toLevel, now, now + step.ms, base.queues, base.stockRev + 1),
+      .bind(id, playerId, building, toLevel, now, now + ms, base.queues, base.stockRev + 1),
   ]);
   if (!result[0].meta.changes || !result[1].meta.changes) {
     return {ok: false, error: 'Your stock changed. Try that again.'};
@@ -324,8 +329,10 @@ export async function buyResource(
     .bind(playerId, day, k)
     .first<{amount: number}>();
   const soFar = today?.amount ?? 0;
-  if (soFar + bought > DAILY_RESOURCE_CAP[k]) {
-    const left = Math.max(0, DAILY_RESOURCE_CAP[k] - soFar);
+  // The Depot's level raises the daily caps; the rates never move.
+  const cap = Math.floor(DAILY_RESOURCE_CAP[k] * depotCapMultiplier(base.levels.depot));
+  if (soFar + bought > cap) {
+    const left = Math.max(0, cap - soFar);
     return {ok: false, error: `Daily ${RESOURCE_LABEL[k]} limit: ${left.toLocaleString()} more today.`};
   }
 

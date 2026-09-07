@@ -356,3 +356,118 @@ export function categoryBoost(levels: BuildingLevels, category: AssetCategory): 
   const hub = HUB_OF_CATEGORY[category];
   return hub ? buildingBoost(levels[hub]) : 1;
 }
+
+/* -------------------------------------------------------------------------- */
+/* What the departments do - BUILDING EFFECTS v1                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Every curve runs from nothing at level 1 (the owner's ruling: everything
+ * starts at 1 and level 1 is the start, not a bonus) to the document's
+ * level-10 endpoint, in equal steps.
+ */
+function ramp(level: number, at10: number): number {
+  // Past 10 holds at the level-10 value until a later season's table lands;
+  // the document's caps (x0.70 timers, x1.50 march) are hard.
+  const l = Math.max(1, Math.min(10, Math.floor(level)));
+  return (at10 - 1) * ((l - 1) / 9);
+}
+
+/** The most any combination of march bonuses may reach. */
+export const MARCH_TOTAL_CAP = 1.5;
+
+/** Tactical Operations Center: every Task Force marches faster. x1.20 at 10. */
+export function tocMultiplier(level: number): number {
+  return 1 + ramp(level, 1.2);
+}
+
+/** The whole march multiplier: Drone Network x TOC, capped. */
+export function marchMultiplier(droneNetwork: number, tocLevel: number): number {
+  return Math.min(MARCH_TOTAL_CAP, droneNetwork * tocMultiplier(tocLevel));
+}
+
+/** Engineer Support Yard: new building timers are shorter. x0.70 at 10. */
+export function engineerMultiplier(level: number): number {
+  return 1 + ramp(level, 0.7);
+}
+
+/** Depot: the daily Supplies caps are higher. x1.50 at 10. Rates never change. */
+export function depotCapMultiplier(level: number): number {
+  return 1 + ramp(level, 1.5);
+}
+
+/** Signals Center: an inbound march shows this long before it lands. */
+export function signalsLeadMs(level: number): number {
+  return Math.max(1, Math.floor(level)) * 3 * 60_000;
+}
+
+/** Alliance Trading Post: open barter offers at once (barter is not built yet). */
+export function tradingOffers(level: number): number {
+  return Math.max(1, Math.floor(level));
+}
+
+/**
+ * The panel line: what the building does at this level, and what the next
+ * one gives. One place, so the sheet and the Command Center's list agree.
+ */
+export function effectLine(building: LevelledBuilding, level: number, cap: number): string {
+  const next = level + 1;
+  const hasNext = next <= cap;
+  const pct = (m: number) => `${Math.round(Math.abs(m - 1) * 1000) / 10}%`;
+  const line = (now: string, nextLine: string) => (hasNext ? `${now} Next: ${nextLine}` : now);
+  const category = CATEGORY_OF_HUB[building];
+  if (category) {
+    return line(
+      `All ${category.replace('_', '-')} assets: +${pct(buildingBoost(level))} to all five stats.`,
+      `+${pct(buildingBoost(next))}.`,
+    );
+  }
+  switch (building) {
+    case 'command_center':
+      return line(
+        `Buildings and Service Ranks may advance to ${level}.`,
+        `${next}${next === 5 ? ', and Task Force Bravo' : next === 15 ? ', and Task Force Charlie' : next === 25 ? ', and Task Force Delta' : ''}.`,
+      );
+    case 'tactical_operations_center':
+      return line(
+        `All Task Forces march ${pct(tocMultiplier(level))} faster. With the Drone Network, capped at x${MARCH_TOTAL_CAP.toFixed(2)}.`,
+        `${pct(tocMultiplier(next))}.`,
+      );
+    case 'signals_center':
+      return line(
+        `Incoming attacks show ${signalsLeadMs(level) / 60_000} minutes before they land.`,
+        `${signalsLeadMs(next) / 60_000} minutes.`,
+      );
+    case 'quartermaster_warehouse': {
+      const at = (l: number) => ({...NO_BUILDINGS, quartermaster_warehouse: l});
+      return line(
+        `Stores ${storageCap(at(level)).toLocaleString()} of each resource; ${Math.round(protectedShare(at(level)) * 100)}% is raid-protected.`,
+        `${storageCap(at(next)).toLocaleString()}, ${Math.round(protectedShare(at(next)) * 100)}%.`,
+      );
+    }
+    case 'engineer_support_yard':
+      return line(
+        `New building timers are ${pct(engineerMultiplier(level))} shorter.${level >= SECOND_TEAM.requiresEngineerYard ? ' The Second Engineer Team can be hired.' : ''}`,
+        `${pct(engineerMultiplier(next))}${next === SECOND_TEAM.requiresEngineerYard ? ', and the Second Engineer Team' : ''}.`,
+      );
+    case 'depot':
+      return line(
+        `Daily Supplies limits are +${pct(depotCapMultiplier(level))} higher. Rates stay fixed.`,
+        `+${pct(depotCapMultiplier(next))}.`,
+      );
+    case 'alliance_trading_post':
+      return line(
+        `You may keep ${tradingOffers(level)} alliance barter offer${tradingOffers(level) === 1 ? '' : 's'} open.`,
+        `${tradingOffers(next)}.`,
+      );
+    default: {
+      const kind = RESOURCE_KINDS.find((k) => PRODUCER_OF[k] === building);
+      if (!kind) return '';
+      const at = (l: number) => ({...NO_BUILDINGS, [building]: l});
+      return line(
+        `Produces ${productionPerHour(at(level))[kind].toLocaleString()} ${RESOURCE_LABEL[kind]}/hour.`,
+        `${productionPerHour(at(next))[kind].toLocaleString()}/hour.`,
+      );
+    }
+  }
+}

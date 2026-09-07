@@ -12,9 +12,9 @@
  */
 import {type ReactNode, useState} from 'react';
 import BuildingPanel from './BuildingPanel';
-import {ResourceShop, SecondTeamPanel, StockPanel} from './ResourcePanels';
+import {QueuePanel, ResourceShop, SecondTeamPanel, StockPanel} from './ResourcePanels';
 import {useBase} from './useBase';
-import {LEVELLED_BUILDINGS, isLevelledBuilding} from '../../shared/buildings';
+import {LEVELLED_BUILDINGS, PRODUCER_OF, RESOURCE_KINDS, isLevelledBuilding} from '../../shared/buildings';
 import {type MessageKey, t} from '../i18n';
 import {
   type BaseView,
@@ -205,7 +205,22 @@ export function DepartmentSheet({id, onClose}: {id: string; onClose: () => void}
         <div className="space-y-3">
           <BuildingPanel building={levelled} base={base} onChanged={setBase} />
           {levelled === 'quartermaster_warehouse' && <StockPanel base={base} />}
-          {levelled === 'engineer_support_yard' && <SecondTeamPanel base={base} onChanged={setBase} />}
+          {RESOURCE_KINDS.filter((k) => PRODUCER_OF[k] === levelled).map((k) => (
+            <div key={k}>
+              <StockPanel base={base} only={k} />
+            </div>
+          ))}
+          {levelled === 'engineer_support_yard' && (
+            <>
+              <QueuePanel base={base} />
+              <SecondTeamPanel base={base} onChanged={setBase} />
+            </>
+          )}
+          {levelled === 'signals_center' && (
+            <p className="text-[11px] text-neutral-500">
+              Incoming attacks appear on the World map once they are within your warning lead time.
+            </p>
+          )}
           <p className="text-xs text-neutral-500">{blurb}</p>
         </div>
       ) : (

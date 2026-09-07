@@ -8,8 +8,8 @@ import {handleAdminRequests} from './admin';
 import {ensureRally, lastRalliedAt, rallyTo, readRally, setRally} from './rally';
 import {assignSlot, ensureRoster, moveSlot, readSquads, squadLiftUsed, squadPower} from './squads';
 import {packageUp, rankUp, resetPackages, settleWallet} from './upgrades';
-import {buyResource, buySecondTeam, readBase, startLevel} from './buildings';
-import {type LevelledBuilding, rankCeiling} from '../shared/buildings';
+import {buyResource, buySecondTeam, readBase, readLevels, startLevel} from './buildings';
+import {type LevelledBuilding, rankCeiling, signalsLeadMs} from '../shared/buildings';
 import {BOARD_BUILDING_BY_ID} from '../shared/base';
 import {isPackageKey} from '../shared/upgrades';
 import {type Split} from '../shared/economy';
@@ -686,13 +686,15 @@ async function handleWorld(request: Request, env: Env, player: PlayerRow): Promi
   // still lands correctly - it simply lands the next time anybody reads.
   await settleArrivals(env.DB, world.id, now, newId);
 
-  const [rallyPoint, ralliedAt, marches, away] = await Promise.all([
+  const [rallyPoint, ralliedAt, marches, away, viewerLevels] = await Promise.all([
     ownAlliance ? ensureRally(env.DB, ownAlliance.id, world.id, now) : Promise.resolve(null),
     lastRalliedAt(env.DB, world.id, player.id),
     pendingMarches(env.DB, world.id),
     // Read after settling, so a squad that just landed is not still listed as
     // in the air on the one panel that is supposed to say where it is.
     deployments(env.DB, player.id, now),
+    // The viewer's Signals Center decides how early other people's marches show.
+    readLevels(env.DB, player.id),
   ]);
 
   return json({
@@ -726,7 +728,12 @@ async function handleWorld(request: Request, env: Env, player: PlayerRow): Promi
     // Everything in transit. Drawn on the map, so a defender sees what is
     // coming - which is the whole reason marching exists rather than an
     // attack being a button that resolves instantly.
-    marches: marches.map((m) => ({
+    marches: marches
+      // Your own marches are always yours to see. Anyone else's shows only
+      // once it is within your Signals Center's lead time of landing -
+      // BUILDING EFFECTS v1: visibleAt = max(sentAt, arrivalAt - lead).
+      .filter((m) => m.attacker_id === player.id || m.arrives_at - signalsLeadMs(viewerLevels.signals_center) <= now)
+      .map((m) => ({
       id: m.id,
       attacker: m.attacker,
       defender: m.defender,
