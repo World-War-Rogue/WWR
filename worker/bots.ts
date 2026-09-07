@@ -34,10 +34,11 @@ export const FARM_CEILING_SEASON_1 = 8;
 
 /**
  * Plant at most this many per request. Each bot is eight or so round trips
- * to D1, and a Worker request has a subrequest budget; the bots page loops
+ * to D1 and the free plan allows fifty subrequests per request: ten bots
+ * returned a bare 500 on the live server, five did not. The bots page loops
  * requests until a world holds its target.
  */
-export const PLANT_BATCH_MAX = 10;
+export const PLANT_BATCH_MAX = 5;
 
 /** How many farm bots a server is meant to carry. */
 export const FARM_TARGET_PER_WORLD = 200;
