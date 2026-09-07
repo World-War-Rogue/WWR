@@ -24,6 +24,7 @@ import {
   shortfall,
 } from '../../shared/buildings';
 import {formatClock} from '../../shared/gametime';
+import {guideEvent} from './guide/bus';
 
 export function remaining(ms: number): string {
   const s = Math.max(0, Math.ceil(ms / 1000));
@@ -82,6 +83,11 @@ export default function BuildingPanel({
   const blocked = buildingBlock(building, base.levels, base.season);
   const short = shortfall(base.resources, step.cost);
   const queueFull = running.length >= base.queues;
+  useEffect(() => {
+    const k = RESOURCE_KINDS.find((x) => short[x]);
+    if (k && !blocked) guideEvent(`tip:shortfall:amount=${short[k]}:resource=${RESOURCE_LABEL[k]}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [building]);
 
   const start = async () => {
     setBusy(true);

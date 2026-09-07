@@ -359,6 +359,7 @@ export default function BaseBoard({
         */}
         <div
           className="absolute"
+          data-guide="building:command_center"
           style={{
             left: `${COMMAND_CENTER_BOX.x * 100}%`,
             top: `${COMMAND_CENTER_BOX.y * 100}%`,
@@ -416,6 +417,7 @@ export default function BaseBoard({
           return (
             <div
               key={padId}
+              data-guide={`slab:${squad}`}
               className={`absolute flex flex-col items-center justify-center text-center ${
                 tfSel ? 'rounded ring-2 ring-white/70' : ''
               }`}
@@ -456,6 +458,7 @@ export default function BaseBoard({
           return (
             <div
               key={b.id}
+              data-guide={`building:${b.id}`}
               className={`absolute ${isLifted ? '' : 'transition-[left,top] duration-200'}`}
               style={{
                 left: `${x * 100}%`,

@@ -10,6 +10,7 @@
  * exactly one base, so plot coordinates are the only unit this file thinks in;
  * pixels appear only at the moment of drawing.
  */
+import {guideEvent} from './guide/bus';
 import {SHIELD_WORDING, isShielded} from '../../shared/shields';
 import {remaining} from './BuildingPanel';
 import {type RefObject, useCallback, useEffect, useMemo, useRef, useState} from 'react';
@@ -883,6 +884,10 @@ export default function WorldMap({
   const selectedBase: PlacedBase | null = selected
     ? basesByPlot.get(`${selected.x},${selected.y}`) ?? null
     : null;
+  // Admiral Rider's step 2: the player found their own base.
+  useEffect(() => {
+    if (selectedBase && selectedBase.username === view?.you.username) guideEvent('tap:own-base');
+  }, [selectedBase, view?.you.username]);
 
   // Draw.
   useEffect(() => {
@@ -1280,6 +1285,7 @@ export default function WorldMap({
     setError(null);
     try {
       await api.attack(squad, attacking.x, attacking.y);
+      guideEvent('tip:march');
       setAttacking(null);
       setSelected(null);
       await load(camera, w, h);
@@ -1382,7 +1388,7 @@ export default function WorldMap({
         </div>
 
         <div className="flex flex-col items-end gap-2 justify-self-end">
-          <button
+          <button data-guide="my-base"
             onClick={onOpenBase}
             className="pointer-events-auto rounded bg-neutral-800 px-3 py-2 text-sm font-medium text-neutral-100 backdrop-blur transition hover:bg-neutral-700"
           >
@@ -1623,6 +1629,7 @@ export default function WorldMap({
             <button
               onClick={onOpenBattles}
               title="Battle reports"
+              data-guide="reports"
               className="pointer-events-auto flex h-11 items-center gap-2 rounded border border-neutral-700 bg-black/70 px-4 text-sm font-semibold text-neutral-100 backdrop-blur transition hover:border-red-600 hover:text-red-200"
             >
               <svg
@@ -1642,7 +1649,7 @@ export default function WorldMap({
             </button>
 
             {view?.you.plot && (
-              <button
+              <button data-guide="home"
                 onClick={() =>
                   setCamera({
                     cx: view.you.plot!.x + 0.5,

@@ -10,6 +10,7 @@
 import {type FormEvent, useEffect, useRef, useState} from 'react';
 import {REPORT_MAX, type ReportScreen} from '../../shared/support';
 import {ApiError, api} from '../net/api';
+import {guideEvent} from './guide/bus';
 import {t} from '../i18n';
 import {buildId, recentErrors} from './recentErrors';
 
@@ -25,6 +26,17 @@ export default function Settings({
   const [sentId, setSentId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const box = useRef<HTMLDivElement | null>(null);
+  const [guide, setGuide] = useState<boolean | null>(null);
+  useEffect(() => {
+    let live = true;
+    api
+      .season()
+      .then((s) => live && setGuide(s.guide.enabled))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
 
   // Escape closes. Same rule as the player menu - a panel that only closes by
   // finding the right button is a panel people leave open over the game.
@@ -87,6 +99,34 @@ export default function Settings({
             {t('settings.close')}
           </button>
         </div>
+
+        <section className="border-b border-neutral-900 px-4 py-4" data-guide="settings">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-neutral-100">Guide: Admiral Rider</h3>
+              <p className="mt-1 text-[13px] leading-relaxed text-neutral-400">
+                Walks you through every screen and building. Off hides him and his tips at once; on resumes where he left off.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                if (guide === null) return;
+                const next = !guide;
+                setGuide(next);
+                api
+                  .guide({enabled: next})
+                  .then(() => guideEvent('guide:refresh'))
+                  .catch(() => setGuide(!next));
+              }}
+              disabled={guide === null}
+              className={`shrink-0 rounded border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider ${
+                guide ? 'border-cyan-600 bg-cyan-950/40 text-cyan-200' : 'border-neutral-700 text-neutral-400'
+              }`}
+            >
+              {guide === null ? '…' : guide ? 'On' : 'Off'}
+            </button>
+          </div>
+        </section>
 
         <section className="px-4 py-4">
           <h3 className="text-sm font-semibold text-neutral-100">{t('settings.reportBug')}</h3>

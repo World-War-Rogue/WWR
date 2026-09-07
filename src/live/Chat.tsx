@@ -13,6 +13,7 @@
  * which nobody notices in a strategy game, and it is the thing to replace
  * first if chat ever becomes the reason people are here.
  */
+import {guideEvent} from './guide/bus';
 import {type FormEvent, useCallback, useEffect, useRef, useState} from 'react';
 import {CHAT_TABS, type ChatTab, MESSAGE_MAX} from '../../shared/chat';
 import {RANK_KEY} from './ranks';
@@ -431,7 +432,11 @@ export default function Chat({
         )}
 
         <button
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            setOpen(true);
+            guideEvent('open:chat');
+          }}
+          data-guide="chat"
           className="flex w-full items-center gap-3 border-t border-neutral-800 bg-neutral-950/95 px-4 py-3 text-left backdrop-blur"
         >
           <span className="min-w-0 flex-1 truncate text-sm">

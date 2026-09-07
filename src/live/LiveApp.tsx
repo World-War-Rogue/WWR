@@ -6,6 +6,9 @@
  * keeps running whether or not this tab is open. The tactical UI in App.tsx
  * gets wired to these same endpoints once the foundation is trusted.
  */
+import Guide from './guide/Guide';
+import {guideEvent} from './guide/bus';
+import {HUB_OF_CATEGORY} from '../../shared/buildings';
 import {remaining} from './BuildingPanel';
 import {useCallback, useEffect, useState} from 'react';
 import {setLanguage, t} from '../i18n';
@@ -168,7 +171,25 @@ export default function LiveApp() {
     // at 94px per plot centred on your own plot, which is what the Home button
     // does, so this needs no second concept of "home".
   >('world');
+
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // What Admiral Rider hears. Screens, sheets and the settings panel are
+  // reported here, in one place, as they change.
+  useEffect(() => {
+    guideEvent(`screen:${screen}`);
+    if (screen === 'assets' && assetOnly && HUB_OF_CATEGORY[assetOnly]) {
+      guideEvent(`open:building:${HUB_OF_CATEGORY[assetOnly]}`);
+    }
+  }, [screen, assetOnly]);
+  useEffect(() => {
+    if (sheet === 'command_center') guideEvent('open:building:command_center');
+    else if (sheet === 'depot') guideEvent('open:building:depot');
+    else if (sheet) guideEvent(`open:building:${sheet.department}`);
+  }, [sheet]);
+  useEffect(() => {
+    if (settingsOpen) guideEvent('open:settings');
+  }, [settingsOpen]);
 
   // Collect client errors from the first render, so a report filed at minute
   // three still carries what went wrong at minute one.
@@ -257,6 +278,7 @@ export default function LiveApp() {
   // branch having to know about it.
   const chat = (
     <>
+      <Guide />
       <Chat
         me={player.username}
         onViewProfile={(name) => {
@@ -443,7 +465,7 @@ export default function LiveApp() {
 
         {/* The clock, between the two buttons - the same strip the map uses. */}
         <div className="pointer-events-auto flex flex-col items-center gap-1">
-          <div className="rounded border border-neutral-800 bg-black/70 px-3 py-1.5 text-[11px] backdrop-blur">
+          <div data-guide="clock" className="rounded border border-neutral-800 bg-black/70 px-3 py-1.5 text-[11px] backdrop-blur">
             <GameClock />
           </div>
           {base?.season1?.shield.until && base.season1.shield.until > now() && (
@@ -455,6 +477,7 @@ export default function LiveApp() {
 
         <button
           onClick={() => setScreen('world')}
+          data-guide="world-map"
           className="pointer-events-auto rounded bg-neutral-800/90 px-3 py-2 text-sm font-medium text-neutral-100 shadow backdrop-blur transition hover:bg-neutral-700"
         >
           {t('nav.worldMap')}

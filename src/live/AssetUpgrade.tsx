@@ -16,9 +16,11 @@
  * recomputed there, so what is drawn here is a quote and not an authority - if
  * the two ever disagree the server wins and says so.
  */
-import {useState} from 'react';
+import {useEffect, useState} from 'react';
 import {assetArtUrl, assetStageArtUrl, nextVisualStage, visualStage} from '../../shared/assetVisuals';
 import {DRONE_WORDING} from '../../shared/drones';
+import {guideEvent} from './guide/bus';
+import {unlockWeekOf} from '../../shared/season';
 
 import {
   type Asset,
@@ -170,6 +172,14 @@ export default function AssetUpgrade({
 }) {
   // A locked asset is looked at, never bought: every button is held busy.
   const [busyState, setBusy] = useState(false);
+  useEffect(() => {
+    if (locked) {
+      const w = unlockWeekOf(asset.id);
+      if (w !== null) guideEvent(`tip:locked:week=${w}`);
+    } else {
+      guideEvent('open:asset');
+    }
+  }, [asset.id, locked]);
   const busy = busyState || locked !== null;
   const [error, setError] = useState<string | null>(null);
 

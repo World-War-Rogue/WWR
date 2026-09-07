@@ -29,6 +29,7 @@ import {attributesWith} from '../../shared/upgrades';
 import {categoryBoost} from '../../shared/buildings';
 import {DRONE_WORDING, droneNetworkMultiplier, isDrone} from '../../shared/drones';
 import {TASK_FORCE_UNLOCK, taskForceOpen} from '../../shared/season';
+import {guideEvent} from './guide/bus';
 import AssetIcon from './AssetIcon';
 import ForcesTabs from './ForcesTabs';
 import {t} from '../i18n';
@@ -462,6 +463,8 @@ export default function Squads({
                                   setError(t('squads.awayHint'));
                                   return;
                                 }
+                                guideEvent('tap:slot');
+                                if (id && isDrone(id)) guideEvent('tap:drone');
                                 // An occupied slot asks what to do with what is
                                 // already there; an empty one goes straight to
                                 // the choices, because there is only one thing
