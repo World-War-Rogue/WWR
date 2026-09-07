@@ -118,7 +118,7 @@ export function ResourceShop({
       </div>
       <p className="mt-1 text-[11px] text-neutral-500">
         One Credit or Token buys a fixed amount. Credits are spent first. Daily limits reset at
-        00:00 RST; a purchase that will not fit in the Warehouse is refused.
+        00:00 RST. Storage is unlimited.
       </p>
       <div className="mt-2 space-y-2">
         {RESOURCE_KINDS.map((k) => {

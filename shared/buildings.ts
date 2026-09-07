@@ -150,12 +150,19 @@ export function storageCap(levels: BuildingLevels): number {
 }
 
 /**
- * The cap for one resource. Fuel has none - it is stored without limit and
- * only its production is fixed (owner's decision 2026-09-07); the Warehouse
- * caps the other three.
+ * The cap for one resource: there is none. Nothing a player holds - Fuel,
+ * Steel, Munitions, Alloy - is ever capped (owner's ruling 2026-09-07: "there
+ * should never be a cap on any materials or supplies"). Production never
+ * stops, a Depot purchase is never refused for space, a reward is never
+ * clipped, raid loot is never left behind for want of room.
+ *
+ * The Quartermaster Warehouse keeps its other job, the raid-protected share.
+ * `storageCap` below is retained only as a figure the design table still
+ * names; nothing applies it. The signature stays so every call site reads
+ * the rule from one place.
  */
-export function capFor(kind: ResourceKind, levels: BuildingLevels): number {
-  return kind === 'fuel' ? Number.POSITIVE_INFINITY : storageCap(levels);
+export function capFor(_kind: ResourceKind, _levels: BuildingLevels): number {
+  return Number.POSITIVE_INFINITY;
 }
 
 export function protectedShare(levels: BuildingLevels): number {
@@ -450,8 +457,8 @@ export function effectLine(building: LevelledBuilding, level: number, cap: numbe
     case 'quartermaster_warehouse': {
       const at = (l: number) => ({...NO_BUILDINGS, quartermaster_warehouse: l});
       return line(
-        `Stores ${storageCap(at(level)).toLocaleString()} of each resource; ${Math.round(protectedShare(at(level)) * 100)}% is raid-protected.`,
-        `${storageCap(at(next)).toLocaleString()}, ${Math.round(protectedShare(at(next)) * 100)}%.`,
+        `${Math.round(protectedShare(at(level)) * 100)}% of every stock is raid-protected. Storage is unlimited.`,
+        `${Math.round(protectedShare(at(next)) * 100)}% protected.`,
       );
     }
     case 'engineer_support_yard':

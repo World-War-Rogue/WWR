@@ -323,12 +323,6 @@ export async function buyResource(
   const bought = units * per;
 
   const base = await readBase(db, playerId, now);
-  if (base.resources[k] + bought > capFor(k, base.levels)) {
-    return {
-      ok: false,
-      error: `${RESOURCE_LABEL[k]} storage is full. Upgrade the Quartermaster Warehouse or spend resources to resume production.`,
-    };
-  }
   const day = gameDayStart(now);
   const today = await db
     .prepare(`SELECT amount FROM depot_purchases WHERE player_id = ?1 AND day = ?2 AND resource = ?3`)

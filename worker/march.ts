@@ -23,7 +23,7 @@ import {readSystems} from './combatSystems';
 import {noteDailyProgress} from './dailyOps';
 import {deltaOpen, lockedMessage, readSquads} from './squads';
 import {readBase} from './buildings';
-import {type Resources, RESOURCE_KINDS, categoryBoost, marchMultiplier, raidLoot} from '../shared/buildings';
+import {capFor, type Resources, RESOURCE_KINDS, categoryBoost, marchMultiplier, raidLoot} from '../shared/buildings';
 import {REPAIR_WORDING, isDisabled, marchHpFactor} from '../shared/repair';
 import {applyDamage, settleRepairs} from './repair';
 import {readLevels} from './buildings';
@@ -790,8 +790,10 @@ export async function settleArrivals(
       ]);
       const loot = raidLoot(victim.resources, victim.levels);
       const taken: Resources = {...loot};
+      // No storage cap anywhere (ruling 2026-09-07): the raider takes the
+      // whole share the Warehouse did not protect.
       for (const k of RESOURCE_KINDS) {
-        taken[k] = Math.max(0, Math.min(loot[k], raider.storageCap - raider.resources[k]));
+        taken[k] = Math.max(0, Math.min(loot[k], capFor(k, raider.levels) - raider.resources[k]));
       }
       if (RESOURCE_KINDS.some((k) => taken[k] > 0)) {
         await db.batch([
