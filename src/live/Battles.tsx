@@ -249,6 +249,17 @@ function Detail({
           </section>
         )}
 
+        {detail.raid && (
+          <section className="mt-3 rounded border border-orange-900/60 bg-orange-950/20 p-3 text-xs">
+            <h3 className="text-[11px] uppercase tracking-wide text-orange-300">Raid</h3>
+            <p className="mt-1 font-mono text-neutral-200">
+              Fuel {detail.raid.fuel.toLocaleString()} · Steel {detail.raid.steel.toLocaleString()} · Munitions{' '}
+              {detail.raid.munitions.toLocaleString()} · Alloy {detail.raid.alloy.toLocaleString()}
+            </p>
+            <p className="mt-0.5 text-[10px] text-neutral-500">5% of the unprotected stock, as far as the raider's Warehouse could hold.</p>
+          </section>
+        )}
+
         {detail.notes.length > 0 && (
           <section className="mt-3 rounded border border-neutral-800 bg-neutral-950 p-3">
             <h3 className="text-[11px] uppercase tracking-wide text-neutral-500">

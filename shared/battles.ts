@@ -55,6 +55,8 @@ export interface BattleDetail {
   squads: SquadResult[];
   /** Free-text notes the resolver wants to surface - terrain, surprise, retreat. */
   notes: string[];
+  /** What the raid took, when the attacker won. Absent on older reports. */
+  raid?: {fuel: number; steel: number; munitions: number; alloy: number};
 }
 
 export interface BattleRound {

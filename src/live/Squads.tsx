@@ -44,9 +44,25 @@ const ROLE_TINT: Record<string, string> = {
   lift: 'text-neutral-300',
 };
 
+/** A thin bar under the name: what the asset has left. Hidden when whole. */
+function HpBar({hp, repairing}: {hp: number; repairing: boolean}) {
+  if (hp >= 0.999 && !repairing) return null;
+  const pct = Math.round(Math.max(0, Math.min(1, hp)) * 100);
+  return (
+    <span className="mt-0.5 block h-1 w-full overflow-hidden rounded-full bg-neutral-800" title={repairing ? 'Under repair' : `${pct}% hit points`}>
+      <span
+        className={`block h-full rounded-full ${repairing ? 'bg-cyan-400' : pct <= 0 ? 'bg-red-600' : pct < 50 ? 'bg-orange-500' : 'bg-emerald-500'}`}
+        style={{width: `${repairing ? 100 : Math.max(2, pct)}%`}}
+      />
+    </span>
+  );
+}
+
 function Slot({
   asset,
   level,
+  hp = 1,
+  repairing = false,
   selected,
   dropTarget,
   dragging,
@@ -55,6 +71,8 @@ function Slot({
 }: {
   asset: Asset | null;
   level: number;
+  hp?: number;
+  repairing?: boolean;
   selected: boolean;
   dropTarget: boolean;
   dragging: boolean;
@@ -93,6 +111,7 @@ function Slot({
             <span className="block font-mono text-[10px] text-neutral-600">
               lift {asset.lift} · lv {level}
             </span>
+            <HpBar hp={hp} repairing={repairing} />
           </span>
         </span>
       ) : (
@@ -273,6 +292,18 @@ export default function Squads({
     }
   }
 
+  async function repairAll() {
+    setBusy(true);
+    setError(null);
+    try {
+      setView(await api.repair('all'));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'That did not stick.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function assign(squad: string, slot: number, assetId: string | null) {
     setBusy(true);
     setError(null);
@@ -430,6 +461,19 @@ export default function Squads({
                         : DRONE_WORDING.network(network, droneIds.length)}
                     </p>
 
+                    {(view.squads[name] ?? []).some((id) => {
+                      const o = id ? view.owned.find((x) => x.assetId === id) : null;
+                      return o && o.hp < 1 && !(o.repairEndsAt && o.repairEndsAt > Date.now());
+                    }) &&
+                      !out && (
+                        <button
+                          onClick={() => void repairAll()}
+                          className="mt-2 w-full rounded border border-cyan-700 bg-cyan-950/30 px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-cyan-200 hover:bg-cyan-900/40"
+                        >
+                          Repair damaged assets
+                        </button>
+                      )}
+
                     <div className="mt-3 grid grid-cols-3 gap-2">
                       {Array.from({length: SQUAD_SLOTS}, (_, slot) => {
                         const id = view.squads[name]?.[slot] ?? null;
@@ -442,6 +486,10 @@ export default function Squads({
                             <Slot
                               asset={asset}
                               level={id ? levels.get(id) ?? 1 : 1}
+                              hp={id ? view.owned.find((o) => o.assetId === id)?.hp ?? 1 : 1}
+                              repairing={
+                                id ? (view.owned.find((o) => o.assetId === id)?.repairEndsAt ?? 0) > Date.now() : false
+                              }
                               selected={
                                 (picking?.squad === name && picking.slot === slot) ||
                                 (acting?.squad === name && acting.slot === slot)

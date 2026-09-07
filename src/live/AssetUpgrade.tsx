@@ -238,6 +238,8 @@ export default function AssetUpgrade({
           electronics: row.pkg_electronics,
         },
         packageCredits: row.pkg_credits,
+        hp: held.hp,
+        repairEndsAt: held.repairEndsAt,
       });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not reach the server.');

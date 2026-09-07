@@ -244,6 +244,10 @@ export interface OwnedAsset {
   packages: Packages;
   /** Command Credits sunk into the packages, and so refunded in full on a reset. */
   packageCredits: number;
+  /** Hit points left, 0-1. Below 1 it fights and marches weaker; 0 is disabled. */
+  hp: number;
+  /** When its repair finishes, while one runs. */
+  repairEndsAt: number | null;
 }
 
 export interface UpgradeResponse {
@@ -422,6 +426,8 @@ export const api = {
     ),
   squads: () => call<SquadView>('/api/squads'),
   season: () => call<SeasonState>('/api/season'),
+  repair: (assetId: string | 'all') =>
+    call<SquadView>('/api/assets/repair', {method: 'POST', body: JSON.stringify({assetId})}),
   buildAsset: (assetId: string) =>
     call<SquadView>('/api/assets/build', {method: 'POST', body: JSON.stringify({assetId})}),
   applyShield: (kind: string, split?: Wallet) =>

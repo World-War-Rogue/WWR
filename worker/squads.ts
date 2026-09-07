@@ -42,6 +42,10 @@ export interface OwnedAsset {
   packages: Packages;
   /** Command Credits sunk into the packages, and so refundable on a reset. */
   packageCredits: number;
+  /** Hit points left, 0-1. */
+  hp: number;
+  /** When its repair finishes, while one runs. */
+  repairEndsAt: number | null;
 }
 
 interface AssetRow {
@@ -52,10 +56,13 @@ interface AssetRow {
   pkg_propulsion: number;
   pkg_electronics: number;
   pkg_credits: number;
+  hp: number;
+  repairEndsAt: number | null;
 }
 
 const ROSTER_SQL = `SELECT asset_id AS assetId, level, pkg_armament, pkg_protection,
-                           pkg_propulsion, pkg_electronics, pkg_credits
+                           pkg_propulsion, pkg_electronics, pkg_credits,
+                           hp_fraction AS hp, repair_ends_at AS repairEndsAt
                       FROM player_assets WHERE player_id = ?1`;
 
 function owned(rows: AssetRow[]): OwnedAsset[] {
@@ -64,6 +71,8 @@ function owned(rows: AssetRow[]): OwnedAsset[] {
     level: r.level,
     packages: packagesFromRow(r),
     packageCredits: r.pkg_credits,
+    hp: r.hp,
+    repairEndsAt: r.repairEndsAt,
   }));
 }
 

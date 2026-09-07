@@ -19,7 +19,9 @@ import {
 import {type SideSpec, resolve} from '../shared/combat';
 import {readSquads} from './squads';
 import {readBase} from './buildings';
-import {categoryBoost, marchMultiplier} from '../shared/buildings';
+import {type Resources, RESOURCE_KINDS, categoryBoost, marchMultiplier, raidLoot} from '../shared/buildings';
+import {REPAIR_WORDING, isDisabled, marchHpFactor} from '../shared/repair';
+import {applyDamage, settleRepairs} from './repair';
 import {readLevels} from './buildings';
 import {TASK_FORCE_UNLOCK, taskForceOpen} from '../shared/season';
 import {SHIELD_COOLDOWN_MS, SHIELD_WORDING, isShielded} from '../shared/shields';
@@ -99,6 +101,10 @@ export interface UnitSpec {
   slot?: number;
   /** Its category building's boost. Absent means 1. */
   boost?: number;
+  /** Hit points it left with, 0-1. Absent means whole. */
+  hpFraction?: number;
+  /** The ally whose roster this reinforcement belongs to. Absent: the defender's own. */
+  owner?: string;
 }
 
 interface AssetLevelRow {
@@ -108,24 +114,43 @@ interface AssetLevelRow {
   pkg_protection: number;
   pkg_propulsion: number;
   pkg_electronics: number;
+  hp: number;
+  repairEndsAt: number | null;
 }
 
 const ROSTER_SQL = `SELECT asset_id AS assetId, level, pkg_armament, pkg_protection,
-                           pkg_propulsion, pkg_electronics
+                           pkg_propulsion, pkg_electronics, hp_fraction AS hp,
+                           repair_ends_at AS repairEndsAt
                       FROM player_assets WHERE player_id = ?1`;
 
-async function rosterOf(db: D1Database, playerId: string): Promise<Map<string, UnitSpec>> {
+/** A unit as it stands in the roster: with its hit points and repair state. */
+type RosterUnit = UnitSpec & {repairing: boolean};
+
+async function rosterOf(db: D1Database, playerId: string): Promise<Map<string, RosterUnit>> {
+  // Finished repairs first, so a unit that healed a minute ago is whole.
+  const now = Date.now();
+  await settleRepairs(db, playerId, now);
   // The base's building levels ride along on every unit as a boost, so the
   // resolver, the march clock and the power figure all see the same asset.
   const [rows, base] = await Promise.all([
     db.prepare(ROSTER_SQL).bind(playerId).all<AssetLevelRow>(),
-    readBase(db, playerId, Date.now()),
+    readBase(db, playerId, now),
   ]);
   return new Map(
     (rows.results ?? []).map((r) => {
       const asset = ASSET_BY_ID[r.assetId];
       const boost = asset ? categoryBoost(base.levels, asset.category) : 1;
-      return [r.assetId, {assetId: r.assetId, level: r.level, packages: packagesFromRow(r), boost}];
+      return [
+        r.assetId,
+        {
+          assetId: r.assetId,
+          level: r.level,
+          packages: packagesFromRow(r),
+          boost,
+          hpFraction: r.hp,
+          repairing: r.repairEndsAt !== null && r.repairEndsAt > now,
+        },
+      ];
     }),
   );
 }
@@ -137,16 +162,16 @@ async function unitsOf(
   db: D1Database,
   playerId: string,
   squad: SquadName,
-): Promise<UnitSpec[]> {
+): Promise<RosterUnit[]> {
   const board = await readSquads(db, playerId);
   const slots = board[squad] ?? [];
   if (!slots.some(Boolean)) return [];
   const roster = await rosterOf(db, playerId);
   // The slot index travels with the unit: it is the formation. Slots 0-1 are
   // the front, 2-3 the centre, 4-5 the rear, and the resolver reads it.
-  const out: UnitSpec[] = [];
+  const out: RosterUnit[] = [];
   slots.forEach((id, slot) => {
-    if (id) out.push({...(roster.get(id) ?? {assetId: id, level: 1, packages: BARE}), slot});
+    if (id) out.push({...(roster.get(id) ?? {assetId: id, level: 1, packages: BARE, repairing: false}), slot});
   });
   return out;
 }
@@ -162,7 +187,9 @@ async function homeUnits(db: D1Database, playerId: string): Promise<UnitSpec[]> 
   for (const [squad, slots] of Object.entries(board)) {
     if (away.has(squad)) continue;
     slots.forEach((id, slot) => {
-      if (id) out.push({...(roster.get(id) ?? {assetId: id, level: 1, packages: BARE}), slot});
+      const r = roster.get(id ?? '');
+      // A unit under repair is in the shop, not on the line.
+      if (id && !(r && r.repairing)) out.push({...(r ?? {assetId: id, level: 1, packages: BARE}), slot});
     });
   }
   return out;
@@ -186,13 +213,13 @@ export async function garrisonUnits(
 ): Promise<UnitSpec[]> {
   const rows = await db
     .prepare(
-      `SELECT units FROM marches
+      `SELECT units, attacker_id AS owner FROM marches
         WHERE defender_id = ?1 AND kind = 'reinforce'
           AND resolved_at IS NOT NULL
           AND garrison_until IS NOT NULL AND garrison_until > ?2`,
     )
     .bind(playerId, now)
-    .all<{units: string}>();
+    .all<{units: string; owner: string}>();
 
   const out: UnitSpec[] = [];
   for (const row of rows.results ?? []) {
@@ -201,7 +228,7 @@ export async function garrisonUnits(
       // A march stored before packages existed has none. `packages` is optional
       // on the resolver's input for exactly this reason, so an old reinforcement
       // in the field resolves as it always did rather than throwing.
-      if (Array.isArray(parsed)) out.push(...parsed);
+      if (Array.isArray(parsed)) out.push(...parsed.map((u) => ({...u, owner: row.owner})));
     } catch {
       // A reinforcement whose roster cannot be read simply is not there.
     }
@@ -234,6 +261,13 @@ export async function launch(
 
   const units = await unitsOf(db, attackerId, squad);
   if (units.length === 0) return {ok: false, error: `Task Force ${squad} is empty.`};
+  // Nothing marches broken. A disabled asset is repaired first; one in the
+  // shop waits or is moved out. GAME-MATH v1 §5.
+  for (const u of units) {
+    const label = ASSET_BY_ID[u.assetId]?.name ?? u.assetId;
+    if (u.repairing) return {ok: false, error: REPAIR_WORDING.repairing(label)};
+    if (isDisabled(u.hpFraction ?? 1)) return {ok: false, error: REPAIR_WORDING.disabled(label)};
+  }
   const levels = await readLevels(db, attackerId);
   if (!taskForceOpen(squad, levels.command_center)) {
     return {ok: false, error: `Task Force ${squad} opens at Command Center level ${TASK_FORCE_UNLOCK[squad]}.`};
@@ -259,7 +293,8 @@ export async function launch(
   const resolved = units.map((u) => {
     const asset = ASSET_BY_ID[u.assetId];
     const a = asset ? attributesWith(asset, u.level, u.packages, u.boost ?? 1) : null;
-    return {id: u.assetId, mobility: a?.mobility ?? 5, detection: a?.detection ?? 5};
+    // A damaged vehicle limps: its pace is scaled by what it has left.
+    return {id: u.assetId, mobility: (a?.mobility ?? 5) * marchHpFactor(u.hpFraction ?? 1), detection: a?.detection ?? 5};
   });
   const network = droneNetworkMultiplier(resolved.filter((r) => isDrone(r.id)));
   // The Tactical Operations Center speeds every march; the whole bonus is
@@ -282,8 +317,8 @@ export async function launch(
         attackerId,
         squad,
         defenderId,
-        // Frozen here. What marched is what fights.
-        JSON.stringify(units),
+        // Frozen here. What marched is what fights - hit points included.
+        JSON.stringify(units.map(({repairing: _r, ...u}) => u)),
         from.x,
         from.y,
         to.x,
@@ -668,6 +703,58 @@ export async function settleArrivals(
         .bind(battleId, march.defender_id),
       db.prepare(`UPDATE marches SET battle_id = ?2 WHERE id = ?1`).bind(march.id, battleId),
     ]);
+
+    // What each asset had left is what it comes home with - the attacker's
+    // column and the defender's own line, and every ally's reinforcement,
+    // each on its owner's roster. GAME-MATH v1 §5.
+    const hits: Array<{playerId: string; assetId: string; remaining: number}> = [];
+    result.attacker.units.forEach((u, i) => {
+      const spec = attackUnits[i];
+      if (spec && spec.assetId === u.assetId) hits.push({playerId: march.attacker_id, assetId: u.assetId, remaining: u.remaining});
+    });
+    result.defender.units.forEach((u, i) => {
+      const spec = defendUnits[i] as (UnitSpec & {owner?: string}) | undefined;
+      if (spec && spec.assetId === u.assetId) {
+        hits.push({playerId: spec.owner ?? march.defender_id, assetId: u.assetId, remaining: u.remaining});
+      }
+    });
+    await applyDamage(db, hits);
+
+    // The raid: a win takes 5% of what the Warehouse does not protect, into
+    // the attacker's stock as far as it fits. BUILDING RESOURCES v1 §2.
+    if (result.outcome === 'attacker') {
+      const [victim, raider] = await Promise.all([
+        readBase(db, march.defender_id, now),
+        readBase(db, march.attacker_id, now),
+      ]);
+      const loot = raidLoot(victim.resources, victim.levels);
+      const taken: Resources = {...loot};
+      for (const k of RESOURCE_KINDS) {
+        taken[k] = Math.max(0, Math.min(loot[k], raider.storageCap - raider.resources[k]));
+      }
+      if (RESOURCE_KINDS.some((k) => taken[k] > 0)) {
+        await db.batch([
+          db
+            .prepare(
+              `UPDATE bases SET fuel = fuel - ?2, steel = steel - ?3, munitions = munitions - ?4, alloy = alloy - ?5,
+                                stock_rev = stock_rev + 1
+                WHERE player_id = ?1 AND fuel >= ?2 AND steel >= ?3 AND munitions >= ?4 AND alloy >= ?5`,
+            )
+            .bind(march.defender_id, taken.fuel, taken.steel, taken.munitions, taken.alloy),
+          db
+            .prepare(
+              `UPDATE bases SET fuel = fuel + ?2, steel = steel + ?3, munitions = munitions + ?4, alloy = alloy + ?5
+                WHERE player_id = ?1`,
+            )
+            .bind(march.attacker_id, taken.fuel, taken.steel, taken.munitions, taken.alloy),
+          db
+            .prepare(
+              `UPDATE battles SET detail = json_set(detail, '$.raid', json(?2)) WHERE id = ?1`,
+            )
+            .bind(battleId, JSON.stringify(taken)),
+        ]);
+      }
+    }
 
     // The survivors walk home, the same distance, in public. A squad is away
     // for the whole round trip rather than only the journey out, which is most

@@ -20,6 +20,7 @@ import {HUB_OF_CATEGORY, categoryBoost, rankCeiling} from '../../shared/building
 import {NO_PACKAGES} from '../../shared/upgrades';
 import {unlockWeekOf, weekStart} from '../../shared/season';
 import {buildState} from '../../shared/construction';
+import {repairBill} from '../../shared/repair';
 import {type BuildingLevels, NO_BUILDINGS} from '../../shared/buildings';
 import {formatClock, formatGameDate} from '../../shared/gametime';
 import {buildingLabel, remaining} from './BuildingPanel';
@@ -140,6 +141,8 @@ function Card({
   onView,
   lock,
   onBuild,
+  onRepair,
+  boost,
 }: {
   asset: Asset;
   squad: string | null;
@@ -149,7 +152,10 @@ function Card({
   onView: (() => void) | null;
   lock: ReturnType<typeof unlockLabel> | null;
   onBuild: (() => void) | null;
+  onRepair: (() => void) | null;
+  boost: number;
 }) {
+  const bill = held && held.hp < 1 ? repairBill(asset, held.level, held.packages, boost, held.hp) : null;
   const counters = counterWeb(asset.category);
   const fitted = held
     ? PACKAGE_KEYS.reduce((n, k) => n + (held.packages[k] > 1 ? 1 : 0), 0)
@@ -231,6 +237,36 @@ function Card({
         sixty of them, and a number they have to open a panel to see is a number
         they stop checking.
       */}
+      {held && (held.hp < 1 || (held.repairEndsAt ?? 0) > Date.now()) && (
+        <div className="mt-2 rounded border border-neutral-800 bg-neutral-900/50 px-2 py-1.5 text-[11px]">
+          {(held.repairEndsAt ?? 0) > Date.now() ? (
+            <span className="text-cyan-300">Under repair · done {formatClock(held.repairEndsAt!)} RST</span>
+          ) : (
+            <span className="flex items-center justify-between gap-2">
+              <span className={held.hp <= 0.0005 ? 'text-red-400' : 'text-orange-300'}>
+                {held.hp <= 0.0005 ? 'Disabled' : `${Math.round(held.hp * 100)}% hit points`}
+                {bill && (
+                  <span className="block text-[10px] text-neutral-500">
+                    Repair: Fuel {bill.fuel} · Steel {bill.steel} · Munitions {bill.munitions} · {remaining(bill.ms)}
+                  </span>
+                )}
+              </span>
+              {onRepair && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRepair();
+                  }}
+                  className="shrink-0 rounded border border-cyan-700 bg-cyan-950/30 px-2 py-0.5 font-semibold text-cyan-200 hover:bg-cyan-900/40"
+                >
+                  Repair
+                </button>
+              )}
+            </span>
+          )}
+        </div>
+      )}
+
       {held && onUpgrade && (
         <button
           onClick={onUpgrade}
@@ -288,6 +324,17 @@ export default function Assets({
   const [season1, setSeason1] = useState<SeasonState | null>(null);
   const [upgrading, setUpgrading] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  const repair = async (assetId: string) => {
+    setNotice(null);
+    try {
+      const view = await api.repair(assetId);
+      setRoster(new Map(view.owned.map((o) => [o.assetId, o])));
+      setBase(view.base);
+    } catch (err) {
+      setNotice(err instanceof ApiError ? err.message : 'Could not reach the server.');
+    }
+  };
 
   const build = async (assetId: string) => {
     setNotice(null);
@@ -419,6 +466,8 @@ export default function Assets({
                 onView={wallet ? () => setUpgrading(asset.id) : null}
                 lock={roster.get(asset.id) ? null : unlockLabel(asset.id, base?.levels ?? null, season1?.build ?? null, Date.now())}
                 onBuild={() => void build(asset.id)}
+                onRepair={() => void repair(asset.id)}
+                boost={base ? categoryBoost(base.levels, asset.category) : 1}
               />
             </div>
           ))}
@@ -431,7 +480,7 @@ export default function Assets({
       {upgrading && wallet && ASSET_BY_ID[upgrading] && (
         <AssetUpgrade
           asset={ASSET_BY_ID[upgrading]}
-          held={roster.get(upgrading) ?? {assetId: upgrading, level: 1, packages: NO_PACKAGES, packageCredits: 0}}
+          held={roster.get(upgrading) ?? {assetId: upgrading, level: 1, packages: NO_PACKAGES, packageCredits: 0, hp: 1, repairEndsAt: null}}
           locked={
             roster.get(upgrading)
               ? null

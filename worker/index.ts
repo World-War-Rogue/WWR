@@ -11,6 +11,7 @@ import {packageUp, rankUp, resetPackages, settleWallet} from './upgrades';
 import {buyResource, buySecondTeam, readBase, readLevels, startLevel} from './buildings';
 import {applyShield, readSeasonState, saveGuide, startBuild} from './season1';
 import {powerOf} from './power';
+import {settleRepairs, startRepair} from './repair';
 import {NEW_SHIELD_MS, isShielded} from '../shared/shields';
 import {type LevelledBuilding, rankCeiling, signalsLeadMs} from '../shared/buildings';
 import {BOARD_BUILDING_BY_ID} from '../shared/base';
@@ -1045,6 +1046,8 @@ async function handleSquads(env: Env, player: PlayerRow): Promise<Response> {
   const state = await settleAndLoad(env, player.id, now);
   if (!state) return fail(404, 'No base found.');
 
+  // Finished repairs first, so the roster shows whole what is whole.
+  await settleRepairs(env.DB, player.id, now);
   const [owned, board, away, base] = await Promise.all([
     ensureRoster(env.DB, player.id, now),
     readSquads(env.DB, player.id),
@@ -2626,6 +2629,21 @@ async function route(
     const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
     const assetId = typeof body?.assetId === 'string' ? body.assetId : '';
     const result = await startBuild(env.DB, player.id, assetId, Date.now(), (b) => buildingName(b as LevelledBuilding));
+    if (!result.ok) return fail(400, result.error);
+    return handleSquads(env, player);
+  }
+
+  if (endpoint === 'POST /api/assets/repair') {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const target = typeof body?.assetId === 'string' ? body.assetId : 'all';
+    const result = await startRepair(
+      env.DB,
+      player.id,
+      target,
+      await marchingSquads(env.DB, player.id),
+      Date.now(),
+      (b) => buildingName(b as LevelledBuilding),
+    );
     if (!result.ok) return fail(400, result.error);
     return handleSquads(env, player);
   }
