@@ -91,6 +91,30 @@ trim with the figure erased.
 Windows ships no flag glyphs, so country flags render as raw letters there. Use
 a country-code chip, not an emoji flag.
 
+## Bots
+
+Two kinds, both in `worker/bots.ts`, both listed on `/api/admin/bots` (owner
+session), where every one has a **Sign in as** link (`/api/admin/impersonate`,
+owner only - it replaces the owner's cookie; sign out and back in to return).
+
+- **Farm bots** (`role = 'farmbot'`, callsign `Lieutenant ######`) are planted
+  from the bots page, 10 per request, up to 200 per world. They never act.
+  Their levels are a deterministic function of (now - planted_at, seed),
+  clamped to the week's readiness band and their ceiling (8 in Season 1),
+  and are materialised into `base_levels` / `player_assets` when they are read:
+  inside a map viewport (a few per request, `growBotsInViewport`) or as a raid
+  target (`materialiseBot` in `settleArrivals`). Never shielded. To the rest of
+  the game they are players; keep it that way rather than special-casing them.
+- **Test bots** (`role = 'testbot'`) are minted by `POST /api/admin/testbots/mint`
+  with header `X-Test-Bot-Secret`, only while the `TEST_BOT_SECRET` secret is
+  set. Their attacks are refused unless `TEST_BOTS_MAY_ATTACK` is `"on"`, which
+  it is only in the `test` environment. `tools/testbots/` drives them.
+
+The `test` environment in `wrangler.jsonc` is a second Worker (`wwr-test`) on
+its own database. Deploy and migrate it with `--env test`. Bindings do not
+inherit between environments, so anything added to the top level must be
+added under `env.test` too or that deploy silently runs without it.
+
 ## Temporary switches
 
 `ALL_SKINS_UNLOCKED` in `worker/game.ts` is `true` so testers can equip any

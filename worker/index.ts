@@ -5,6 +5,16 @@
  * static assets binding, which serves the built React client.
  */
 import {handleAdminRequests} from './admin';
+import {handleBotsPage} from './botsAdmin';
+import {
+  FARM_CEILING_SEASON_1,
+  PLANT_BATCH_MAX,
+  TEST_ROLE,
+  growBotsInViewport,
+  materialiseBot,
+  mintTestBots,
+  plantFarmBots,
+} from './bots';
 import {ensureRally, lastRalliedAt, rallyTo, readRally, setRally} from './rally';
 import {assignSlot, deltaOpen, ensureRoster, moveSlot, readSquads, squadPower} from './squads';
 import {packageUp, rankUp, resetPackages, settleWallet} from './upgrades';
@@ -151,6 +161,10 @@ export interface Env {
   RESEND_API_KEY?: string;
   MAIL_FROM?: string;
   OWNER_EMAIL?: string;
+  /** Set with: wrangler secret put TEST_BOT_SECRET. Unset = test bots cannot be minted. */
+  TEST_BOT_SECRET?: string;
+  /** "on" lets test-bot accounts order attacks. Off on the live server. */
+  TEST_BOTS_MAY_ATTACK?: string;
 }
 
 const RESOURCES: ResourceKind[] = ['fuel', 'steel', 'munitions', 'alloy'];
@@ -202,8 +216,10 @@ async function seedBase(
   username: string,
   skin: SkinId,
   now: number,
+  /** Bots are planted into a named world; players go wherever there is room. */
+  worldId?: number,
 ): Promise<void> {
-  const worldId = await assignHomeWorld(env.DB, now);
+  worldId ??= await assignHomeWorld(env.DB, now);
   const statements = [
     env.DB.prepare(
       `INSERT INTO bases (player_id, name, resources_at, created_at, skin, home_world_id)
@@ -593,6 +609,65 @@ function mailerFrom(env: Env): MailerConfig | null {
   };
 }
 
+/* -------------------------------------------------------------------------- */
+/* Bots                                                                        */
+/* -------------------------------------------------------------------------- */
+
+function seedBaseFor(env: Env) {
+  // A random starter skin each, so a row of bots does not share one look.
+  return (playerId: string, username: string, now: number, worldId?: number) =>
+    seedBase(env, playerId, username, STARTER_SKIN_IDS[Math.floor(Math.random() * STARTER_SKIN_IDS.length)], now, worldId);
+}
+
+/**
+ * Mint test accounts. Authenticated by a shared secret rather than a session,
+ * because the harness that calls it has no account yet - that is what it is
+ * asking for. Refused outright when the secret is not configured.
+ */
+async function handleMintTestBots(request: Request, env: Env): Promise<Response> {
+  if (!env.TEST_BOT_SECRET) return fail(404, 'No such endpoint.');
+  const given = request.headers.get('X-Test-Bot-Secret') ?? '';
+  if (given.length === 0 || given !== env.TEST_BOT_SECRET) return fail(404, 'No such endpoint.');
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const count = Math.min(10, Math.max(1, Number(body?.count) || 5));
+  const now = Date.now();
+  const bots = await mintTestBots(env.DB, count, seedBaseFor(env), NEW_SHIELD_MS, now);
+  return json({bots, note: 'Passwords are shown once. Store them now.'});
+}
+
+/** Owner only: plant a batch of farm bots in one world. */
+async function handlePlantFarmBots(request: Request, env: Env, player: PlayerRow): Promise<Response> {
+  if (player.role !== 'owner') return fail(404, 'No such endpoint.');
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const worldId = Number(body?.worldId);
+  if (!Number.isInteger(worldId)) return fail(400, 'Which world?');
+  const world = await getWorld(env.DB, worldId);
+  if (!world) return fail(404, 'No such world.');
+  const count = Math.min(PLANT_BATCH_MAX, Math.max(1, Number(body?.count) || PLANT_BATCH_MAX));
+  const ceiling = Math.min(50, Math.max(1, Number(body?.ceiling) || FARM_CEILING_SEASON_1));
+  const planted = await plantFarmBots(env.DB, worldId, count, ceiling, seedBaseFor(env), Date.now());
+  return json({planted: planted.length, bots: planted});
+}
+
+/**
+ * Owner only: sign in as any account. Replaces the owner's own session cookie
+ * with the target's, so signing out afterwards and back in is how the owner
+ * returns to being themselves. Answers a redirect because the link lives on
+ * the bots page and is opened by a person.
+ */
+async function handleImpersonate(request: Request, env: Env, player: PlayerRow): Promise<Response> {
+  if (player.role !== 'owner') return fail(404, 'No such endpoint.');
+  const url = new URL(request.url);
+  const playerId = url.searchParams.get('player') ?? '';
+  const target = await env.DB.prepare(`SELECT id, username, role FROM players WHERE id = ?1`)
+    .bind(playerId)
+    .first<{id: string; username: string; role: string}>();
+  if (!target) return fail(404, 'No such player.');
+  const session = await startSession(env, target.id, target.username, Date.now(), target.role);
+  const cookie = session.headers.get('Set-Cookie') ?? '';
+  return new Response(null, {status: 303, headers: {Location: '/', 'Set-Cookie': cookie}});
+}
+
 async function handleLogin(request: Request, env: Env): Promise<Response> {
   const parsed = validateCredentials(await request.json().catch(() => null));
   if (!parsed.ok) return fail(400, parsed.error);
@@ -664,6 +739,10 @@ async function handleWorld(request: Request, env: Env, player: PlayerRow): Promi
   const y = num('y', 0);
   const w = Math.min(80, Math.max(1, num('w', 40)));
   const h = Math.min(80, Math.max(1, num('h', 40)));
+
+  // Farm bots inside the rectangle are brought up to date first, so the
+  // levels drawn on the map are the ones a raid would meet. worker/bots.ts.
+  await growBotsInViewport(env.DB, world.id, x, y, w, h, now);
 
   const [bases, self, home] = await Promise.all([
     basesInViewport(env.DB, world.id, x, y, w, h),
@@ -1236,6 +1315,12 @@ async function handleAttack(request: Request, env: Env, player: PlayerRow): Prom
 
   if (!mine) return fail(409, 'You are not standing anywhere yet.');
   if (!target) return fail(404, 'Nobody is there.');
+
+  // Test bots on the live server never attack a person. The harness enforces
+  // it too, but the server is the one that has to be right.
+  if (player.role === TEST_ROLE && env.TEST_BOTS_MAY_ATTACK !== 'on') {
+    return fail(403, 'Test accounts may not attack on this server.');
+  }
 
   // An alliance is the one place where the answer has to be no rather than
   // "yes, but you shouldn't". The same march becomes a reinforcement: it takes
@@ -2552,6 +2637,7 @@ async function route(
 
   if (endpoint === 'GET /api/access/callsign') return handleCallsignCheck(request, env);
   if (endpoint === 'POST /api/auth/login') return handleLogin(request, env);
+  if (endpoint === 'POST /api/admin/testbots/mint') return handleMintTestBots(request, env);
 
   if (endpoint === 'POST /api/auth/logout') {
     const token = readSessionCookie(request);
@@ -2571,6 +2657,10 @@ async function route(
   if (endpoint === 'GET /api/access/requests') return handleAdminRequests(env, player);
 
   if (endpoint === 'GET /api/admin/ai-check') return handleAiCheck(request, env, player);
+
+  if (endpoint === 'GET /api/admin/bots') return handleBotsPage(env, player);
+  if (endpoint === 'GET /api/admin/impersonate') return handleImpersonate(request, env, player);
+  if (endpoint === 'POST /api/admin/farmbots/plant') return handlePlantFarmBots(request, env, player);
 
   if (endpoint === 'POST /api/support/report') return handleBugReport(request, env, player);
 

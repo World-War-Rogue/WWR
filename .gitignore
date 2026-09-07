@@ -11,3 +11,7 @@ coverage/
 # screenshots, concept pages, frame grabs - and they are not part of the game.
 # The folder stays on disk; it just stops showing up as changes to commit.
 Claude outputs/
+
+# Test bot credentials
+tools/testbots/bots.json
+tools/testbots/reports/

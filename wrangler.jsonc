@@ -41,4 +41,27 @@
   "observability": {
     "enabled": true
   }
+
+  // The test realm: a second Worker with its own database, so bot raids and
+  // reset drills never touch the server real testers are on. Deploy with
+  // `npx wrangler deploy --env test`; migrate with
+  // `npx wrangler d1 migrations apply wwr-test-db --remote --env test`.
+  // Bindings do not inherit between environments, so every one is repeated.
+  "env": {
+    "test": {
+      "name": "wwr-test",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "wwr-test-db",
+          "database_id": "REPLACE-WITH-THE-ID-FROM-wrangler-d1-create"
+        }
+      ],
+      "ai": {"binding": "AI"},
+      "vars": {
+        "DEBUG_ERRORS": "on",
+        "TEST_BOTS_MAY_ATTACK": "on"
+      }
+    }
+  }
 }

@@ -24,6 +24,7 @@ import {type Resources, RESOURCE_KINDS, categoryBoost, marchMultiplier, raidLoot
 import {REPAIR_WORDING, isDisabled, marchHpFactor} from '../shared/repair';
 import {applyDamage, settleRepairs} from './repair';
 import {readLevels} from './buildings';
+import {materialiseBot} from './bots';
 import {taskForceOpen} from '../shared/season';
 import {SHIELD_COOLDOWN_MS, SHIELD_WORDING, isShielded} from '../shared/shields';
 import {DRONE_WORDING, droneCount, droneNetworkMultiplier, isDrone, paceMobility} from '../shared/drones';
@@ -547,6 +548,10 @@ export async function settleArrivals(
     } catch {
       attackUnits = [];
     }
+
+    // A farm bot's levels are a function of time; bring them up to date before
+    // reading them, so the raid meets the base the map promised. worker/bots.ts.
+    await materialiseBot(db, march.defender_id, now);
 
     const [ownUnits, reinforcements, defenderLevels, defenderShield] = await Promise.all([
       homeUnits(db, march.defender_id),
