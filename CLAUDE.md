@@ -211,3 +211,39 @@ it: PATH, then the standard installs, then GitHub Desktop's bundled copy under
 `$env:WWR_GIT` to a full path to override. Any other script that shells out to
 git has to do the same - assuming `git` on PATH is how this failed for a month
 without anyone noticing the snapshot was stale.
+
+## Working with Matt
+
+- ChatGPT is the game designer (with Grok alongside from 2026-09-07); Matt is
+  owner and deployer; Claude implements. Read the repo and the existing
+  systems first, answer with a plan and questions only, wait for approval,
+  then build only the approved scope. Product decisions are asked plainly
+  with the trade-off and a recommendation.
+- Claude commits (one commit per fix, a clear title and a description that
+  says why) and never pushes, deploys or runs remote migrations. Matt pushes
+  from GitHub Desktop and deploys in PowerShell. Nothing is "verified" until
+  Matt or a tester ran it in the deployed game.
+- Instructions to Matt are given explicitly and completely, one line at a
+  time.
+- The mascot is **General Rider** (not Admiral). Rider hides while any modal
+  is open: sheets, composers and dialogs call `useModal()` from
+  `src/live/guide/useModal.ts`, which registers them in `guide/bus.ts`.
+  Anything new that floats over the game must call it, or Rider's bubble
+  (z-60, bottom edge) will sit over its buttons.
+- The map wrapper is `position: fixed`, so it is its own stacking context:
+  a z-index inside `WorldMap` never wins against the chat bar (a fixed z-40
+  sibling). Anything anchored to the map's bottom edge must pad for the bar.
+- `src/live/WorldMap.tsx` keeps its last camera and view in a module-level
+  cache across mounts (`forgetMap()` on sign-out), so the map does not open
+  blank when the player comes back from the base.
+
+## Claude session log
+
+Chats get lost; the repo does not. Every commit carries its session link in
+`Claude-Session:`. Sessions so far:
+
+- 2026-09-07 bots, test realm, first-load budget:
+  https://claude.ai/code/session_011WwhehTcZ3zWnFfzjzUgiM
+- 2026-09-07 QA fix pass (General Rider, composer clipping, account menu,
+  blank map, Skip tour, building tap, nameplates, Credits/Tokens, upgrade
+  dead ends): https://claude.ai/code/session_01Wnmkfu9Lof4ogvFTtYbqyg
