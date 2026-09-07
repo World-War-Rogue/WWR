@@ -12,6 +12,7 @@ import {ASSETS} from '../../shared/assets';
 import {COMBAT_SYSTEM_LANES, LANE_LABEL} from '../../shared/combatSystems';
 import {PACKAGE_KEYS, PACKAGE_LABEL} from '../../shared/upgrades';
 import {ApiError, type DevStatus, api} from '../net/api';
+import {useModal} from './guide/useModal';
 
 const LEVELS = [1, 10, 20, 30, 40, 50];
 
@@ -29,6 +30,8 @@ export default function DevTools({onClose}: {onClose: () => void}) {
   const [level, setLevel] = useState(50);
   const [tokens, setTokens] = useState(100000);
   const [credits, setCredits] = useState(100000);
+  // Rider steps aside for this screen like any other panel.
+  useModal();
 
   useEffect(() => {
     api
@@ -204,6 +207,14 @@ export default function DevTools({onClose}: {onClose: () => void}) {
               </button>
               <button disabled={busy || !status.account} onClick={() => void run({action: 'seed-liveries'})} className={btn}>
                 Seed liveries
+              </button>
+              <button
+                disabled={busy || !status.account}
+                onClick={() => void run({action: 'drop-shields'})}
+                title="Clears every shield on this realm so there is something to attack"
+                className={`${btn} border-red-800 text-red-200`}
+              >
+                Drop all shields (realm)
               </button>
             </div>
           </section>

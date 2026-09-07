@@ -286,6 +286,18 @@ export async function devAction(
       ]);
       return {ok: true, message: 'Depot daily caps, Trade Post windows, shield coupons and cooldown cleared.'};
     }
+    case 'drop-shields': {
+      // Every fresh account - bots included - carries the 48-hour new-player
+      // shield, so a freshly minted test realm has nothing attackable for two
+      // days. This clears every shield on the realm (not just the QA
+      // account's), which is why it exists only behind the test-realm flag.
+      const r = await db.batch([
+        db
+          .prepare(`UPDATE players SET shield_until = NULL, shield_kind = NULL, shield_cooldown_until = NULL WHERE shield_until IS NOT NULL`),
+        log(db, actorId, target.id, 'drop-shields', {scope: 'realm'}, now),
+      ]);
+      return {ok: true, message: `Dropped ${r[0].meta.changes ?? 0} shields across the realm. Every base can be attacked now.`};
+    }
     case 'seed-liveries': {
       // Base skins are already all equippable while ALL_SKINS_UNLOCKED is on
       // (worker/game.ts); per-asset liveries do not exist yet. Recorded so the
@@ -294,6 +306,6 @@ export async function devAction(
       return {ok: false, error: 'Per-asset liveries are not built yet. Base skins are already all unlocked on this build.'};
     }
     default:
-      return {ok: false, error: 'action must be reset, set-all, max-one, grant, clear-limits or seed-liveries.'};
+      return {ok: false, error: 'action must be reset, set-all, max-one, grant, clear-limits, drop-shields or seed-liveries.'};
   }
 }
