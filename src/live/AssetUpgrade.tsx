@@ -161,7 +161,7 @@ function Track({
           <p className="mt-1 text-[11px] font-semibold text-orange-300">
             {permanent
               ? 'This is permanent and cannot be undone.'
-              : 'A package can be stripped later for a refund in Credits; the rank it sits on cannot.'}
+              : 'A package can be stripped later - Credits paid come back, Tokens paid do not; the rank it sits on cannot be undone.'}
           </p>
           <div className="mt-2 flex gap-2">
             <button
@@ -255,6 +255,7 @@ export default function AssetUpgrade({
 
   /** The lowest fitted package. System Integration is measured off this one. */
   const lowestPackage = Math.min(...PACKAGE_KEYS.map((k) => held.packages[k]));
+  const anyFitted = PACKAGE_KEYS.some((k) => held.packages[k] > 1);
 
   /** What one more rank is worth on this asset, in points across all five. */
   const rankGain =
@@ -539,7 +540,7 @@ export default function AssetUpgrade({
                   : ATTR_LABEL[PACKAGE_ATTRIBUTE[key]]
               }
               explain={{
-                what: `${PACKAGE_LABEL[key]} raises ${ATTR_LABEL[PACKAGE_ATTRIBUTE[key]]}. Can be stripped later for a full refund in Command Credits.`,
+                what: `${PACKAGE_LABEL[key]} raises ${ATTR_LABEL[PACKAGE_ATTRIBUTE[key]]}. Can be stripped later; Command Credits paid are refunded, Tokens paid are not.`,
                 gain:
                   rank >= ceilingFor
                     ? `Blocked at Service Rank ${held.level}.`
@@ -572,17 +573,22 @@ export default function AssetUpgrade({
           </p>
         </div>
 
+        {/*
+          Enabled on "anything fitted", not on "there is a refund": an asset
+          fitted entirely with Tokens strips for zero Credits, and the button
+          says so rather than refusing.
+        */}
         <button
           onClick={() => void run(() => api.resetPackages(held.assetId))}
-          disabled={busy || held.packageCredits === 0}
+          disabled={busy || !anyFitted}
           className="mt-3 w-full rounded border border-neutral-800 px-3 py-2 text-xs text-neutral-400 transition hover:border-red-800 hover:text-red-300 disabled:border-neutral-900 disabled:text-neutral-700 disabled:hover:border-neutral-900"
         >
-          {held.packageCredits === 0
+          {!anyFitted
             ? 'Strip packages · nothing fitted yet'
             : `Strip packages · refunds ${held.packageCredits.toLocaleString()} Credits`}
           <span className="block text-[10px] text-neutral-700">
-            Takes all four back to 1 and refunds the whole cost in Command Credits, whatever
-            you paid in. Service Rank is untouched.
+            Takes all four back to 1. Command Credits you paid come back; Tokens you paid do
+            not. Service Rank is untouched.
           </span>
         </button>
       </div>

@@ -40,6 +40,8 @@ Each item is one or more commits; Claude updates this file in the same commit.
 
 ## P3 — Known follow-ups not in any prompt
 
+- [x] Package strip refunds only the Credit-paid share; Tokens spent are never refunded (ruling 2026-09-07, closes the Token→Credit conversion found by the inventory)
+
 - [ ] Command Credit earning design — [?] ChatGPT (prompt sent 2026-09-07)
 - [ ] Asset name list (near-miss fictional names, "Abraham") — [?] ChatGPT
 - [ ] `docs/ONBOARDING-SHIELDS-CONSTRUCTION-v1.md` still says Admiral Rider — designer doc, ChatGPT's next revision
