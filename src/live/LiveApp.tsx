@@ -6,6 +6,7 @@
  * keeps running whether or not this tab is open. The tactical UI in App.tsx
  * gets wired to these same endpoints once the foundation is trusted.
  */
+import {remaining} from './BuildingPanel';
 import {useCallback, useEffect, useState} from 'react';
 import {setLanguage, t} from '../i18n';
 import Alliance from './Alliance';
@@ -441,8 +442,15 @@ export default function LiveApp() {
         <div aria-hidden="true" className="w-24" />
 
         {/* The clock, between the two buttons - the same strip the map uses. */}
-        <div className="pointer-events-auto rounded border border-neutral-800 bg-black/70 px-3 py-1.5 text-[11px] backdrop-blur">
-          <GameClock />
+        <div className="pointer-events-auto flex flex-col items-center gap-1">
+          <div className="rounded border border-neutral-800 bg-black/70 px-3 py-1.5 text-[11px] backdrop-blur">
+            <GameClock />
+          </div>
+          {base?.season1?.shield.until && base.season1.shield.until > now() && (
+            <span className="rounded border border-cyan-800/70 bg-cyan-950/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-cyan-200 backdrop-blur">
+              Shielded · {remaining(base.season1.shield.until - now())}
+            </span>
+          )}
         </div>
 
         <button

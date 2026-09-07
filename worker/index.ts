@@ -2600,19 +2600,21 @@ async function route(
 
   if (endpoint === 'GET /api/base') {
     const now = Date.now();
-    const [state, wallet, placements] = await Promise.all([
+    const [state, wallet, placements, season1] = await Promise.all([
       settleAndLoad(env, player.id, now),
       // Settled here as well as on the roster screen, because this is the read
       // every player makes on every visit - a tester who never opens the roster
       // still gets their weekly top-up.
       settleWallet(env.DB, player.id, now),
       readPlacements(env.DB, player.id),
+      readSeasonState(env.DB, player.id, now),
     ]);
     if (!state) return fail(404, 'No base found.');
     return json({
       ...baseView(state, now),
       wallet: {tokens: wallet.tokens, credits: wallet.credits},
       placements,
+      season1,
     });
   }
 

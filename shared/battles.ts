@@ -12,7 +12,7 @@
  * whose story changes after the fact is worse than no report at all.
  */
 
-export type BattleOutcome = 'attacker' | 'defender' | 'draw';
+export type BattleOutcome = 'attacker' | 'defender' | 'draw' | 'blocked';
 export type BattleSide = 'attacker' | 'defender';
 
 /** The row a report list is built from. Everything here is denormalised. */
@@ -92,7 +92,9 @@ export function parseDetail(raw: string): BattleDetail {
 }
 
 /** Won, lost or drew - from the viewer's side, which is the only framing that reads. */
-export function verdictFor(outcome: BattleOutcome, side: BattleSide): 'won' | 'lost' | 'drew' {
+export function verdictFor(outcome: BattleOutcome, side: BattleSide): 'won' | 'lost' | 'drew' | 'blocked' {
+  // A shield turned the attack away: nobody won, nothing was fought.
+  if (outcome === 'blocked') return 'blocked';
   if (outcome === 'draw') return 'drew';
   return outcome === side ? 'won' : 'lost';
 }

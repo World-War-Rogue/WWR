@@ -8,6 +8,7 @@ export const BATTLES = {
   'battles.none': 'No battles yet.',
   'battles.noneHint': 'Reports appear here the moment combat exists and somebody fights one.',
   'battles.won': 'won',
+  'battles.blocked': 'blocked',
   'battles.lost': 'lost',
   'battles.drew': 'drew',
   // The name is inside the sentence, not appended to a verb by the screen:

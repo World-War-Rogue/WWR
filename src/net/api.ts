@@ -144,6 +144,8 @@ export interface BaseView {
   storageCap: number;
   /** The Command Center's level - the Base Level. */
   baseLevel: number;
+  /** Construction, shield and guide state - the shield badge and the ring. */
+  season1?: SeasonState;
   justCompleted: {kind: string; level: number} | null;
   buildings: BuildingView[];
   job: {kind: string; toLevel: number; startedAt: number; completesAt: number} | null;

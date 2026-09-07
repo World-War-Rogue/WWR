@@ -10,6 +10,8 @@
  * exactly one base, so plot coordinates are the only unit this file thinks in;
  * pixels appear only at the moment of drawing.
  */
+import {SHIELD_WORDING, isShielded} from '../../shared/shields';
+import {remaining} from './BuildingPanel';
 import {type RefObject, useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ApiError,
@@ -198,6 +200,41 @@ function drawNameplate(
   ctx.textAlign = 'left';
   ctx.fillText(label, boxX + padX, boxY + boxH / 2);
 
+  // Shielded: a thin pale-cyan hex ring around the plot and a small shield
+  // glyph beside the plate. Static, no countdown - the popup says how long.
+  // SHIELDS v1 presentation.
+  if (isShielded(base.shieldUntil, Date.now())) {
+    const r = scale * 0.5;
+    const cxp = cx;
+    const cyp = footY - scale * 0.5;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(103, 232, 249, 0.8)';
+    ctx.lineWidth = Math.max(1, scale * 0.02);
+    ctx.beginPath();
+    for (let i = 0; i < 6; i += 1) {
+      const a = (Math.PI / 3) * i - Math.PI / 6;
+      const x = cxp + r * Math.cos(a);
+      const y = cyp + r * Math.sin(a);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+    // The glyph: a small shield shape hard against the plate's right end.
+    const gx = boxX + boxW + fontSize * 0.5;
+    const gy = boxY + boxH / 2;
+    const g = fontSize * 0.55;
+    ctx.fillStyle = 'rgba(103, 232, 249, 0.95)';
+    ctx.beginPath();
+    ctx.moveTo(gx - g, gy - g);
+    ctx.lineTo(gx + g, gy - g);
+    ctx.lineTo(gx + g, gy + g * 0.2);
+    ctx.quadraticCurveTo(gx + g, gy + g, gx, gy + g * 1.2);
+    ctx.quadraticCurveTo(gx - g, gy + g, gx - g, gy + g * 0.2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
 }
 
 /**
@@ -1480,6 +1517,12 @@ export default function WorldMap({
                 >
                   {t('map.viewProfile')}
                 </button>
+                {isShielded(selectedBase.shieldUntil, Date.now()) && (
+                  <p className="mt-2 rounded border border-cyan-800/70 bg-cyan-950/30 px-2 py-1 text-xs text-cyan-200">
+                    Shielded · {remaining(selectedBase.shieldUntil! - Date.now())}
+                    <span className="block text-[10px] text-cyan-400/70">{SHIELD_WORDING.popupBody}</span>
+                  </p>
+                )}
                 {selectedBase.username !== view?.you.username && (
                   <button
                     onClick={() => {
@@ -1488,7 +1531,9 @@ export default function WorldMap({
                       // attack, so it is fetched then rather than with the map.
                       void api.squads().then(setSquads).catch(() => undefined);
                     }}
-                    className={`mt-2 w-full rounded border px-3 py-2 text-sm font-semibold ${
+                    disabled={!allied && isShielded(selectedBase.shieldUntil, Date.now())}
+                    title={!allied && isShielded(selectedBase.shieldUntil, Date.now()) ? SHIELD_WORDING.targetBlocked : undefined}
+                    className={`mt-2 w-full rounded border px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
                       allied
                         ? 'border-emerald-800 bg-emerald-950/40 text-emerald-200 hover:border-emerald-500'
                         : 'border-red-800 bg-red-950/40 text-red-200 hover:border-red-500'
@@ -1496,6 +1541,9 @@ export default function WorldMap({
                   >
                     {allied ? t('map.reinforce') : t('map.attack')}
                   </button>
+                )}
+                {!allied && selectedBase.username !== view?.you.username && isShielded(selectedBase.shieldUntil, Date.now()) && (
+                  <p className="mt-1 text-[10px] text-neutral-500">{SHIELD_WORDING.targetBlocked}</p>
                 )}
               </>
             ) : (

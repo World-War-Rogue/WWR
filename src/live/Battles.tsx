@@ -32,12 +32,14 @@ function when(ts: number): string {
 // The verdict arrives as a code, not as a word, so it is looked up rather
 // than rendered - `verdictFor` returns 'won' | 'lost' | 'drew'.
 const VERDICT_LABEL: Record<string, MessageKey> = {
+  blocked: 'battles.blocked',
   won: 'battles.won',
   lost: 'battles.lost',
   drew: 'battles.drew',
 };
 
 const VERDICT_STYLE: Record<string, string> = {
+  blocked: 'border-cyan-800 bg-cyan-950/60 text-cyan-300',
   won: 'border-emerald-800 bg-emerald-950/60 text-emerald-300',
   lost: 'border-red-900 bg-red-950/60 text-red-300',
   drew: 'border-neutral-700 bg-neutral-900 text-neutral-300',

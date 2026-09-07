@@ -393,6 +393,10 @@ export default function BaseBoard({
           {ccSel && !lifted && (
             <div className="pointer-events-none absolute inset-[6%] rounded-lg ring-2 ring-white/70" />
           )}
+          {/* Shielded: a thin cyan segmented ring around the Command Center. SHIELDS v1. */}
+          {base.season1?.shield.until && base.season1.shield.until > Date.now() && (
+            <div className="pointer-events-none absolute inset-[2%] rounded-xl border-2 border-dashed border-cyan-300/80" />
+          )}
         </div>
 
         {/*

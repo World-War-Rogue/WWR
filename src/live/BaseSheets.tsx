@@ -13,7 +13,8 @@
 import {type ReactNode, useState} from 'react';
 import BuildingPanel from './BuildingPanel';
 import {QueuePanel, ResourceShop, SecondTeamPanel, StockPanel} from './ResourcePanels';
-import {useBase} from './useBase';
+import {useBase, useSeason} from './useBase';
+import ShieldPanel from './ShieldPanel';
 import {LEVELLED_BUILDINGS, PRODUCER_OF, RESOURCE_KINDS, isLevelledBuilding} from '../../shared/buildings';
 import {type MessageKey, t} from '../i18n';
 import {
@@ -94,11 +95,13 @@ export function CommandCenterSheet({
   /** The player panel - who you are and the doors you walk through. */
   profile: ReactNode;
 }) {
-  const [tab, setTab] = useState<'departments' | 'events' | 'wars' | 'profile'>('departments');
+  const [tab, setTab] = useState<'departments' | 'protection' | 'events' | 'wars' | 'profile'>('departments');
   // Base levels v2: the Command Center's own level. Read when the sheet opens.
   const [levels, setLevels] = useBase();
+  const [season1, setSeason1] = useSeason();
   const tabs = [
     {key: 'departments', label: t('cc.departments')},
+    {key: 'protection', label: 'Protection'},
     {key: 'events', label: t('cc.events')},
     {key: 'wars', label: t('cc.wars')},
     {key: 'profile', label: t('cc.profile')},
@@ -112,6 +115,19 @@ export function CommandCenterSheet({
       onTab={(k) => setTab(k as typeof tab)}
       onClose={onClose}
     >
+      {tab === 'protection' &&
+        (season1 && levels ? (
+          <ShieldPanel
+            season1={season1}
+            wallet={levels.wallet}
+            onChanged={(next, wallet) => {
+              setSeason1(next);
+              setLevels({...levels, wallet});
+            }}
+          />
+        ) : (
+          <Soon text="Reading…" />
+        ))}
       {tab === 'events' && <Soon text={t('cc.eventsSoon')} />}
       {tab === 'wars' && <Soon text={t('cc.warsSoon')} />}
       {tab === 'profile' && profile}
@@ -153,6 +169,7 @@ export function CommandCenterSheet({
 export function DepotSheet({onClose, onCustomise}: {onClose: () => void; onCustomise: () => void}) {
   const [tab, setTab] = useState<'supplies' | 'modules' | 'cosmetics' | 'services'>('supplies');
   const [base, setBase] = useBase();
+  const [season1, setSeason1] = useSeason();
   const tabs = [
     {key: 'supplies', label: t('depot.supplies')},
     {key: 'modules', label: t('depot.modules')},
@@ -188,7 +205,22 @@ export function DepotSheet({onClose, onCustomise}: {onClose: () => void; onCusto
           </button>
         </>
       )}
-      {tab === 'services' && <Soon text={t('depot.servicesSoon')} />}
+      {tab === 'services' && (
+        <div className="space-y-3">
+          {season1 && base && (
+            <ShieldPanel
+              season1={season1}
+              wallet={base.wallet}
+              paidOnly
+              onChanged={(next, wallet) => {
+                setSeason1(next);
+                setBase({...base, wallet});
+              }}
+            />
+          )}
+          <Soon text={t('depot.servicesSoon')} />
+        </div>
+      )}
     </Sheet>
   );
 }
