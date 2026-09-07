@@ -25,7 +25,8 @@ import {powerBreakdown} from '../shared/powerBreakdown';
 import {createQaAccount, devAction, devSeedsEnabled, devStatus} from './devProgression';
 import {claimCache, listGrants, noteDailyProgress, readDaily} from './dailyOps';
 import {ensureExercises, readExercise, viewOf} from './exercises';
-import {arenaView, makeAttempt} from './arena';
+import {arenaView, listAttempts, makeAttempt, readAttempt} from './arena';
+import {arenaSquadView, saveArenaSlots} from './arenaSquad';
 import {seasonPhase} from '../shared/season1Ops';
 import {FARM_ROLE} from './bots';
 import {isCombatSystemLane} from '../shared/combatSystems';
@@ -3045,6 +3046,28 @@ async function route(
     return json({ok: true, reward: result.reward, daily: await readDaily(env.DB, player.id, Date.now())});
   }
   if (endpoint === 'GET /api/ops/grants') return json({grants: await listGrants(env.DB, player.id)});
+
+  // The Arena Squad: the setup screen, and the save. Slots only; every
+  // figure and every rule is the server's (worker/arenaSquad.ts).
+  if (endpoint === 'GET /api/arena/squad' || endpoint === 'POST /api/arena/squad') {
+    const now = Date.now();
+    const away = await marchingSquads(env.DB, player.id);
+    if (endpoint === 'POST /api/arena/squad') {
+      const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+      const saved = await saveArenaSlots(env.DB, player.id, body?.slots, now);
+      if (!saved.ok) return fail(400, saved.error);
+    }
+    return json(await arenaSquadView(env.DB, player.id, away, now));
+  }
+
+  // A stored Arena report, re-opened: the whole fight as it was resolved.
+  if (endpoint === 'GET /api/arena/report') {
+    const id = url.searchParams.get('id') ?? '';
+    const attempt = id ? await readAttempt(env.DB, player.id, id) : null;
+    if (!attempt) return fail(404, 'No such report.');
+    return json({attempt});
+  }
+  if (endpoint === 'GET /api/arena/reports') return json({attempts: await listAttempts(env.DB, player.id)});
 
   // Iron Dominion Arena: the screen, and one attempt.
   if (endpoint === 'GET /api/arena' || endpoint === 'POST /api/arena/attempt') {

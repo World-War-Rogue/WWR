@@ -1,22 +1,29 @@
 /**
  * The Iron Dominion Arena, phase A: the Proving Ground.
  *
- * Everything on this screen comes from `/api/arena`. The server picks the
- * Task Force, builds the Benchmark Squad, resolves the fight and scores it;
- * this screen shows the choice, the opponent, the three attempts with every
- * scored term, and the live daily and weekly boards - both provisional until
- * the Monday settlement, and it says so.
+ * Everything on this screen comes from `/api/arena`. The server reads the
+ * saved Arena Squad, builds the day's Dominion Warden, resolves the fight
+ * and scores it - all before this screen hears about it. This screen shows
+ * the squad, the Warden, the three attempts with every scored term, and the
+ * live daily and weekly boards (provisional until the Monday settlement,
+ * and it says so). An attempt opens the battle view, which plays the stored
+ * fight; when it ends, or is skipped, the report opens.
  */
-import {useEffect, useState} from 'react';
+import {lazy, Suspense, useCallback, useEffect, useState} from 'react';
 import {ASSET_BY_ID, CATEGORY_LABEL, type AssetCategory} from '../../shared/assets';
-import {ARENA_RULES, FIELD_CACHE, FULL_ENGAGEMENT_BONUS, MAX_ATTEMPT_SCORE, RANK_BANDS, SCORE} from '../../shared/arena';
+import {ARENA_RULES, FIELD_CACHE, FULL_ENGAGEMENT_BONUS, RANK_BANDS} from '../../shared/arena';
 import {formatClock} from '../../shared/gametime';
 import {describeReward} from '../../shared/season1Ops';
 import {ApiError, type ArenaAttempt, type ArenaView, api} from '../net/api';
 import {remaining} from './BuildingPanel';
 import {t} from '../i18n';
-import {taskForceName} from './taskForce';
 import {useModal} from './guide/useModal';
+import ArenaReport from './ArenaReport';
+
+const ArenaBattle = lazy(() => import('./ArenaBattle'));
+const ArenaSquad = lazy(() => import('./ArenaSquad'));
+
+type Mode = {kind: 'lobby'} | {kind: 'squad'} | {kind: 'battle'; attempt: ArenaAttempt} | {kind: 'report'; attempt: ArenaAttempt};
 
 export default function Arena({onClose}: {onClose: () => void}) {
   // A full screen: General Rider stays out of the way while it is open.
@@ -25,22 +32,22 @@ export default function Arena({onClose}: {onClose: () => void}) {
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [open, setOpen] = useState<ArenaAttempt | null>(null);
+  const [mode, setMode] = useState<Mode>({kind: 'lobby'});
   const [board, setBoard] = useState<'daily' | 'weekly'>('daily');
   const [now, setNow] = useState(() => Date.now());
 
-  useEffect(() => {
-    let live = true;
+  const load = useCallback(() => {
     api
       .arena()
-      .then((v) => live && setView(v))
-      .catch((e) => live && setError(e instanceof ApiError ? e.message : 'Could not reach the server.'));
-    const id = window.setInterval(() => setNow(Date.now()), 30_000);
-    return () => {
-      live = false;
-      window.clearInterval(id);
-    };
+      .then((v) => setView(v))
+      .catch((e) => setError(e instanceof ApiError ? e.message : 'Could not reach the server.'));
   }, []);
+
+  useEffect(() => {
+    load();
+    const id = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(id);
+  }, [load]);
 
   async function attempt() {
     setBusy(true);
@@ -49,17 +56,48 @@ export default function Arena({onClose}: {onClose: () => void}) {
     try {
       const r = await api.arenaAttempt();
       setView(r.view);
-      setOpen(r.attempt);
       const paid = [
         r.fieldCache ? `Field Cache: ${describeReward(FIELD_CACHE)}` : null,
         r.fullEngagement ? `Full Engagement: ${describeReward(FULL_ENGAGEMENT_BONUS)}` : null,
       ].filter(Boolean);
       if (paid.length) setNote(paid.join(' · '));
+      // The fight is resolved and stored. Now watch it.
+      setMode({kind: 'battle', attempt: r.attempt});
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'That did not stick.');
     } finally {
       setBusy(false);
     }
+  }
+
+  if (mode.kind === 'squad') {
+    return (
+      <Suspense fallback={<p className="p-4 text-sm text-neutral-500">Loading…</p>}>
+        <ArenaSquad
+          onClose={() => {
+            setMode({kind: 'lobby'});
+            load();
+          }}
+          onEnter={() => {
+            setMode({kind: 'lobby'});
+            load();
+            void attempt();
+          }}
+        />
+      </Suspense>
+    );
+  }
+  if (mode.kind === 'battle') {
+    const a = mode.attempt;
+    return (
+      <Suspense fallback={<p className="p-4 text-sm text-neutral-500">Loading…</p>}>
+        <ArenaBattle attempt={a} onDone={() => setMode({kind: 'report', attempt: a})} />
+      </Suspense>
+    );
+  }
+  if (mode.kind === 'report') {
+    const a = mode.attempt;
+    return <ArenaReport attempt={a} onWatchAgain={a.battle ? () => setMode({kind: 'battle', attempt: a}) : undefined} onClose={() => setMode({kind: 'lobby'})} />;
   }
 
   const btn = 'rounded border border-neutral-700 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-neutral-200 hover:border-orange-500 hover:text-orange-200 disabled:opacity-40';
@@ -90,11 +128,16 @@ export default function Arena({onClose}: {onClose: () => void}) {
           {/* Today: attempts, your force, the benchmark. */}
           <section className="mt-4 grid gap-3 sm:grid-cols-2">
             <div className="rounded border border-neutral-800 bg-neutral-950 p-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-400">Your force</p>
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-400">Arena Squad</p>
+                <button onClick={() => setMode({kind: 'squad'})} className={btn}>
+                  Set up
+                </button>
+              </div>
               {view.force ? (
                 <>
                   <p className="mt-1 text-sm text-neutral-100">
-                    {taskForceName(view.force.squad)} <span className="font-mono text-neutral-400">power {view.force.power.toLocaleString()}</span>
+                    <span className="font-mono text-neutral-400">power {view.force.power.toLocaleString()}</span>
                   </p>
                   <ul className="mt-1 text-[11px] text-neutral-400">
                     {view.force.units.map((u) => (
@@ -103,23 +146,23 @@ export default function Arena({onClose}: {onClose: () => void}) {
                       </li>
                     ))}
                   </ul>
-                  <p className="mt-1 text-[10px] text-neutral-600">Chosen by the server: your strongest Task Force at home, whole, with a drone.</p>
+                  <p className="mt-1 text-[10px] text-neutral-600">Your saved loadout, checked by the server. Nothing on the map moves.</p>
                 </>
               ) : (
-                <p className="mt-1 text-[12px] text-amber-400">No eligible Task Force: one must be at home, whole, and carrying a drone.</p>
+                <p className="mt-1 text-[12px] text-amber-400">{view.forceBlocked ?? 'Set up your Arena Squad first.'}</p>
               )}
             </div>
             <div className="rounded border border-red-900/60 bg-neutral-950 p-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-red-300">Iron Dominion Benchmark Squad</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-red-300">{view.benchmark.name}</p>
               <p className="mt-1 font-mono text-sm text-neutral-100">power {view.benchmark.power.toLocaleString()}</p>
               <ul className="mt-1 text-[11px] text-neutral-400">
-                {view.benchmark.units.map((u, i) => (
-                  <li key={i}>
-                    {CATEGORY_LABEL[u.category as AssetCategory] ?? u.category} <span className="text-neutral-600">Lv {u.level}</span>
+                {view.benchmark.hardpoints.map((h) => (
+                  <li key={h.index}>
+                    {h.name} <span className="text-neutral-600">{CATEGORY_LABEL[h.category as AssetCategory] ?? h.category} Lv {h.level}</span>
                   </li>
                 ))}
               </ul>
-              <p className="mt-1 text-[10px] text-neutral-600">One per server per day, built from yesterday’s strongest profile. Same for everyone.</p>
+              <p className="mt-1 text-[10px] text-neutral-600">One per server per day, its hardpoints built from yesterday’s strongest profile. Same for everyone.</p>
             </div>
           </section>
 
@@ -142,7 +185,7 @@ export default function Arena({onClose}: {onClose: () => void}) {
                 disabled={busy || !view.force || view.attemptsUsed >= view.attemptsPerDay || view.phase !== 'proving_ground'}
                 className="shrink-0 rounded border border-orange-600 bg-orange-950/40 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-orange-200 hover:bg-orange-900/40 disabled:border-neutral-800 disabled:bg-transparent disabled:text-neutral-600"
               >
-                {busy ? '…' : 'Fight the benchmark'}
+                {busy ? '…' : 'Enter the Arena'}
               </button>
             </div>
 
@@ -151,7 +194,7 @@ export default function Arena({onClose}: {onClose: () => void}) {
                 {view.attempts.map((a) => (
                   <li key={a.id}>
                     <button
-                      onClick={() => setOpen(a)}
+                      onClick={() => setMode({kind: 'report', attempt: a})}
                       className={`w-full rounded border p-2 text-left ${
                         a.outcome === 'attacker' ? 'border-emerald-900 bg-emerald-950/20' : 'border-neutral-800 bg-neutral-950'
                       }`}
@@ -159,7 +202,7 @@ export default function Arena({onClose}: {onClose: () => void}) {
                       <p className="text-[10px] uppercase tracking-wider text-neutral-500">Attempt {a.n} · {formatClock(a.createdAt)} RST</p>
                       <p className="font-mono text-lg text-neutral-50">{a.score.toLocaleString()}</p>
                       <p className="text-[10px] text-neutral-500">
-                        {a.outcome === 'attacker' ? 'Benchmark defeated' : a.outcome === 'draw' ? 'Draw' : 'Benchmark held'} · {taskForceName(a.squad)} · tap for the report
+                        {a.outcome === 'attacker' ? 'Warden defeated' : a.outcome === 'draw' ? 'Draw' : 'Warden held'} · tap for the report
                       </p>
                     </button>
                   </li>
@@ -167,59 +210,6 @@ export default function Arena({onClose}: {onClose: () => void}) {
               </ul>
             )}
           </section>
-
-          {open && open.breakdown && (
-            <section className="mt-3 rounded border border-orange-800/60 bg-neutral-950 p-3">
-              <div className="flex items-center justify-between">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-orange-300">Attempt {open.n} report</p>
-                <button onClick={() => setOpen(null)} className="text-neutral-500 hover:text-neutral-200">
-                  ✕
-                </button>
-              </div>
-              <p className="mt-1 font-mono text-2xl text-neutral-50">
-                {open.score.toLocaleString()} <span className="text-sm text-neutral-600">/ {MAX_ATTEMPT_SCORE.toLocaleString()}</span>
-              </p>
-              <table className="mt-2 w-full text-[11px]">
-                <tbody className="divide-y divide-neutral-900">
-                  {(
-                    [
-                      ['Enemy durability damage', open.breakdown.enemyDamagePct, SCORE.enemyDamage, open.breakdown.terms.enemyDamage],
-                      ['Enemy assets eliminated', open.breakdown.enemyEliminatedPct, SCORE.enemyEliminated, open.breakdown.terms.enemyEliminated],
-                      ['Own durability remaining', open.breakdown.ownRemainingPct, SCORE.ownRemaining, open.breakdown.terms.ownRemaining],
-                      ['Round efficiency', open.breakdown.roundEfficiencyPct, SCORE.roundEfficiency, open.breakdown.terms.roundEfficiency],
-                    ] as Array<[string, number, number, number]>
-                  ).map(([label, pct, weight, pts]) => (
-                    <tr key={label}>
-                      <td className="py-1 text-neutral-300">{label}</td>
-                      <td className="py-1 text-right font-mono text-neutral-500">{Math.round(pct * 100)}% × {weight.toLocaleString()}</td>
-                      <td className="py-1 text-right font-mono text-neutral-100">{Math.floor(pts).toLocaleString()}</td>
-                    </tr>
-                  ))}
-                  <tr>
-                    <td className="py-1 text-neutral-300">Clear bonus</td>
-                    <td className="py-1 text-right font-mono text-neutral-500">{open.breakdown.cleared ? 'benchmark defeated' : 'not cleared'}</td>
-                    <td className="py-1 text-right font-mono text-neutral-100">{open.breakdown.terms.clearBonus.toLocaleString()}</td>
-                  </tr>
-                </tbody>
-              </table>
-              <p className="mt-2 text-[10px] uppercase tracking-wider text-neutral-500">Rounds</p>
-              <ol className="mt-1 space-y-0.5 text-[11px] text-neutral-400">
-                {open.rounds.map((r) => (
-                  <li key={r.index}>
-                    <span className="font-mono text-neutral-600">{r.index}.</span> {r.summary}
-                  </li>
-                ))}
-              </ol>
-              {open.notes.length > 0 && (
-                <ul className="mt-2 space-y-0.5 text-[11px] text-neutral-500">
-                  {open.notes.map((n, i) => (
-                    <li key={i}>{n}</li>
-                  ))}
-                </ul>
-              )}
-              <p className="mt-2 text-[10px] text-neutral-600">Nothing of yours was damaged, spent or marched. The fight is between two snapshots.</p>
-            </section>
-          )}
 
           {/* Boards. */}
           <section className="mt-3 rounded border border-neutral-800 bg-neutral-950 p-3">

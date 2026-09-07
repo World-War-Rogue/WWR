@@ -289,6 +289,8 @@ export interface SideSpec {
 
 interface Unit {
   id: string;
+  /** Position in the side's units array, for the event log. */
+  index: number;
   asset: Asset;
   level: number;
   hp: number;
@@ -324,12 +326,35 @@ export interface CombatRound {
   defenderDamage: number;
 }
 
+/**
+ * One shot, as it happened. The resolver records every shot it applies, in
+ * order, so a replay can show the fight the resolver fought - not a fight
+ * it re-imagines. `shooter` and `target` index the side's units array as it
+ * was passed in (an unknown asset id is skipped by build() and never fires
+ * or is fired at, so an index in here always names a real unit). Damage is
+ * the amount actually taken off the target's pool; `remaining` is what the
+ * target had left afterwards, 0-1 of its own pool.
+ */
+export interface CombatEvent {
+  /** 0 is the opening drone wave; 1.. are the rounds. */
+  round: number;
+  side: 'attacker' | 'defender';
+  shooter: number;
+  target: number;
+  damage: number;
+  remaining: number;
+  /** This shot took the target to zero. */
+  broke: boolean;
+}
+
 export interface CombatResult {
   outcome: 'attacker' | 'defender' | 'draw';
   rounds: CombatRound[];
   notes: string[];
   attacker: SideResult;
   defender: SideResult;
+  /** Every shot, in firing order. Absent only on results stored before it existed. */
+  events?: CombatEvent[];
 }
 
 export interface SideResult {
@@ -399,6 +424,7 @@ function build(spec: SideSpec): Unit[] {
     const frac = Math.max(0, Math.min(1, u.hpFraction ?? 1));
     units.push({
       id: `${u.assetId}#${i}`,
+      index: i,
       asset,
       level: u.level,
       hp: maxHp * frac,
@@ -577,6 +603,18 @@ export function resolve(
 
   const rounds: CombatRound[] = [];
   const notes: string[] = [];
+  const events: CombatEvent[] = [];
+  const record = (round: number, side: 'A' | 'D', shooter: Unit, target: Unit, dealt: number) => {
+    events.push({
+      round,
+      side: side === 'A' ? 'attacker' : 'defender',
+      shooter: shooter.index,
+      target: target.index,
+      damage: Math.round(dealt),
+      remaining: target.maxHp === 0 ? 0 : Number((Math.max(0, target.hp) / target.maxHp).toFixed(4)),
+      broke: target.hp <= 0 && dealt > 0,
+    });
+  };
   if (expA > 1) notes.push(`${attackerSpec.name} left a band uncovered.`);
   if (expD > 1) notes.push(`${defenderSpec.name} left a band uncovered.`);
   let spotA = SPOTTING_BASE;
@@ -608,6 +646,7 @@ export function resolve(
           roll,
           FRONT_DRONE_WAVE,
         );
+        record(0, side, u, target, dealt);
         if (side === 'A') waveA += dealt;
         else waveD += dealt;
       }
@@ -665,6 +704,7 @@ export function resolve(
         side === 'A' ? expD : expA,
         roll,
       );
+      record(r, side, u, target, dealt);
       if (side === 'A') dmgA += dealt;
       else dmgD += dealt;
       if (target.hp <= 0) broken.push(target.asset.code);
@@ -728,5 +768,5 @@ export function resolve(
   // screen, the harness, a log - sees what took part without a second field.
   notes.push(...resultA.modifiers, ...resultD.modifiers);
 
-  return {outcome, rounds, notes, attacker: resultA, defender: resultD};
+  return {outcome, rounds, notes, attacker: resultA, defender: resultD, events};
 }

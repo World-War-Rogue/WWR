@@ -16,7 +16,7 @@ import type {PowerBreakdown} from '../../shared/powerBreakdown';
 import type {Lane, Reward} from '../../shared/season1Ops';
 import type {ExerciseView} from '../../shared/exercises';
 import type {ScoreBreakdown} from '../../shared/arena';
-import type {CombatantSpec} from '../../shared/combat';
+import type {CombatEvent, CombatantSpec} from '../../shared/combat';
 import type {BuildingLevels} from '../../shared/buildings';
 
 export interface ChatMessage {
@@ -304,6 +304,27 @@ export interface DailyView {
   industryMs: number;
 }
 
+export interface ArenaSideResult {
+  name: string;
+  power: number;
+  losses: number;
+  strength: number;
+  units: Array<{assetId: string; name: string; damaged: boolean; remaining: number}>;
+  modifiers: string[];
+}
+
+/** The fight as the server resolved and stored it; the replay plays it. */
+export interface ArenaBattle {
+  opponent: string;
+  benchmark: CombatantSpec[];
+  events: CombatEvent[];
+  rounds: Array<{index: number; summary: string; attackerDamage: number; defenderDamage: number}>;
+  notes: string[];
+  attacker: ArenaSideResult;
+  defender: ArenaSideResult;
+  seed: number;
+}
+
 export interface ArenaAttempt {
   id: string;
   n: number;
@@ -312,9 +333,30 @@ export interface ArenaAttempt {
   outcome: string;
   breakdown: ScoreBreakdown | null;
   units: CombatantSpec[];
-  rounds: Array<{index: number; summary: string; attackerDamage: number; defenderDamage: number}>;
-  notes: string[];
+  battle: ArenaBattle | null;
   createdAt: number;
+  dayKey: string;
+}
+
+export interface ArenaSquadView {
+  slots: Array<string | null>;
+  power: number;
+  blocked: string | null;
+  systems: {fire_control: number; survivability: number; sustainment: number};
+  wallet: Wallet;
+  commandCenter: number;
+  season: number;
+  roster: Array<{
+    assetId: string;
+    level: number;
+    hp: number;
+    repairing: boolean;
+    away: boolean;
+    power: number;
+    taskForce: string | null;
+    unavailable: string | null;
+  }>;
+  taskForces: Record<string, Array<string | null>>;
 }
 
 export interface ArenaBoardRow {
@@ -335,7 +377,13 @@ export interface ArenaView {
   attemptsUsed: number;
   attemptsPerDay: number;
   force: {squad: string; power: number; units: Array<{assetId: string; level: number; slot: number}>} | null;
-  benchmark: {units: Array<{assetId: string; category: string; level: number}>; power: number};
+  forceBlocked: string | null;
+  benchmark: {
+    units: Array<{assetId: string; category: string; level: number}>;
+    power: number;
+    hardpoints: Array<{index: number; name: string; category: string; level: number}>;
+    name: string;
+  };
   attempts: ArenaAttempt[];
   daily: ArenaBoardRow[];
   myDaily: {rank: number; best: number} | null;
@@ -610,6 +658,10 @@ export const api = {
     }),
   daily: () => call<DailyView>('/api/ops/daily'),
   arena: () => call<ArenaView>('/api/arena'),
+  arenaSquad: () => call<ArenaSquadView>('/api/arena/squad'),
+  arenaSaveSquad: (slots: Array<string | null>) => call<ArenaSquadView>('/api/arena/squad', {method: 'POST', body: JSON.stringify({slots})}),
+  arenaReport: (id: string) => call<{attempt: ArenaAttempt}>(`/api/arena/report?id=${encodeURIComponent(id)}`),
+  arenaReports: () => call<{attempts: ArenaAttempt[]}>('/api/arena/reports'),
   arenaAttempt: () =>
     call<{ok: true; attempt: ArenaAttempt; fieldCache: boolean; fullEngagement: boolean; view: ArenaView}>('/api/arena/attempt', {
       method: 'POST',

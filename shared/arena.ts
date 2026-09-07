@@ -2,11 +2,19 @@
  * Iron Dominion Arena, phase A (weeks 1-4): the Proving Ground.
  *
  * A daily benchmark, not head-to-head. Three attempts a day with the
- * player's strongest eligible Task Force against one anonymous Dominion
- * Benchmark Squad generated per server per day from the previous day's
- * strongest snapshot. Every attempt settles at once and scores from the
- * resolver's outputs; the day's best counts, the week is the sum of the
- * seven daily bests, and Monday 00:00 RST settles the week's rank rewards.
+ * player's saved Arena Squad (shared/arenaSquad.ts) against the Dominion
+ * Warden: one enemy war machine per server per day whose six hardpoints are
+ * generated from the previous day's strongest snapshot. Every attempt
+ * settles at once and scores from the resolver's outputs; the day's best
+ * counts, the week is the sum of the seven daily bests, and Monday 00:00
+ * RST settles the week's rank rewards.
+ *
+ * The Warden IS the benchmark squad, worn as one machine. In the resolver
+ * it is six units - that is what keeps it fair at every rank, since a
+ * single unit with six units' attributes mitigates six times as hard - and
+ * on screen those six units are its turret, launcher, pods and sensor mast.
+ * A hardpoint knocked out is a unit broken; the machine's bar is the side's
+ * strength. Nothing about the scoring changed.
  *
  * Source: docs/SEASON-1-LIVE-OPS-v1.md §Arena phase A and the reward tables
  * in docs/SEASON-1-LIVE-OPS-DESIGN-v1.md, with the 7 September rulings:
@@ -119,7 +127,43 @@ export const MAX_ATTEMPT_SCORE = SCORE.enemyDamage + SCORE.enemyEliminated + SCO
 /* The Benchmark Squad                                                        */
 /* -------------------------------------------------------------------------- */
 
-export const BENCHMARK_NAME = 'Iron Dominion Benchmark Squad';
+export const WARDEN_NAME = 'Dominion Warden';
+/** The name older attempts were stored under; the same opponent. */
+export const BENCHMARK_NAME = WARDEN_NAME;
+
+/** What each benchmark unit is, on the Warden. */
+export const HARDPOINT_OF: Record<AssetCategory, string> = {
+  armour: 'Main gun turret',
+  artillery: 'Rocket battery',
+  fixed_wing: 'Missile rack',
+  rotary: 'Autocannon pod',
+  drone: 'Sensor mast',
+  naval: 'Deck gun',
+};
+
+export interface Hardpoint {
+  index: number;
+  name: string;
+  category: AssetCategory;
+  level: number;
+}
+
+/** The Warden's hardpoints, in unit order, with duplicate names numbered. */
+export function wardenHardpoints(units: CombatantSpec[]): Hardpoint[] {
+  const counts = new Map<string, number>();
+  const totals = new Map<string, number>();
+  for (const u of units) {
+    const c = ASSETS.find((a) => a.id === u.assetId)?.category ?? 'armour';
+    totals.set(c, (totals.get(c) ?? 0) + 1);
+  }
+  return units.map((u, index) => {
+    const category = ASSETS.find((a) => a.id === u.assetId)?.category ?? 'armour';
+    const n = (counts.get(category) ?? 0) + 1;
+    counts.set(category, n);
+    const base = HARDPOINT_OF[category];
+    return {index, name: (totals.get(category) ?? 1) > 1 ? `${base} ${n}` : base, category, level: u.level};
+  });
+}
 
 /**
  * Lethality of a snapshot, for choosing the day's source profile. Server
@@ -216,8 +260,8 @@ export function rankStandings<T extends WeeklyStanding>(rows: T[]): T[] {
 }
 
 export const ARENA_RULES = [
-  'Three attempts a day, 00:00 RST reset. Your strongest eligible Task Force is chosen for you.',
-  'One Dominion Benchmark Squad per server per day, built from yesterday’s strongest profile.',
+  'Three attempts a day, 00:00 RST reset. You fight with your saved Arena Squad.',
+  'One Dominion Warden per server per day, its hardpoints built from yesterday’s strongest profile.',
   'Your best attempt of the day counts; the week is the sum of your daily bests.',
   'Ties: higher single best attempt, then who reached the score first.',
   'Nothing is damaged, spent or marched. An attempt is a fight between two snapshots.',

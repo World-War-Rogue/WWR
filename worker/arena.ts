@@ -8,11 +8,9 @@
  * An attempt is a fight between two snapshots: nothing of the player's is
  * damaged, spent or marched.
  */
-import {ASSET_BY_ID, SQUAD_NAMES, type SquadName} from '../shared/assets';
 import {
   ARENA_ATTEMPTS_PER_DAY,
   ATTEMPTS_FOR_WEEKLY_REWARD,
-  BENCHMARK_NAME,
   FIELD_CACHE,
   FULL_ENGAGEMENT_BONUS,
   type ScoreBreakdown,
@@ -25,17 +23,16 @@ import {
   rankStandings,
   scoreAttempt,
   squadPowerOf,
+  WARDEN_NAME,
+  wardenHardpoints,
 } from '../shared/arena';
-import {type CombatantSpec, type SideSpec, resolve} from '../shared/combat';
-import {droneCount} from '../shared/drones';
+import {type CombatantSpec, resolve} from '../shared/combat';
+import {type StoredBattle, parseStoredAttempt, storedBattle} from '../shared/arenaReplay';
 import {hashSeed, seeded} from '../shared/exercises';
-import {taskForceOpen} from '../shared/season';
 import {dailyWindow, describeReward, seasonPhase, weeklyWindow} from '../shared/season1Ops';
-import {categoryBoost} from '../shared/buildings';
-import {readLevels} from './buildings';
-import {readSystems} from './combatSystems';
+import {ARENA_SYSTEMS_KEY} from './combatSystems';
 import {grantReward} from './dailyOps';
-import {deltaOpen, ensureRoster, readSquads, squadPower} from './squads';
+import {arenaForce} from './arenaSquad';
 
 interface DayRow {
   world_id: number;
@@ -124,66 +121,6 @@ export async function ensureBenchmark(db: D1Database, worldId: number, now: numb
 }
 
 /* -------------------------------------------------------------------------- */
-/* The player's strongest eligible Task Force                                 */
-/* -------------------------------------------------------------------------- */
-
-/**
- * The Task Force the Arena fights with: open, at home, whole, carrying a
- * drone, highest power. Chosen by the server, never the client. Returns the
- * snapshot exactly as a march would freeze it.
- */
-export async function bestTaskForce(
-  db: D1Database,
-  playerId: string,
-  away: Set<string>,
-  now: number,
-): Promise<{squad: SquadName; units: CombatantSpec[]; power: number} | null> {
-  const [owned, board, levels, systems] = await Promise.all([
-    ensureRoster(db, playerId, now),
-    readSquads(db, playerId),
-    readLevels(db, playerId),
-    readSystems(db, playerId),
-  ]);
-  const roster = new Map(owned.map((o) => [o.assetId, o]));
-  const delta = await deltaOpen(db, playerId, levels.command_center, now);
-  let best: {squad: SquadName; units: CombatantSpec[]; power: number} | null = null;
-  for (const name of SQUAD_NAMES) {
-    if (away.has(name)) continue;
-    if (!taskForceOpen(name, levels.command_center, name === 'Delta' && delta)) continue;
-    const slots = board[name] ?? [];
-    const ids = slots.filter((id): id is string => !!id);
-    if (ids.length === 0 || droneCount(ids) === 0) continue;
-    const ready = ids.every((id) => {
-      const o = roster.get(id);
-      return o && o.hp > 0 && !(o.repairEndsAt && o.repairEndsAt > now);
-    });
-    if (!ready) continue;
-    const power = squadPower(board, roster, name, levels);
-    if (!best || power > best.power) {
-      const units: CombatantSpec[] = [];
-      slots.forEach((id, slot) => {
-        if (!id) return;
-        const o = roster.get(id);
-        const asset = ASSET_BY_ID[id];
-        if (!o || !asset) return;
-        units.push({
-          assetId: id,
-          level: o.level,
-          packages: o.packages,
-          slot,
-          hpFraction: o.hp,
-          boost: categoryBoost(levels, asset.category),
-          systems: systems[name],
-          squad: name,
-        });
-      });
-      best = {squad: name, units, power};
-    }
-  }
-  return best;
-}
-
-/* -------------------------------------------------------------------------- */
 /* An attempt                                                                 */
 /* -------------------------------------------------------------------------- */
 
@@ -191,18 +128,50 @@ export type AttemptResult =
   | {ok: true; attempt: AttemptView; fieldCache: boolean; fullEngagement: boolean}
   | {ok: false; error: string};
 
+export type {StoredBattle} from '../shared/arenaReplay';
+
 export interface AttemptView {
   id: string;
   n: number;
   squad: string;
   score: number;
   outcome: string;
-  breakdown: ScoreBreakdown;
+  breakdown: ScoreBreakdown | null;
   units: CombatantSpec[];
-  benchmark: CombatantSpec[];
-  rounds: unknown[];
-  notes: string[];
+  battle: StoredBattle | null;
   createdAt: number;
+  dayKey: string;
+}
+
+function parseAttempt(r: AttemptRow): AttemptView {
+  const {breakdown, battle} = parseStoredAttempt(r.breakdown, WARDEN_NAME, r.seed);
+  return {
+    id: r.id,
+    n: r.n,
+    squad: r.squad,
+    score: r.score,
+    outcome: r.outcome,
+    breakdown,
+    units: parseUnits(r.snapshot),
+    battle,
+    createdAt: r.created_at,
+    dayKey: r.day_key,
+  };
+}
+
+/** One stored attempt, for the report and the replay. Only the owner's. */
+export async function readAttempt(db: D1Database, playerId: string, id: string): Promise<AttemptView | null> {
+  const row = await db.prepare(`SELECT * FROM arena_attempts WHERE id = ?1 AND player_id = ?2`).bind(id, playerId).first<AttemptRow>();
+  return row ? parseAttempt(row) : null;
+}
+
+/** The player's attempts, newest first, for the Reports screen. */
+export async function listAttempts(db: D1Database, playerId: string, limit = 30): Promise<AttemptView[]> {
+  const rows = await db
+    .prepare(`SELECT * FROM arena_attempts WHERE player_id = ?1 ORDER BY created_at DESC LIMIT ?2`)
+    .bind(playerId, limit)
+    .all<AttemptRow>();
+  return (rows.results ?? []).map(parseAttempt);
 }
 
 export async function makeAttempt(
@@ -227,15 +196,19 @@ export async function makeAttempt(
   const used = (done.results ?? []).length;
   if (used >= ARENA_ATTEMPTS_PER_DAY) return {ok: false, error: 'No attempts left today. Three more at 00:00 RST.'};
 
-  const force = await bestTaskForce(db, playerId, away, now);
-  if (!force) return {ok: false, error: 'No eligible Task Force: one must be at home, whole, and carrying a drone.'};
+  const chosen = await arenaForce(db, playerId, away, now);
+  if (!chosen.ok) return chosen;
+  const force = {squad: ARENA_SYSTEMS_KEY, units: chosen.force.units, power: chosen.force.power};
 
   const {units: benchmark} = await ensureBenchmark(db, worldId, now);
   const id = newId();
   const seed = Math.abs(hashSeed(`${id}:${playerId}:${day.key}`)) % 2147483647;
-  const result = resolve({name: username, units: force.units}, {name: BENCHMARK_NAME, units: benchmark}, seed);
+  // Resolved here, once, before anything is shown. What is stored is the
+  // whole fight: the replay plays these events and can change nothing.
+  const result = resolve({name: username, units: force.units}, {name: WARDEN_NAME, units: benchmark}, seed);
   const breakdown = scoreAttempt(result);
   const n = used + 1;
+  const stored = storedBattle(result, WARDEN_NAME, benchmark, seed);
 
   const inserted = await db
     .prepare(
@@ -243,7 +216,7 @@ export async function makeAttempt(
          (id, player_id, world_id, day_key, week_key, n, squad, snapshot, seed, score, breakdown, outcome, battle_id, created_at)
        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, NULL, ?13)`,
     )
-    .bind(id, playerId, worldId, day.key, week.key, n, force.squad, JSON.stringify(force.units), seed, breakdown.score, JSON.stringify({...breakdown, rounds: result.rounds, notes: result.notes, benchmark}), result.outcome, now)
+    .bind(id, playerId, worldId, day.key, week.key, n, force.squad, JSON.stringify(force.units), seed, breakdown.score, JSON.stringify({...breakdown, ...stored}), result.outcome, now)
     .run();
   // Two taps at once: the UNIQUE (player, day, n) lets one through.
   if (!(inserted.meta.changes ?? 0)) return {ok: false, error: 'That attempt already went through. Refresh.'};
@@ -265,10 +238,9 @@ export async function makeAttempt(
       outcome: result.outcome,
       breakdown,
       units: force.units,
-      benchmark,
-      rounds: result.rounds,
-      notes: result.notes,
+      battle: stored,
       createdAt: now,
+      dayKey: day.key,
     },
     fieldCache,
     fullEngagement,
@@ -407,28 +379,9 @@ export async function arenaView(db: D1Database, playerId: string, worldId: numbe
       .all<AttemptRow>(),
     dailyBoard(db, worldId, day.key),
     weeklyStandings(db, worldId, week.key),
-    bestTaskForce(db, playerId, away, now),
+    arenaForce(db, playerId, away, now),
   ]);
-  const attempts = (mine.results ?? []).map((r) => {
-    let parsed: (ScoreBreakdown & {rounds?: unknown[]; notes?: string[]; benchmark?: CombatantSpec[]}) | null = null;
-    try {
-      parsed = JSON.parse(r.breakdown);
-    } catch {
-      parsed = null;
-    }
-    return {
-      id: r.id,
-      n: r.n,
-      squad: r.squad,
-      score: r.score,
-      outcome: r.outcome,
-      breakdown: parsed,
-      units: parseUnits(r.snapshot),
-      rounds: parsed?.rounds ?? [],
-      notes: parsed?.notes ?? [],
-      createdAt: r.created_at,
-    };
-  });
+  const attempts = (mine.results ?? []).map(parseAttempt);
   const weeklyRanked = weekly.map((s, i) => ({...s, rank: i + 1}));
   const myWeekly = weeklyRanked.find((s) => s.playerId === playerId) ?? null;
   const myDaily = daily.find((s) => s.playerId === playerId) ?? null;
@@ -444,8 +397,9 @@ export async function arenaView(db: D1Database, playerId: string, worldId: numbe
     closesAt: week.resetAt,
     attemptsUsed: attempts.length,
     attemptsPerDay: ARENA_ATTEMPTS_PER_DAY,
-    force: force ? {squad: force.squad, power: force.power, units: force.units.map((u) => ({assetId: u.assetId, level: u.level, slot: u.slot ?? 0}))} : null,
-    benchmark: {units: benchmarkView(benchmark), power: squadPowerOf(benchmark)},
+    force: force.ok ? {squad: ARENA_SYSTEMS_KEY, power: force.force.power, units: force.force.units.map((u) => ({assetId: u.assetId, level: u.level, slot: u.slot ?? 0}))} : null,
+    forceBlocked: force.ok ? null : force.error,
+    benchmark: {units: benchmarkView(benchmark), power: squadPowerOf(benchmark), hardpoints: wardenHardpoints(benchmark), name: WARDEN_NAME},
     attempts,
     daily: daily.map(({playerId: _p, ...r}) => r),
     myDaily: myDaily ? {rank: myDaily.rank, best: myDaily.best} : null,

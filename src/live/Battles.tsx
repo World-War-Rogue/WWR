@@ -7,16 +7,19 @@
  * cheaper before the resolver exists than after it has been written to fit
  * whatever the screen happened to render.
  */
-import {type ReactNode, useCallback, useEffect, useState} from 'react';
+import {type ReactNode, Suspense, lazy, useCallback, useEffect, useState} from 'react';
 import {taskForceName} from './taskForce';
 import {type MessageKey, t} from '../i18n';
-import {api, type ApiError, type RewardGrant} from '../net/api';
+import {api, type ApiError, type ArenaAttempt, type RewardGrant} from '../net/api';
+import ArenaReport from './ArenaReport';
+
+const ArenaBattle = lazy(() => import('./ArenaBattle'));
 import {describeReward} from '../../shared/season1Ops';
 import {formatClock, formatGameDate} from '../../shared/gametime';
 import type {BattleDetail, BattleSummary} from '../../shared/battles';
 import {verdictFor} from '../../shared/battles';
 
-type Scope = 'mine' | 'alliance' | 'rewards';
+type Scope = 'mine' | 'alliance' | 'arena' | 'rewards';
 
 // The relative-time phrases live in core: every screen that stamps something
 // with an age says it the same way, and a translator should only have to
@@ -283,6 +286,18 @@ function Detail({
   );
 }
 
+/** A reward source, in words. Every grant table source ends up here. */
+function sourceLabel(source: string): string {
+  if (source === 'daily-cache') return 'Daily Operations Cache';
+  if (source.startsWith('daily-lane:')) return `Daily Operations · ${source.slice('daily-lane:'.length)}`;
+  if (source.startsWith('exercise:')) return 'Map exercise';
+  if (source === 'arena-field-cache') return 'Arena Field Cache';
+  if (source === 'arena-full-engagement') return 'Arena Full Engagement';
+  if (source === 'arena-weekly-rank') return 'Arena weekly rank';
+  if (source === 'warfront-member') return 'Warfront member reward';
+  return source;
+}
+
 export default function Battles({onClose, account}: {onClose: () => void; account?: ReactNode}) {
   const [scope, setScope] = useState<Scope>('mine');
   const [list, setList] = useState<BattleSummary[] | null>(null);
@@ -290,10 +305,25 @@ export default function Battles({onClose, account}: {onClose: () => void; accoun
   const [error, setError] = useState<string | null>(null);
 
   const [grants, setGrants] = useState<RewardGrant[] | null>(null);
+  const [arena, setArena] = useState<ArenaAttempt[] | null>(null);
+  // An Arena report re-opened from here, and the replay behind it.
+  const [arenaOpen, setArenaOpen] = useState<{attempt: ArenaAttempt; watching: boolean} | null>(null);
 
   const load = useCallback(async (which: Scope) => {
     setList(null);
     setError(null);
+    if (which === 'arena') {
+      // Stored Arena attempts, whole: the report and the replay come from
+      // the same row, so a report opened here is the one the fight made.
+      try {
+        setArena((await api.arenaReports()).attempts);
+      } catch (e) {
+        setError((e as ApiError).message);
+        setArena([]);
+      }
+      setList([]);
+      return;
+    }
     if (which === 'rewards') {
       // Reward history straight from event_reward_grants: every Daily
       // Operations lane and Cache the server paid, with its grant id.
@@ -322,6 +352,20 @@ export default function Battles({onClose, account}: {onClose: () => void; accoun
   if (open) {
     return <Detail report={open.summary} detail={open.detail} onBack={() => setOpen(null)} />;
   }
+  if (arenaOpen) {
+    const a = arenaOpen.attempt;
+    return arenaOpen.watching ? (
+      <div className="h-full overflow-y-auto">
+        <Suspense fallback={<p className="p-4 text-sm text-neutral-500">Loading…</p>}>
+          <ArenaBattle attempt={a} onDone={() => setArenaOpen({attempt: a, watching: false})} />
+        </Suspense>
+      </div>
+    ) : (
+      <div className="h-full overflow-y-auto">
+        <ArenaReport attempt={a} onWatchAgain={a.battle ? () => setArenaOpen({attempt: a, watching: true}) : undefined} onClose={() => setArenaOpen(null)} />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -335,7 +379,7 @@ export default function Battles({onClose, account}: {onClose: () => void; accoun
         <h2 className="font-semibold text-neutral-100">{t('battles.title')}</h2>
         <div className="ml-auto flex items-center gap-1">
           {account}
-          {(['mine', 'alliance', 'rewards'] as const).map((which) => (
+          {(['mine', 'alliance', 'arena', 'rewards'] as const).map((which) => (
             <button
               key={which}
               onClick={() => setScope(which)}
@@ -345,7 +389,7 @@ export default function Battles({onClose, account}: {onClose: () => void; accoun
                   : 'border-neutral-700 text-neutral-400 hover:border-neutral-500'
               }`}
             >
-              {which === 'mine' ? t('battles.mine') : which === 'alliance' ? t('battles.alliance') : 'Rewards'}
+              {which === 'mine' ? t('battles.mine') : which === 'alliance' ? t('battles.alliance') : which === 'arena' ? 'Arena' : 'Rewards'}
             </button>
           ))}
         </div>
@@ -353,6 +397,35 @@ export default function Battles({onClose, account}: {onClose: () => void; accoun
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {error && <p className="px-3 py-4 text-sm text-red-300">{error}</p>}
+        {scope === 'arena' && arena !== null && (
+          arena.length === 0 ? (
+            <div className="px-3 py-8 text-center">
+              <p className="text-sm text-neutral-400">No Arena attempts yet.</p>
+              <p className="mt-1 text-xs text-neutral-600">Every attempt is stored whole: the report and the replay open from here.</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-neutral-900">
+              {arena.map((a) => (
+                <li key={a.id}>
+                  <button onClick={() => setArenaOpen({attempt: a, watching: false})} className="w-full px-3 py-2 text-left hover:bg-neutral-900/60">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className={`text-[12px] font-semibold ${a.outcome === 'attacker' ? 'text-emerald-300' : a.outcome === 'draw' ? 'text-neutral-300' : 'text-red-300'}`}>
+                        {a.outcome === 'attacker' ? 'Victory' : a.outcome === 'draw' ? 'Draw' : 'Defeat'} · vs {a.battle?.opponent ?? 'Dominion Warden'}
+                      </span>
+                      <span className="shrink-0 font-mono text-[10px] text-neutral-500">
+                        {formatGameDate(a.createdAt)} {formatClock(a.createdAt)} RST
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-neutral-400">
+                      Attempt {a.n} · score <span className="font-mono text-neutral-200">{a.score.toLocaleString()}</span> · {a.units.length} assets
+                      {a.battle ? ` · ${a.battle.events.length} shots` : ''}
+                    </p>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )
+        )}
         {scope === 'rewards' && grants !== null && (
           grants.length === 0 ? (
             <div className="px-3 py-8 text-center">
@@ -365,7 +438,7 @@ export default function Battles({onClose, account}: {onClose: () => void; accoun
                 <li key={g.id} className="px-3 py-2">
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="text-[12px] font-semibold text-neutral-200">
-                      {g.source === 'daily-cache' ? 'Daily Operations Cache' : g.source.startsWith('daily-lane:') ? `Daily Operations · ${g.source.slice('daily-lane:'.length)}` : g.source}
+                      {sourceLabel(g.source)}
                     </span>
                     <span className="shrink-0 font-mono text-[10px] text-neutral-500">
                       {formatGameDate(g.createdAt)} {formatClock(g.createdAt)} RST · wk {g.week}
@@ -380,10 +453,10 @@ export default function Battles({onClose, account}: {onClose: () => void; accoun
             </ul>
           )
         )}
-        {scope !== 'rewards' && list === null && !error && (
+        {scope !== 'rewards' && scope !== 'arena' && list === null && !error && (
           <p className="px-3 py-4 text-sm text-neutral-500">{t('battles.reading')}</p>
         )}
-        {scope !== 'rewards' && list?.length === 0 && !error && (
+        {scope !== 'rewards' && scope !== 'arena' && list?.length === 0 && !error && (
           <div className="px-3 py-8 text-center">
             <p className="text-sm text-neutral-400">{t('battles.none')}</p>
             <p className="mt-1 text-xs text-neutral-600">{t('battles.noneHint')}</p>

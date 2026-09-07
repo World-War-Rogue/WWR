@@ -20,7 +20,17 @@ import {
 import {type Split, defaultSplit, splitIsValid} from '../shared/economy';
 import {type Wallet, claimWallet, ledger, settleWallet} from './upgrades';
 
-export type SquadSystems = Record<SquadName, CombatSystems>;
+/**
+ * The Arena Squad has its own three lanes under this key: it fights as its
+ * own force, so it is fitted as its own force. Same rows, same prices.
+ */
+export const ARENA_SYSTEMS_KEY = 'Arena';
+export type SystemsKey = SquadName | typeof ARENA_SYSTEMS_KEY;
+export type SquadSystems = Record<SystemsKey, CombatSystems>;
+
+export function isSystemsKey(value: unknown): value is SystemsKey {
+  return value === ARENA_SYSTEMS_KEY || isSquadName(value);
+}
 
 interface Row {
   squad: string;
@@ -41,9 +51,9 @@ export async function readSystems(db: D1Database, playerId: string): Promise<Squ
     .prepare(`SELECT squad, fire_control, survivability, sustainment FROM squad_systems WHERE player_id = ?1`)
     .bind(playerId)
     .all<Row>();
-  const out = Object.fromEntries(SQUAD_NAMES.map((s) => [s, {...NO_SYSTEMS}])) as SquadSystems;
+  const out = Object.fromEntries([...SQUAD_NAMES, ARENA_SYSTEMS_KEY].map((s) => [s, {...NO_SYSTEMS}])) as SquadSystems;
   for (const r of rows.results ?? []) {
-    if (isSquadName(r.squad)) out[r.squad] = systemsFromRow(r);
+    if (isSystemsKey(r.squad)) out[r.squad] = systemsFromRow(r);
   }
   return out;
 }
@@ -71,7 +81,7 @@ export async function systemUp(
   /** The Command Center's ceiling (shared/buildings.ts rankCeiling). */
   ceiling = COMBAT_SYSTEM_MAX_LEVEL,
 ): Promise<SystemUpResult> {
-  if (!isSquadName(squad)) return {ok: false, error: 'No such Task Force.'};
+  if (!isSystemsKey(squad)) return {ok: false, error: 'No such Task Force.'};
   if (!Number.isInteger(target)) return {ok: false, error: 'Pick a level.'};
 
   await db
@@ -111,7 +121,7 @@ export async function systemUp(
       'combat-system',
       chosen,
       `${squad}:${lane}`,
-      `Task Force ${squad} ${LANE_LABEL[lane]} ${current} to ${target}`,
+      `${squad === ARENA_SYSTEMS_KEY ? 'Arena Squad' : `Task Force ${squad}`} ${LANE_LABEL[lane]} ${current} to ${target}`,
       now,
       wallet.rev,
     ),
