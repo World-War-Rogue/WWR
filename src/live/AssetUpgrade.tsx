@@ -26,7 +26,6 @@ import {
   type Asset,
   ASSET_MAX_LEVEL,
   ATTRIBUTE_MAX,
-  SEASON_GAIN,
   RANK_GROWTH,
   isMilestone,
   attributeAtLevel,
@@ -464,12 +463,7 @@ export default function AssetUpgrade({
           }
           note="Permanent, and the ceiling every package is measured against"
           explain={{
-            what:
-              `Raises all five attributes at once, by the same proportion — a ranked ` +
-              `${asset.name} is a better ${asset.name}, never a different one. It is also ` +
-              `the ceiling: no package can be fitted above the Service Rank, so this is ` +
-              `what unlocks the four below. Permanent, and the one thing a strip cannot ` +
-              `undo. A full season of ranks is worth ${SEASON_GAIN}x.`,
+            what: `Raises all five stats. Every 10th level is a milestone: a double step and new art. Permanent.`,
             gain:
               ccBlocked
                 ? `Held at the Command Center's level.`
@@ -513,12 +507,7 @@ export default function AssetUpgrade({
                   : ATTR_LABEL[PACKAGE_ATTRIBUTE[key]]
               }
               explain={{
-                what:
-                  `Specialises this asset: ${PACKAGE_LABEL[key]} adds to ` +
-                  `${ATTR_LABEL[PACKAGE_ATTRIBUTE[key]]} and nothing else. Added on top of ` +
-                  `the Service Rank rather than multiplied by it, so a point here is worth ` +
-                  `the same on a rank 1 asset as on a rank 10 one. Can be stripped later ` +
-                  `for a full refund in Command Credits.`,
+                what: `${PACKAGE_LABEL[key]} raises ${ATTR_LABEL[PACKAGE_ATTRIBUTE[key]]}. Can be stripped later for a full refund in Command Credits.`,
                 gain:
                   rank >= ceilingFor
                     ? `Blocked at Service Rank ${held.level}.`
