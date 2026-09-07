@@ -195,7 +195,7 @@ export const BOARD_BUILDINGS: readonly BoardBuilding[] = [
   },
   {
     id: 'garrison_barracks',
-    name: 'Garrison Barracks',
+    name: 'Arsenal',
     art: '/base/building-garrison-barracks.webp',
     draw: 'pedestal',
     fixed: false,

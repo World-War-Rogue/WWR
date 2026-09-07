@@ -31,7 +31,7 @@ export const GUIDE_STEPS: GuideStep[] = [
   {id: 16, say: 'Signals Center spots inbound attacks earlier and reveals only carried categories before a battle lands.', advance: 'open:building:signals_center', highlight: 'building:signals_center'},
   {id: 17, say: 'Bulk Fuel Point produces Fuel. Fuel powers construction and pays for vehicle-heavy asset builds.', advance: 'open:building:fuel_point', highlight: 'building:fuel_point'},
   {id: 18, say: 'Base Fabrication Shop produces Steel. Steel is the backbone of buildings, armour, and base growth.', advance: 'open:building:fabrication_shop', highlight: 'building:fabrication_shop'},
-  {id: 19, say: 'Garrison Barracks produces Munitions. Munitions pays for weapon systems and artillery construction.', advance: 'open:building:garrison_barracks', highlight: 'building:garrison_barracks'},
+  {id: 19, say: 'The Arsenal produces Munitions. Munitions pays for weapon systems and artillery construction.', advance: 'open:building:garrison_barracks', highlight: 'building:garrison_barracks'},
   {id: 20, say: 'Materials Recovery Yard produces Alloy. Alloy pays for advanced frames, electronics, and air assets.', advance: 'open:building:recovery_yard', highlight: 'building:recovery_yard'},
   {id: 21, say: 'Quartermaster Warehouse holds your stock, raises storage, and protects part of it from raids.', advance: 'open:building:quartermaster_warehouse', highlight: 'building:quartermaster_warehouse'},
   {id: 22, say: 'Engineer Support Yard shortens new building timers. At Level 10, hire the permanent Second Engineer Team.', advance: 'open:building:engineer_support_yard', highlight: 'building:engineer_support_yard'},
