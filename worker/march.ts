@@ -21,6 +21,7 @@ import {readSquads} from './squads';
 import {readBase} from './buildings';
 import {categoryBoost, marchMultiplier} from '../shared/buildings';
 import {readLevels} from './buildings';
+import {TASK_FORCE_UNLOCK, taskForceOpen} from '../shared/season';
 import {DRONE_WORDING, droneCount, droneNetworkMultiplier, isDrone, paceMobility} from '../shared/drones';
 
 export interface MarchRow {
@@ -223,6 +224,10 @@ export async function launch(
 
   const units = await unitsOf(db, attackerId, squad);
   if (units.length === 0) return {ok: false, error: `Task Force ${squad} is empty.`};
+  const levels = await readLevels(db, attackerId);
+  if (!taskForceOpen(squad, levels.command_center)) {
+    return {ok: false, error: `Task Force ${squad} opens at Command Center level ${TASK_FORCE_UNLOCK[squad]}.`};
+  }
   // Nothing leaves the base without a drone. DRONE RULES v1.
   if (droneCount(units.map((u) => u.assetId)) === 0) return {ok: false, error: DRONE_WORDING.needDrone};
 
@@ -249,7 +254,6 @@ export async function launch(
   const network = droneNetworkMultiplier(resolved.filter((r) => isDrone(r.id)));
   // The Tactical Operations Center speeds every march; the whole bonus is
   // capped at MARCH_TOTAL_CAP. BUILDING EFFECTS v1.
-  const levels = await readLevels(db, attackerId);
   const speed = paceMobility(resolved) * marchMultiplier(network, levels.tactical_operations_center);
   const seconds = marchSeconds(plotsBetween(from.x, from.y, to.x, to.y), speed);
   const arrivesAt = now + seconds * 1000;

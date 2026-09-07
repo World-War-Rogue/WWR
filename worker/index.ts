@@ -1305,6 +1305,7 @@ async function handleMove2(request: Request, env: Env, player: PlayerRow): Promi
     {squad: from.squad, slot: Number(from.slot)},
     {squad: to.squad, slot: Number(to.slot)},
     await marchingSquads(env.DB, player.id),
+    state.baseLevel,
   );
   if (!result.ok) return fail(409, result.error);
   return handleSquads(env, player);
@@ -1333,6 +1334,7 @@ async function handleAssign(request: Request, env: Env, player: PlayerRow): Prom
     slot,
     assetId,
     await marchingSquads(env.DB, player.id),
+    state.baseLevel,
   );
   if (!result.ok) return fail(409, result.error);
 

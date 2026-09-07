@@ -17,6 +17,8 @@ import ForcesTabs from './ForcesTabs';
 import {type BaseLevelsView, type OwnedAsset, type Wallet, api} from '../net/api';
 import BuildingPanel from './BuildingPanel';
 import {HUB_OF_CATEGORY, categoryBoost, rankCeiling} from '../../shared/buildings';
+import {NO_PACKAGES} from '../../shared/upgrades';
+import {seasonWeek, unlockWeekOf} from '../../shared/season';
 import {t} from '../i18n';
 import {taskForceName} from './taskForce';
 import {
@@ -86,30 +88,51 @@ function Bars({asset}: {asset: Asset}) {
   );
 }
 
+/** The overlay text for an asset the player does not hold, or null. */
+export function unlockLabel(assetId: string, now: number): string | null {
+  const week = unlockWeekOf(assetId);
+  if (week === null) return 'Coastal season';
+  return seasonWeek(now) >= week ? `Unlocked week ${week} · construction coming` : `Unlocks week ${week}`;
+}
+
 function Card({
   asset,
   squad,
   held,
   onUpgrade,
+  onView,
 }: {
   asset: Asset;
   squad: string | null;
   held: OwnedAsset | null;
   onUpgrade: (() => void) | null;
+  /** For an asset not held: open it to look, not to buy. */
+  onView: (() => void) | null;
 }) {
+  const lock = held ? null : unlockLabel(asset.id, Date.now());
   const counters = counterWeb(asset.category);
   const fitted = held
     ? PACKAGE_KEYS.reduce((n, k) => n + (held.packages[k] > 1 ? 1 : 0), 0)
     : 0;
   return (
     <article
-      className={`rounded border p-3 ${
+      onClick={!held && onView ? onView : undefined}
+      className={`relative rounded border p-3 ${
         asset.draftable === false
           ? 'border-neutral-900 bg-neutral-950/60 opacity-70'
-          : 'border-neutral-800 bg-neutral-950'
+          : held
+            ? 'border-neutral-800 bg-neutral-950'
+            : 'cursor-pointer border-neutral-900 bg-neutral-950/70 hover:border-neutral-700'
       }`}
     >
-      <div className="flex items-start gap-2">
+      {lock && (
+        // The overlay: the asset is visible in full underneath, and this is
+        // the one thing that says why it cannot be used yet.
+        <span className="pointer-events-none absolute right-2 top-2 z-10 rounded border border-orange-800/70 bg-neutral-950/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-orange-300">
+          {lock}
+        </span>
+      )}
+      <div className={`flex items-start gap-2 ${lock ? 'opacity-60' : ''}`}>
         {/*
           The asset at its current stage, when it has art; the silhouette
           icon until then. Sized so the card stays a card - the upgrade sheet
@@ -325,6 +348,7 @@ export default function Assets({
                 squad={placed.get(asset.id) ?? null}
                 held={roster.get(asset.id) ?? null}
                 onUpgrade={wallet ? () => setUpgrading(asset.id) : null}
+                onView={wallet ? () => setUpgrading(asset.id) : null}
               />
             </div>
           ))}
@@ -334,10 +358,11 @@ export default function Assets({
         )}
       </div>
 
-      {upgrading && wallet && roster.get(upgrading) && ASSET_BY_ID[upgrading] && (
+      {upgrading && wallet && ASSET_BY_ID[upgrading] && (
         <AssetUpgrade
           asset={ASSET_BY_ID[upgrading]}
-          held={roster.get(upgrading)!}
+          held={roster.get(upgrading) ?? {assetId: upgrading, level: 1, packages: NO_PACKAGES, packageCredits: 0}}
+          locked={roster.get(upgrading) ? null : unlockLabel(upgrading, Date.now())}
           wallet={wallet}
           boost={base ? categoryBoost(base.levels, ASSET_BY_ID[upgrading].category) : 1}
           rankCeiling={base ? rankCeiling(base.levels) : undefined}

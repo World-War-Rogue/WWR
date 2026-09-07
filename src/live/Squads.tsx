@@ -28,6 +28,7 @@ import {ApiError, type SquadView, api} from '../net/api';
 import {attributesWith} from '../../shared/upgrades';
 import {categoryBoost} from '../../shared/buildings';
 import {DRONE_WORDING, droneNetworkMultiplier, isDrone} from '../../shared/drones';
+import {TASK_FORCE_UNLOCK, taskForceOpen} from '../../shared/season';
 import AssetIcon from './AssetIcon';
 import ForcesTabs from './ForcesTabs';
 import {t} from '../i18n';
@@ -350,6 +351,8 @@ export default function Squads({
                 const used = view.lift.used[name] ?? 0;
                 const filled = (view.squads[name] ?? []).filter(Boolean).length;
                 const out = away.has(name);
+                // Bravo, Charlie and Delta open with the Command Center (5/15/25).
+                const lockedAt = taskForceOpen(name, view.base.levels.command_center) ? null : TASK_FORCE_UNLOCK[name];
                 // The Drone Network: what the drones aboard do to the march and
                 // the armour, from their real stats (rank, packages, building).
                 const droneIds = (view.squads[name] ?? []).filter((id): id is string => !!id && isDrone(id));
@@ -365,6 +368,19 @@ export default function Squads({
                     return {id, mobility: a.mobility, detection: a.detection};
                   }),
                 );
+                if (lockedAt !== null) {
+                  return (
+                    <section
+                      key={name}
+                      className="rounded border border-dashed border-neutral-800 bg-neutral-950/60 p-3"
+                    >
+                      <h3 className="text-sm font-semibold text-neutral-400">{taskForceName(name)}</h3>
+                      <p className="mt-1 text-[11px] text-neutral-500">
+                        Opens at Command Center level {lockedAt}.
+                      </p>
+                    </section>
+                  );
+                }
                 return (
                   <section
                     key={name}

@@ -154,6 +154,7 @@ export default function AssetUpgrade({
   onChanged,
   boost = 1,
   rankCeiling,
+  locked = null,
 }: {
   asset: Asset;
   held: OwnedAsset;
@@ -164,8 +165,12 @@ export default function AssetUpgrade({
   boost?: number;
   /** The Command Center's ceiling on rank. Absent means only the season caps. */
   rankCeiling?: number;
+  /** Set when the asset is not the player's yet: everything shows, nothing buys. */
+  locked?: string | null;
 }) {
-  const [busy, setBusy] = useState(false);
+  // A locked asset is looked at, never bought: every button is held busy.
+  const [busyState, setBusy] = useState(false);
+  const busy = busyState || locked !== null;
   const [error, setError] = useState<string | null>(null);
 
   const seasonCap = Math.min(ASSET_MAX_LEVEL, maxRankForSeason(SEASON));
@@ -251,6 +256,11 @@ export default function AssetUpgrade({
             ✕
           </button>
         </div>
+        {locked && (
+          <p className="mt-3 rounded border border-orange-900/60 bg-orange-950/20 px-3 py-2 text-xs text-orange-200">
+            {locked} · viewing only. It cannot be placed in a Task Force or upgraded until then.
+          </p>
+        )}
 
         {/*
           The asset as it looks at this rank, and when it next changes. The

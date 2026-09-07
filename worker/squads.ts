@@ -27,13 +27,13 @@
  */
 import {
   ASSET_BY_ID,
-  DRAFTABLE,
   SQUAD_NAMES,
   SQUAD_SLOTS,
   type SquadName,
 } from '../shared/assets';
 import {type Packages, assetPowerWith, packagesFromRow} from '../shared/upgrades';
 import {type BuildingLevels, NO_BUILDINGS, categoryBoost} from '../shared/buildings';
+import {STARTER_ASSETS, TASK_FORCE_UNLOCK, taskForceOpen} from '../shared/season';
 
 export interface OwnedAsset {
   assetId: string;
@@ -91,16 +91,27 @@ export async function ensureRoster(
   const existing = await db.prepare(ROSTER_SQL).bind(playerId).all<AssetRow>();
   if ((existing.results ?? []).length > 0) return owned(existing.results ?? []);
 
-  await db.batch(
-    DRAFTABLE.map((asset) =>
+  // A fresh player: the six starters at rank 1, already in Task Force Alpha
+  // slots 0-5 in the schedule's order, so the first thing they can do is
+  // march. Everything else arrives by the week (shared/season.ts).
+  await db.batch([
+    ...STARTER_ASSETS.map((assetId) =>
       db
         .prepare(
           `INSERT INTO player_assets (player_id, asset_id, level, acquired_at)
            VALUES (?1, ?2, 1, ?3) ON CONFLICT DO NOTHING`,
         )
-        .bind(playerId, asset.id, now),
+        .bind(playerId, assetId, now),
     ),
-  );
+    ...STARTER_ASSETS.map((assetId, slot) =>
+      db
+        .prepare(
+          `INSERT INTO squad_slots (player_id, squad, slot, asset_id)
+           VALUES (?1, 'Alpha', ?2, ?3) ON CONFLICT DO NOTHING`,
+        )
+        .bind(playerId, slot, assetId),
+    ),
+  ]);
 
   const after = await db.prepare(ROSTER_SQL).bind(playerId).all<AssetRow>();
   return owned(after.results ?? []);
@@ -150,8 +161,12 @@ export async function assignSlot(
   slot: number,
   assetId: string | null,
   away: Set<string>,
+  commandCenter: number,
 ): Promise<AssignResult> {
   if (slot < 0 || slot >= SQUAD_SLOTS) return {ok: false, error: 'No such slot.'};
+  if (!taskForceOpen(squad, commandCenter)) {
+    return {ok: false, error: `Task Force ${squad} opens at Command Center level ${TASK_FORCE_UNLOCK[squad]}.`};
+  }
   if (away.has(squad)) return {ok: false, error: `Task Force ${squad} is out. Bring it home first.`};
 
   if (assetId === null) {
@@ -255,9 +270,15 @@ export async function moveSlot(
   from: {squad: SquadName; slot: number},
   to: {squad: SquadName; slot: number},
   away: Set<string>,
+  commandCenter: number,
 ): Promise<AssignResult> {
   if (from.slot < 0 || from.slot >= SQUAD_SLOTS) return {ok: false, error: 'No such slot.'};
   if (to.slot < 0 || to.slot >= SQUAD_SLOTS) return {ok: false, error: 'No such slot.'};
+  for (const name of [from.squad, to.squad]) {
+    if (!taskForceOpen(name, commandCenter)) {
+      return {ok: false, error: `Task Force ${name} opens at Command Center level ${TASK_FORCE_UNLOCK[name]}.`};
+    }
+  }
   // Both ends. A swap edits two squads, so one of them being in the field is
   // enough to refuse the whole move.
   for (const name of [from.squad, to.squad]) {
