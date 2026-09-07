@@ -18,7 +18,7 @@ import {useBase, useSeason} from './useBase';
 import ShieldPanel from './ShieldPanel';
 // A separate download: most sessions never open the Trade Post.
 const TradePost = lazy(() => import('./TradePost'));
-import {type LevelledBuilding, LEVELLED_BUILDINGS, PRODUCER_OF, RESOURCE_KINDS, isLevelledBuilding} from '../../shared/buildings';
+import {type LevelledBuilding, PRODUCER_OF, RESOURCE_KINDS, isLevelledBuilding} from '../../shared/buildings';
 import {type MessageKey, t} from '../i18n';
 import {
   type BaseView,
@@ -103,17 +103,14 @@ export function CommandCenterSheet({
   /** Open another building's sheet (a blocked upgrade's way out). */
   onGoTo?: (where: LevelledBuilding) => void;
 }) {
-  const [tab, setTab] = useState<'departments' | 'protection' | 'events' | 'wars' | 'trade' | 'profile'>('departments');
+  // Ruling 2026-09-07: the Command Center holds its own upgrade and the
+  // player's profile, and nothing else. Shields and the Trade Post live in
+  // the Depot; Events and Wars open from the Tactical Operations Center.
+  const [tab, setTab] = useState<'upgrade' | 'profile'>('upgrade');
   // Base levels v2: the Command Center's own level. Read when the sheet opens.
   const [levels, setLevels] = useBase();
-  const [season1, setSeason1] = useSeason();
   const tabs = [
-    {key: 'departments', label: t('cc.departments')},
-    {key: 'protection', label: 'Protection'},
-    {key: 'events', label: t('cc.events')},
-    {key: 'wars', label: t('cc.wars')},
-    // The Trade Post is a door, not a department: no level, no upgrade.
-    {key: 'trade', label: t('cc.tradePost')},
+    {key: 'upgrade', label: t('cc.title')},
     {key: 'profile', label: t('cc.profile')},
   ] as const;
 
@@ -125,73 +122,29 @@ export function CommandCenterSheet({
       onTab={(k) => setTab(k as typeof tab)}
       onClose={onClose}
     >
-      {tab === 'protection' &&
-        (season1 && levels ? (
-          <ShieldPanel
-            season1={season1}
-            wallet={levels.wallet}
-            onChanged={(next, wallet) => {
-              setSeason1(next);
-              setLevels({...levels, wallet});
-            }}
-          />
+      {tab === 'profile' && profile}
+      {tab === 'upgrade' &&
+        (levels ? (
+          <div className="space-y-3">
+            <BuildingPanel building="command_center" base={levels} onChanged={setLevels} onGoTo={onGoTo} />
+            <p className="text-[11px] text-neutral-600">{t('cc.capNote')}</p>
+          </div>
         ) : (
           <Soon text="Reading…" />
         ))}
-      {tab === 'events' && <DailyOperations />}
-      {tab === 'wars' && <Soon text={t('cc.warsSoon')} />}
-      {tab === 'trade' && (
-        <Suspense fallback={<Soon text="Loading…" />}>
-          <TradePost
-            onWallet={(wallet) => {
-              // A purchase moved the wallet; the Departments tab shows it too.
-              if (levels) setLevels({...levels, wallet});
-            }}
-          />
-        </Suspense>
-      )}
-      {tab === 'profile' && profile}
-      {tab === 'departments' && (
-        <>
-          {levels && (
-            <div className="mb-4">
-              <BuildingPanel building="command_center" base={levels} onChanged={setLevels} onGoTo={onGoTo} />
-            </div>
-          )}
-          {levels && (
-            <div className="space-y-1">
-              {LEVELLED_BUILDINGS.filter((b) => b !== 'command_center').map((b) => {
-                const job = levels.jobs.find((j) => j.building === b);
-                return (
-                  <div
-                    key={b}
-                    className="flex items-center justify-between rounded border border-neutral-800 bg-neutral-900/40 px-3 py-1.5 text-xs"
-                  >
-                    <span className="text-neutral-200">{t(`building.${b}` as MessageKey)}</span>
-                    <span className="font-mono text-neutral-400">
-                      {job ? <span className="text-orange-300">→ {job.toLevel} </span> : null}
-                      Lv {levels.levels[b]}
-                    </span>
-                  </div>
-                );
-              })}
-              <p className="pt-2 text-[11px] text-neutral-600">
-                Open a building on the base to upgrade it. Nothing can stand above the Command Center.
-              </p>
-            </div>
-          )}
-        </>
-      )}
     </Sheet>
   );
 }
 
 export function DepotSheet({onClose, onCustomise, onGoTo}: {onClose: () => void; onCustomise: () => void; onGoTo?: (where: LevelledBuilding) => void}) {
-  const [tab, setTab] = useState<'supplies' | 'modules' | 'cosmetics' | 'services'>('supplies');
+  const [tab, setTab] = useState<'supplies' | 'trade' | 'modules' | 'cosmetics' | 'services'>('supplies');
   const [base, setBase] = useBase();
   const [season1, setSeason1] = useSeason();
   const tabs = [
     {key: 'supplies', label: t('depot.supplies')},
+    // The Trade Post lives in the Depot (ruling 2026-09-07): a store shelf,
+    // not a department - no level, no upgrade.
+    {key: 'trade', label: t('cc.tradePost')},
     {key: 'modules', label: t('depot.modules')},
     {key: 'cosmetics', label: t('depot.cosmetics')},
     {key: 'services', label: t('depot.services')},
@@ -213,6 +166,15 @@ export function DepotSheet({onClose, onCustomise, onGoTo}: {onClose: () => void;
         ) : (
           <Soon text={t('depot.suppliesSoon')} />
         ))}
+      {tab === 'trade' && (
+        <Suspense fallback={<Soon text="Loading…" />}>
+          <TradePost
+            onWallet={(wallet) => {
+              if (base) setBase({...base, wallet});
+            }}
+          />
+        </Suspense>
+      )}
       {tab === 'modules' && <Soon text={t('depot.modulesSoon')} />}
       {tab === 'cosmetics' && (
         <>
@@ -231,7 +193,6 @@ export function DepotSheet({onClose, onCustomise, onGoTo}: {onClose: () => void;
             <ShieldPanel
               season1={season1}
               wallet={base.wallet}
-              paidOnly
               onChanged={(next, wallet) => {
                 setSeason1(next);
                 setBase({...base, wallet});
@@ -251,9 +212,22 @@ export function DepartmentSheet({id, onClose, onGoTo}: {id: string; onClose: () 
   const blurb = t(`blurb.${id}` as MessageKey);
   const [base, setBase] = useBase();
   const levelled = isLevelledBuilding(id) ? id : null;
+  // The Tactical Operations Center is where operations are run from: Events
+  // (Daily Operations today; Arena and Warfront when they exist) and, once
+  // built, Wars.
+  const toc = id === 'tactical_operations_center';
+  // Wars gets its tab here the day it exists; nothing is teased before then.
+  const [tab, setTab] = useState<'about' | 'events'>(toc ? 'events' : 'about');
+  const tabs = toc
+    ? ([
+        {key: 'events', label: t('cc.events')},
+        {key: 'about', label: 'Building'},
+      ] as const)
+    : ([{key: 'about', label: 'Building'}] as const);
   return (
-    <Sheet title={name} tabs={[{key: 'about', label: 'Building'}]} active="about" onTab={() => undefined} onClose={onClose}>
-      {levelled && base ? (
+    <Sheet title={name} tabs={tabs} active={tab} onTab={(k) => setTab(k as typeof tab)} onClose={onClose}>
+      {tab === 'events' && <DailyOperations />}
+      {tab !== 'about' ? null : levelled && base ? (
         <div className="space-y-3">
           <BuildingPanel building={levelled} base={base} onChanged={setBase} onGoTo={onGoTo} />
           {levelled === 'quartermaster_warehouse' && <StockPanel base={base} />}
