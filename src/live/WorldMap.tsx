@@ -573,6 +573,10 @@ export default function WorldMap({
   const [view, setView] = useState<WorldView | null>(null);
   const [selected, setSelected] = useState<{x: number; y: number} | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // True only while the map's own reload is failing and will retry. A refusal
+  // from an action ("Add a Drone to deploy…") is final and must not say
+  // "Retrying…" after it - a player who reads that waits for nothing.
+  const [retrying, setRetrying] = useState(false);
   const [moving, setMoving] = useState(false);
   const [rallying, setRallying] = useState(false);
   /** The plot an attack is being aimed at, while a squad is chosen. */
@@ -648,9 +652,11 @@ export default function WorldMap({
       noteServerTime(next.serverTime);
       setView(next);
       setError(null);
+      setRetrying(false);
       failuresRef.current = 0;
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not reach the server.');
+      setRetrying(true);
       // Ask to be run again. Without this the map only ever reloads when the
       // camera moves, so a load that fails while nobody is touching anything -
       // every deploy does exactly that to every open tab - leaves the map
@@ -1174,6 +1180,7 @@ export default function WorldMap({
       setSelected(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not reach the server.');
+      setRetrying(false);
     } finally {
       setMoving(false);
     }
@@ -1190,6 +1197,7 @@ export default function WorldMap({
       setSelected(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not reach the server.');
+      setRetrying(false);
     } finally {
       setRallying(false);
     }
@@ -1211,6 +1219,7 @@ export default function WorldMap({
       setSelected(null);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not reach the server.');
+      setRetrying(false);
     } finally {
       setRallying(false);
     }
@@ -1255,6 +1264,7 @@ export default function WorldMap({
       await load(camera, w, h);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not reach the server.');
+      setRetrying(false);
     } finally {
       setSending(false);
     }
@@ -1289,6 +1299,7 @@ export default function WorldMap({
       await load(camera, w, h);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not reach the server.');
+      setRetrying(false);
     } finally {
       setRecalling(null);
     }
@@ -1446,7 +1457,7 @@ export default function WorldMap({
         {error && (
           <div className="pointer-events-auto rounded border border-red-900 bg-red-950/80 px-3 py-2 text-sm text-red-200 backdrop-blur">
             {error}
-            <span className="ml-2 text-red-400/70">{t('map.retrying')}</span>
+            {retrying && <span className="ml-2 text-red-400/70">{t('map.retrying')}</span>}
           </div>
         )}
 

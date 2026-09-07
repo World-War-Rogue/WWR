@@ -133,7 +133,7 @@ export default function BaseBoard({
     return m;
   }, [base.placements]);
 
-  const ccLevel = base.buildings.find((b) => b.kind === 'command_post')?.level ?? 0;
+  const ccLevel = base.baseLevel;
 
   async function move(buildingId: string, padId: string) {
     setNote(null);

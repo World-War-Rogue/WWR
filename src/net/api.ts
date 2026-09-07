@@ -142,6 +142,8 @@ export interface BaseView {
   resources: Resources;
   productionPerHour: Resources;
   storageCap: number;
+  /** The Command Center's level - the Base Level. */
+  baseLevel: number;
   justCompleted: {kind: string; level: number} | null;
   buildings: BuildingView[];
   job: {kind: string; toLevel: number; startedAt: number; completesAt: number} | null;

@@ -23,6 +23,7 @@ export const BASE = {
   'blurb.quartermaster_warehouse': 'Raises the storage cap and protects what is stored from raids.',
   'blurb.engineer_support_yard': 'Faster construction. The build queue will live here.',
   'blurb.alliance_trading_post': 'Private barter between members of the same alliance, once forty-eight hours in.',
+  'blurb.depot': 'The store. Supplies, Modules, Cosmetics and Services. Resources are bought here.',
   'department.soon': 'Under design',
   'department.soonBody': 'This building is on the base; what it does is still being designed. Its numbers arrive with the building brief.',
   'building.armour_hub': 'Armour Building',

@@ -302,8 +302,9 @@ async function settleAndLoad(env: Env, playerId: string, now: number) {
   const resources = v2.resources;
   const rate = v2.productionPerHour;
   const cap = v2.storageCap;
+  const baseLevel = v2.levels.command_center;
 
-  return {base, levels, resources, rate, cap, job, completedJob};
+  return {base, levels, resources, rate, cap, job, completedJob, baseLevel};
 }
 
 function baseView(state: NonNullable<Awaited<ReturnType<typeof settleAndLoad>>>, now: number) {
@@ -316,6 +317,8 @@ function baseView(state: NonNullable<Awaited<ReturnType<typeof settleAndLoad>>>,
     resources: state.resources,
     productionPerHour: state.rate,
     storageCap: state.cap,
+    /** The Command Center's level (base levels v2) - the Base Level. */
+    baseLevel: state.baseLevel,
     justCompleted: state.completedJob,
     buildings: BUILDING_KINDS.map((kind) => {
       const level = state.levels[kind];
