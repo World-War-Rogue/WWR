@@ -287,10 +287,13 @@ function Card({
 export default function Assets({
   onClose,
   onShowSquads,
+  onGoTo,
   only = null,
 }: {
   onClose: () => void;
   onShowSquads: () => void;
+  /** Leave the catalogue for the building blocking an upgrade. */
+  onGoTo?: (where: 'command_center') => void;
   /**
    * Opened from a category building on the base board: one category, and the
    * category bar is hidden, because the building IS the category. The player
@@ -488,6 +491,10 @@ export default function Assets({
           boost={base ? categoryBoost(base.levels, ASSET_BY_ID[upgrading].category) : 1}
           rankCeiling={base ? rankCeiling(base.levels) : undefined}
           onClose={() => setUpgrading(null)}
+          onGoTo={onGoTo ? (where) => {
+            setUpgrading(null);
+            onGoTo(where);
+          } : undefined}
           onChanged={(nextWallet, nextHeld) => {
             setWallet(nextWallet);
             setRoster((current) => new Map(current).set(nextHeld.assetId, nextHeld));

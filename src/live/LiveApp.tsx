@@ -492,6 +492,11 @@ export default function LiveApp() {
               setAssetOnly(null);
               setScreen('squads');
             }}
+            onGoTo={(where) => {
+              setAssetOnly(null);
+              setScreen('base');
+              setSheet(where);
+            }}
           />
           </Suspense>
         </div>

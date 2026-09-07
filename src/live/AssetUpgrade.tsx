@@ -75,6 +75,7 @@ function Track({
   cost,
   affordable,
   reason,
+  action,
   busy,
   onBuy,
   note,
@@ -87,6 +88,11 @@ function Track({
   cost: number;
   affordable: boolean;
   reason: string | null;
+  /**
+   * Where to go to clear `reason`, when there is somewhere to go. A blocked
+   * upgrade that only says why is a dead end; this is the way out of it.
+   */
+  action?: {label: string; go: () => void} | null;
   busy: boolean;
   onBuy: () => void;
   note?: string;
@@ -117,7 +123,19 @@ function Track({
             </button>
           </p>
           {note && <p className="text-[10px] text-neutral-600">{note}</p>}
-          {reason && <p className="text-[10px] text-amber-500/80">{reason}</p>}
+          {reason && (
+            <p className="text-[10px] text-amber-500/80">
+              {reason}
+              {action && (
+                <button
+                  onClick={action.go}
+                  className="ml-2 rounded border border-amber-700/70 px-1.5 py-px text-[10px] font-semibold text-amber-300 hover:border-amber-400 hover:text-amber-100"
+                >
+                  {action.label} ›
+                </button>
+              )}
+            </p>
+          )}
         </div>
         <button
           onClick={() => setConfirming(true)}
@@ -188,12 +206,15 @@ export default function AssetUpgrade({
   boost = 1,
   rankCeiling,
   locked = null,
+  onGoTo,
 }: {
   asset: Asset;
   held: OwnedAsset;
   wallet: Wallet;
   onClose: () => void;
   onChanged: (wallet: Wallet, held: OwnedAsset) => void;
+  /** Leave this dialog for the building that is blocking an upgrade. */
+  onGoTo?: (where: 'command_center') => void;
   /** The category building's boost, so the numbers here match the fight. */
   boost?: number;
   /** The Command Center's ceiling on rank. Absent means only the season caps. */
@@ -282,6 +303,12 @@ export default function AssetUpgrade({
 
   const rankStep = rankCost(held.level, held.level + 1);
   const canAfford = (cost: number) => wallet.credits + wallet.tokens >= cost;
+  /**
+   * The exact shortfall, in words. "Not enough" told the player nothing they
+   * could act on; the number and where the two currencies come from do.
+   */
+  const shortBy = (cost: number) =>
+    `Need ${(cost - wallet.credits - wallet.tokens).toLocaleString()} more. Command Credits are earned by playing; Tokens are bought.`;
 
   // Tap the dark outside the sheet, or press Escape, to close it.
   useEffect(() => {
@@ -462,9 +489,10 @@ export default function AssetUpgrade({
               : held.level >= cap
               ? `Season ${SEASON} caps this at ${cap}`
               : !canAfford(rankStep)
-                ? 'Not enough to cover that'
+                ? shortBy(rankStep)
                 : null
           }
+          action={ccBlocked && onGoTo ? {label: 'Go to Command Center', go: () => onGoTo('command_center')} : null}
           note="Permanent, and the ceiling every package is measured against"
           explain={{
             what: `Raises all five stats. Every 10th level is a milestone: a double step and new art. Permanent.`,
@@ -500,9 +528,9 @@ export default function AssetUpgrade({
               affordable={canAfford(cost)}
               reason={
                 rank >= ceilingFor
-                  ? `Raise Service Rank past ${held.level} first`
+                  ? `Raise Service Rank past ${held.level} first (the Service Rank row above)`
                   : !canAfford(cost)
-                    ? 'Not enough to cover that'
+                    ? shortBy(cost)
                     : null
               }
               note={
