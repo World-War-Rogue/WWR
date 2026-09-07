@@ -47,6 +47,8 @@
   // `npx wrangler deploy --env test`; migrate with
   // `npx wrangler d1 migrations apply wwr-test-db --remote --env test`.
   // Bindings do not inherit between environments, so every one is repeated.
+  // Do NOT let `wrangler d1 create` add a binding at the top level: that
+  // attaches the test database to the live Worker.
   "env": {
     "test": {
       "name": "wwr-test",
@@ -54,7 +56,7 @@
         {
           "binding": "DB",
           "database_name": "wwr-test-db",
-          "database_id": "REPLACE-WITH-THE-ID-FROM-wrangler-d1-create"
+          "database_id": "d8760390-d447-4077-a68f-c9409d1e8416"
         }
       ],
       "ai": {"binding": "AI"},
