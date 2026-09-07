@@ -27,6 +27,8 @@ import {
   ASSET_MAX_LEVEL,
   ATTRIBUTE_MAX,
   SEASON_GAIN,
+  RANK_GROWTH,
+  isMilestone,
   attributeAtLevel,
   maxRankForSeason,
 } from '../../shared/assets';
@@ -188,7 +190,6 @@ function Track({
   );
 }
 
-const STAGE_LABEL: Record<number, number> = {1: 1, 10: 2, 20: 3, 30: 4, 40: 5, 50: 6};
 
 export default function AssetUpgrade({
   asset,
@@ -334,10 +335,10 @@ export default function AssetUpgrade({
                     decoding="async"
                     className="h-28 w-28 object-contain"
                   />
-                  <p className="mt-1 text-xs text-neutral-200">
-                    Stage {STAGE_LABEL[now]} of 6
+                  <p className="mt-1 text-xs text-neutral-200">Level {held.level}</p>
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-500">
+                    {now === held.level && held.level > 1 ? 'Milestone' : 'Now'}
                   </p>
-                  <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-500">Now</p>
                 </div>
                 {next ? (
                   <>
@@ -357,18 +358,18 @@ export default function AssetUpgrade({
                           Classified
                         </div>
                       )}
-                      <p className="mt-1 text-xs text-neutral-200">
-                        Stage {STAGE_LABEL[next]} of 6
-                      </p>
-                      <p className="text-[10px] uppercase tracking-[0.2em] text-orange-400">
-                        At Service Rank {next}
-                      </p>
+                      <p className="mt-1 text-xs text-neutral-200">Level {next}</p>
+                      <p className="text-[10px] uppercase tracking-[0.2em] text-orange-400">Next milestone</p>
                     </div>
                   </>
                 ) : (
                   <p className="text-xs text-neutral-400">Final form.</p>
                 )}
               </div>
+              <p className="mt-2 text-center text-[10px] text-neutral-500">
+                Every 10th level is a milestone: a double step on all five stats
+                (+{Math.round((RANK_GROWTH * RANK_GROWTH - 1) * 1000) / 10}% instead of +{Math.round((RANK_GROWTH - 1) * 1000) / 10}%) and new art.
+              </p>
               <div className="mt-2 flex justify-center gap-1">
                 {([1, 10, 20, 30, 40, 50] as const).map((r) => (
                   <span
@@ -474,8 +475,8 @@ export default function AssetUpgrade({
                 ? `Held at the Command Center's level.`
                 : held.level >= cap
                 ? `At the Season ${SEASON} cap.`
-                : `+${rankGain.toFixed(1)} points across all five, and raises every package ` +
-                  `ceiling to ${held.level + 1}.`,
+                : `${isMilestone(held.level + 1) ? `Milestone: double step. ` : ''}+${rankGain.toFixed(1)} points across all five, and raises every package ` +
+                  `ceiling to ${held.level + 1}.${isMilestone(held.level + 1) ? ' New art.' : ''}`,
           }}
           busy={busy}
           onBuy={() => void run(() => api.rankUp(held.assetId, held.level + 1))}

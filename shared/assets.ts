@@ -1152,8 +1152,26 @@ export function milli(value: number): number {
   return Math.round(value * STAT_PRECISION) / STAT_PRECISION;
 }
 
+/**
+ * Milestones. Every tenth rank - 10, 20, 30, 40, 50 - is a double step: the
+ * asset gains two RANK_GROWTH steps instead of one on every attribute, and
+ * its art changes. Owner's decision, 2026-09-07: a milestone should feel
+ * like more than another +4.5%.
+ */
+export const MILESTONE_EVERY = 10;
+export function milestonesReached(level: number): number {
+  return Math.floor(Math.max(0, level) / MILESTONE_EVERY);
+}
+export function isMilestone(level: number): boolean {
+  return level > 0 && level % MILESTONE_EVERY === 0;
+}
+/** What one rank step is worth: a double step on a milestone. */
+export function rankStepGain(toLevel: number): number {
+  return isMilestone(toLevel) ? RANK_GROWTH ** 2 : RANK_GROWTH;
+}
+
 export function attributeAtLevel(base: number, level: number): number {
-  return milli(base * RANK_GROWTH ** (level - 1));
+  return milli(base * RANK_GROWTH ** (level - 1 + milestonesReached(level)));
 }
 
 /** Power contributed by one asset at one level. What a squad is compared on. */
