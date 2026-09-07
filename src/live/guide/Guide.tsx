@@ -1,5 +1,5 @@
 /**
- * Admiral Rider: the portrait above the chat bar and the speech bubble
+ * General Rider: the portrait above the chat bar and the speech bubble
  * beside it. Reads the player's saved place, advances on the script's
  * events, saves every step, and plays a building's line when one is opened
  * out of order. Off when Settings says so; tips only once the walkthrough
@@ -110,14 +110,14 @@ export default function Guide() {
         <button
           onClick={() => setCollapsed((c) => !c)}
           className="pointer-events-auto h-12 w-12 shrink-0 overflow-hidden rounded-full border-2 border-cyan-400/80 bg-neutral-950 shadow-lg"
-          title="Admiral Rider"
+          title="General Rider"
         >
-          <img src="/guide/rider-portrait.webp" alt="Admiral Rider" className="h-full w-full object-cover" draggable={false} />
+          <img src="/guide/rider-portrait.webp" alt="General Rider" className="h-full w-full object-cover" draggable={false} />
         </button>
         {folded ? null : (
         <div className="pointer-events-auto max-w-md flex-1 rounded-lg border border-cyan-800/70 bg-neutral-950/95 px-3 py-2 shadow-lg backdrop-blur">
           <div className="flex items-start justify-between gap-2">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-400">Admiral Rider</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-400">General Rider</p>
             <button
               onClick={() => {
                 if (tip) setTip(null);

@@ -1,5 +1,5 @@
 /**
- * How the game tells Admiral Rider what the player just did.
+ * How the game tells General Rider what the player just did.
  *
  * One window event, one string. Screens fire it where something happens
  * ("open:building:depot", "tap:slot"); the guide listens and advances when

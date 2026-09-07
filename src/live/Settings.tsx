@@ -103,7 +103,7 @@ export default function Settings({
         <section className="border-b border-neutral-900 px-4 py-4" data-guide="settings">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h3 className="text-sm font-semibold text-neutral-100">Guide: Admiral Rider</h3>
+              <h3 className="text-sm font-semibold text-neutral-100">Guide: General Rider</h3>
               <p className="mt-1 text-[13px] leading-relaxed text-neutral-400">
                 Walks you through every screen and building. Off hides him and his tips at once; on resumes where he left off.
               </p>

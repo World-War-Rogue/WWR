@@ -183,7 +183,7 @@ export default function LiveApp() {
 
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // What Admiral Rider hears. Screens, sheets and the settings panel are
+  // What General Rider hears. Screens, sheets and the settings panel are
   // reported here, in one place, as they change.
   useEffect(() => {
     guideEvent(`screen:${screen}`);

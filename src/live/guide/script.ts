@@ -1,5 +1,5 @@
 /**
- * Admiral Rider's walkthrough. ONBOARDING, SHIELDS & CONSTRUCTION v1 §3 -
+ * General Rider's walkthrough. ONBOARDING, SHIELDS & CONSTRUCTION v1 §3 -
  * every line is the document's final copy. A step advances on NEXT or when
  * the named event fires (see bus.ts); the highlight names a data-guide
  * attribute somewhere on screen.
@@ -13,7 +13,7 @@ export interface GuideStep {
 }
 
 export const GUIDE_STEPS: GuideStep[] = [
-  {id: 1, say: 'Welcome, Commander. I am Admiral Rider. I will bring your command post online, one decision at a time.', advance: 'next'},
+  {id: 1, say: 'Welcome, Commander. I am General Rider. I will bring your command post online, one decision at a time.', advance: 'next'},
   {id: 2, say: 'This is your base on the world map. Tap it whenever you need to return home.', advance: 'tap:own-base'},
   {id: 3, say: 'Nearby bases are other commanders. Their position, alliance, and protection status decide whether they are a target or a neighbor.', advance: 'next'},
   {id: 4, say: 'Select a valid enemy base to inspect it. Attack sends a Task Force; a shielded base cannot be attacked.', advance: 'next'},

@@ -885,7 +885,7 @@ export default function WorldMap({
   const selectedBase: PlacedBase | null = selected
     ? basesByPlot.get(`${selected.x},${selected.y}`) ?? null
     : null;
-  // Admiral Rider's step 2: the player found their own base.
+  // General Rider's step 2: the player found their own base.
   useEffect(() => {
     if (selectedBase && selectedBase.username === view?.you.username) guideEvent('tap:own-base');
   }, [selectedBase, view?.you.username]);
