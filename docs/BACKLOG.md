@@ -41,6 +41,8 @@ Each item is one or more commits; Claude updates this file in the same commit.
 
 ## P3 — Known follow-ups not in any prompt
 
+- [~] Season 1 events, daily/weekly loop, Command Credit income and the alliance layer — brief sent to ChatGPT (docs/CHATGPT-SEASON-1-EVENTS-AND-ALLIANCE-BRIEF.md); implement from docs/SEASON-1-EVENTS-AND-ALLIANCE-v1.md when it lands
+
 - [x] Package strip refunds only the Credit-paid share; Tokens never come back — Matt's final ruling, overriding ChatGPT's original-currency proposal; Tokens spent are never refunded (ruling 2026-09-07, closes the Token→Credit conversion found by the inventory)
 
 - [ ] Command Credit earning design — [?] ChatGPT (prompt sent 2026-09-07)
