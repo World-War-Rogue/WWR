@@ -43,9 +43,21 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch((err) => {
-            console.log('SW registration skipped:', err);
-          });
+          navigator.serviceWorker
+            .register('/sw.js')
+            .then((reg) => reg.update().catch(() => undefined))
+            .catch((err) => {
+              console.log('SW registration skipped:', err);
+            });
+        });
+        // A new version took over: reload once so the screen is the new one,
+        // not the old bundle running against the new server. An installed
+        // app on a phone otherwise keeps the old code until it is killed.
+        let reloaded = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (reloaded) return;
+          reloaded = true;
+          window.location.reload();
         });
       }
     </script>
