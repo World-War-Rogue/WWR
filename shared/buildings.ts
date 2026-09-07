@@ -149,6 +149,15 @@ export function storageCap(levels: BuildingLevels): number {
   return row(WAREHOUSE_CAP, levels.quartermaster_warehouse, 1.3);
 }
 
+/**
+ * The cap for one resource. Fuel has none - it is stored without limit and
+ * only its production is fixed (owner's decision 2026-09-07); the Warehouse
+ * caps the other three.
+ */
+export function capFor(kind: ResourceKind, levels: BuildingLevels): number {
+  return kind === 'fuel' ? Number.POSITIVE_INFINITY : storageCap(levels);
+}
+
 export function protectedShare(levels: BuildingLevels): number {
   const l = Math.max(1, Math.floor(levels.quartermaster_warehouse));
   return l < WAREHOUSE_PROTECTED.length ? WAREHOUSE_PROTECTED[l] : 0.8;

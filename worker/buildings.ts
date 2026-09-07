@@ -35,6 +35,7 @@ import {
   SECOND_TEAM,
   buildingBlock,
   buildingStep,
+  capFor,
   depotCapMultiplier,
   engineerMultiplier,
   isLevelledBuilding,
@@ -146,14 +147,15 @@ async function settleResources(
     .first<Resources & {at: number; rev: number}>();
   if (!base) return {stock: {...NO_RESOURCES}, rev: 0};
   const rate = productionPerHour(levels);
-  const cap = storageCap(levels);
   const hours = Math.max(0, now - base.at) / 3_600_000;
   const out = {...NO_RESOURCES};
   for (const k of RESOURCE_KINDS) {
     // Production fills to the cap and stops; a stock already above the cap
     // (a raid protected it, a cap shrank) is left where it is, never cut.
+    // Fuel has no cap.
+    const capK = capFor(k, levels);
     const grown = Math.floor(base[k] + rate[k] * hours);
-    out[k] = base[k] >= cap ? base[k] : Math.min(cap, grown);
+    out[k] = base[k] >= capK ? base[k] : Math.min(capK, grown);
   }
   await db
     .prepare(
@@ -317,7 +319,7 @@ export async function buyResource(
   const bought = units * per;
 
   const base = await readBase(db, playerId, now);
-  if (base.resources[k] + bought > base.storageCap) {
+  if (base.resources[k] + bought > capFor(k, base.levels)) {
     return {
       ok: false,
       error: `${RESOURCE_LABEL[k]} storage is full. Upgrade the Quartermaster Warehouse or spend resources to resume production.`,

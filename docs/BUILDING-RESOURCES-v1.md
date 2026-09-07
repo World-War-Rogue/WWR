@@ -345,3 +345,4 @@ The simulation baseline defines an active free player as logging 90 qualifying a
 - **Departments without a designed effect** (Tactical Operations Center, Signals Center, Engineer Support Yard below 10, Depot, Alliance Trading Post) level and cost as tabled but unlock nothing until designed.
 - **Raids** take 5% of the unprotected stock (`raidLoot` in `shared/buildings.ts`); the battle-settlement step wires it in when raids start taking resources.
 - Implemented in `shared/buildings.ts`, `worker/buildings.ts`, migration 0023.
+- **Fuel is the attack currency (2026-09-07).** Every attack from the map burns Fuel: 100 + 20 per asset + 5 per plot of distance (`attackFuel()` in `shared/march.ts`), debited when the column leaves; reinforcing is free. Fuel has **no storage cap** — only its production rate is fixed; it is won in raids and (when rewards land) daily tasks. The Warehouse caps Steel, Munitions and Alloy only.

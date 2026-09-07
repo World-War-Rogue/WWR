@@ -12,6 +12,7 @@ import {
   type Deployment,
   GARRISON_HOURS,
   type MarchKind,
+  attackFuel,
   marchProgress,
   marchSeconds,
   plotsBetween,
@@ -300,8 +301,30 @@ export async function launch(
   // The Tactical Operations Center speeds every march; the whole bonus is
   // capped at MARCH_TOTAL_CAP. BUILDING EFFECTS v1.
   const speed = paceMobility(resolved) * marchMultiplier(network, levels.tactical_operations_center);
-  const seconds = marchSeconds(plotsBetween(from.x, from.y, to.x, to.y), speed);
+  const plots = plotsBetween(from.x, from.y, to.x, to.y);
+  const seconds = marchSeconds(plots, speed);
   const arrivesAt = now + seconds * 1000;
+
+  // Attacks burn Fuel: a conditional debit against the stock revision, so a
+  // column never leaves on Fuel that was spent elsewhere a moment before.
+  if (kind === 'attack') {
+    const fuel = attackFuel(units.length, plots);
+    const base = await readBase(db, attackerId, now);
+    if (base.resources.fuel < fuel) {
+      return {
+        ok: false,
+        error: `This attack needs ${fuel.toLocaleString()} Fuel; you have ${Math.floor(base.resources.fuel).toLocaleString()}. Produce it at the Bulk Fuel Point or buy it at the Depot.`,
+      };
+    }
+    const debit = await db
+      .prepare(
+        `UPDATE bases SET fuel = fuel - ?2, stock_rev = stock_rev + 1
+          WHERE player_id = ?1 AND stock_rev = ?3 AND fuel >= ?2`,
+      )
+      .bind(attackerId, fuel, base.stockRev)
+      .run();
+    if (!debit.meta.changes) return {ok: false, error: 'Your Fuel changed. Try that again.'};
+  }
 
   try {
     await db

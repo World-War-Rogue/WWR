@@ -10,6 +10,7 @@
  * exactly one base, so plot coordinates are the only unit this file thinks in;
  * pixels appear only at the moment of drawing.
  */
+import {attackFuel, plotsBetween} from '../../shared/march';
 import {guideEvent} from './guide/bus';
 import {SHIELD_WORDING, isShielded} from '../../shared/shields';
 import {remaining} from './BuildingPanel';
@@ -1713,6 +1714,13 @@ export default function WorldMap({
                 const doing = awaySquads.get(name);
                 const filled = (squads?.squads[name] ?? []).filter(Boolean).length;
                 const power = squads?.power[name] ?? 0;
+                // What the attack burns: Fuel by column size and distance.
+                const from = view?.you.plot;
+                const fuel =
+                  !allied && attacking && from
+                    ? attackFuel(filled, plotsBetween(from.x, from.y, attacking.x, attacking.y))
+                    : null;
+                const haveFuel = squads?.base.resources.fuel ?? 0;
                 // A squad that is out cannot be sent, and an empty one has
                 // nothing to send. Both are said rather than merely disabled -
                 // a greyed button with no reason is a bug as far as a player
@@ -1745,6 +1753,11 @@ export default function WorldMap({
                         </span>
                         <span className="block text-[10px] text-neutral-600">
                           {why ?? `${filled}/6`}
+                          {!why && fuel !== null && (
+                            <span className={fuel > haveFuel ? 'ml-2 text-red-400' : 'ml-2 text-amber-300/80'}>
+                              Fuel {fuel.toLocaleString()}
+                            </span>
+                          )}
                         </span>
                       </span>
                     </button>

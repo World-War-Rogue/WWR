@@ -9,6 +9,7 @@ import {type BaseLevelsView, api, ApiError} from '../net/api';
 import {
   type ResourceKind,
   DAILY_RESOURCE_CAP,
+  capFor,
   depotCapMultiplier,
   RESOURCE_KINDS,
   RESOURCE_LABEL,
@@ -35,27 +36,34 @@ export function StockPanel({base, only}: {base: BaseLevelsView; only?: ResourceK
       <div className="mt-2 space-y-1.5">
         {kinds.map((k) => {
           const have = base.resources[k];
-          const full = have >= base.storageCap;
-          const hoursToFull = full ? 0 : (base.storageCap - have) / Math.max(1, base.productionPerHour[k]);
+          const cap = capFor(k, base.levels);
+          const uncapped = !Number.isFinite(cap);
+          const full = !uncapped && have >= cap;
+          const hoursToFull = full || uncapped ? 0 : (cap - have) / Math.max(1, base.productionPerHour[k]);
           return (
             <div key={k} className="text-[11px]">
               <div className="flex items-baseline justify-between">
                 <span className="text-neutral-300">{RESOURCE_LABEL[k]}</span>
                 <span className="font-mono text-neutral-200">
-                  {have.toLocaleString()}
-                  <span className="text-neutral-600"> / {base.storageCap.toLocaleString()}</span>
+                  {Math.floor(have).toLocaleString()}
+                  <span className="text-neutral-600">{uncapped ? ' · no cap' : ` / ${cap.toLocaleString()}`}</span>
                   <span className="ml-2 text-neutral-500">
                     +{base.productionPerHour[k].toLocaleString()}/h
-                    {!full && ` · full in ${hoursToFull >= 1 ? `${Math.ceil(hoursToFull)}h` : `${Math.ceil(hoursToFull * 60)}m`}`}
+                    {!full && !uncapped && ` · full in ${hoursToFull >= 1 ? `${Math.ceil(hoursToFull)}h` : `${Math.ceil(hoursToFull * 60)}m`}`}
                   </span>
                 </span>
               </div>
               <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-neutral-900">
                 <div
                   className={`h-full rounded-full ${full ? 'bg-red-500' : 'bg-orange-500'}`}
-                  style={{width: `${Math.min(100, (have / base.storageCap) * 100)}%`}}
+                  style={{width: `${uncapped ? 100 : Math.min(100, (have / cap) * 100)}%`}}
                 />
               </div>
+              {k === 'fuel' && (
+                <p className="mt-0.5 text-[10px] text-neutral-600">
+                  Fuel sends attacks: every attack from the map burns some. Stored without limit; won in raids and daily tasks.
+                </p>
+              )}
               {full && (
                 <p className="mt-0.5 text-[10px] text-red-400">
                   {RESOURCE_LABEL[k]} storage is full. Upgrade the Quartermaster Warehouse or spend
@@ -119,7 +127,7 @@ export function ResourceShop({
       <div className="mt-2 space-y-2">
         {RESOURCE_KINDS.map((k) => {
           const n = Math.max(1, Math.floor(units[k] ?? 10));
-          const room = base.storageCap - base.resources[k];
+          const room = capFor(k, base.levels) - base.resources[k];
           return (
             <div key={k} className="flex items-center gap-2 text-[11px]">
               <span className="w-20 text-neutral-300">{RESOURCE_LABEL[k]}</span>
