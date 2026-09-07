@@ -110,7 +110,7 @@ export function unlockLabel(assetId: string, levels: BuildingLevels | null, buil
   switch (state.kind) {
     case 'locked':
       return {
-        head: `Opens week ${state.week}`,
+        head: `Opens at Command Center ${state.week} · or week ${state.week}`,
         body: 'Unlocks soon.',
         canBuild: false,
       };
@@ -495,7 +495,7 @@ export default function Assets({
                   const b = ASSET_BY_ID[upgrading] ? HUB_OF_CATEGORY[ASSET_BY_ID[upgrading].category] : null;
                   return w === null || !b
                     ? 'Not this season'
-                    : `This asset opens in Week ${w}. Inspect it now; build it at ${buildingLabel(b)} when it becomes available`;
+                    : `This asset opens at Command Center level ${w}, or in week ${w}. Inspect it now; build it at ${buildingLabel(b)} when it becomes available`;
                 })()
           }
           wallet={wallet}

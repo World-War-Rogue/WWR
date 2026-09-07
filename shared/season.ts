@@ -51,16 +51,22 @@ export function unlockWeekOf(assetId: string): number | null {
   return UNLOCK_WEEK[assetId] ?? null;
 }
 
-export function isUnlocked(assetId: string, now: number): boolean {
+/**
+ * An asset's tier opens when EITHER the season week reaches it or the
+ * player's Command Center does - owner's decision 2026-09-07: a base that
+ * levels fast gets its assets early, and the weekly drip still carries
+ * everyone else. Tier N = the schedule's week N.
+ */
+export function isUnlocked(assetId: string, now: number, commandCenter = 1): boolean {
   const w = unlockWeekOf(assetId);
-  return w !== null && seasonWeek(now) >= w;
+  return w !== null && Math.max(seasonWeek(now), commandCenter) >= w;
 }
 
-/** Task Forces open by Command Center level: Bravo 5, Charlie 15, Delta 25. */
+/** Task Forces open by Command Center level: Bravo 5, Charlie 10, Delta 25. */
 export const TASK_FORCE_UNLOCK: Record<SquadName, number> = {
   Alpha: 1,
   Bravo: 5,
-  Charlie: 15,
+  Charlie: 10,
   Delta: 25,
 };
 

@@ -435,7 +435,7 @@ export function effectLine(building: LevelledBuilding, level: number, cap: numbe
     case 'command_center':
       return line(
         `Buildings and Service Ranks may advance to ${level}.`,
-        `${next}${next === 5 ? ', and Task Force Bravo' : next === 15 ? ', and Task Force Charlie' : next === 25 ? ', and Task Force Delta' : ''}.`,
+        `${next}${next === 5 ? ', and Task Force Bravo' : next === 10 ? ', and Task Force Charlie' : next === 25 ? ', and Task Force Delta' : ''}${next <= 10 ? `, and tier-${next} assets` : ''}.`,
       );
     case 'tactical_operations_center':
       return line(

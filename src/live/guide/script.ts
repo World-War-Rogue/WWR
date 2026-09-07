@@ -62,5 +62,5 @@ export const TIPS: Record<string, (v: Record<string, string | number>) => string
   shortfall: (v) => `You are short ${v.amount} ${v.resource}. Produce it, expand storage if full, or buy it at the Depot.`,
   march: () => 'Alpha is moving. Drone Network improves its pace, but every drone still carries the formation\'s strengths and weaknesses.',
   shield: (v) => `Your shield expires in ${v.remaining}. Plan a shield, reinforce allies, or bring Task Forces home.`,
-  locked: (v) => `This asset opens in Week ${v.week}. Inspect it now, then build it at its category building when released.`,
+  locked: (v) => `This asset opens at Command Center ${v.week}, or in Week ${v.week}. Inspect it now, then build it at its category building when released.`,
 };

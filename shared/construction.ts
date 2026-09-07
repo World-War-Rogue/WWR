@@ -8,7 +8,7 @@
  */
 import {type AssetCategory, ASSET_BY_ID} from './assets';
 import {type BuildingLevels, type LevelledBuilding, type Resources, HUB_OF_CATEGORY} from './buildings';
-import {STARTER_ASSETS, seasonWeek, unlockWeekOf} from './season';
+import {STARTER_ASSETS, isUnlocked, unlockWeekOf} from './season';
 
 export interface BuildSpec {
   cost: Resources;
@@ -57,7 +57,7 @@ export function buildState(assetId: string, levels: BuildingLevels, now: number)
   const building = builtAt(assetId);
   const spec = buildSpec(assetId);
   if (week === null || !building || !spec) return {kind: 'unbuildable'};
-  if (seasonWeek(now) < week) return {kind: 'locked', week};
+  if (!isUnlocked(assetId, now, levels.command_center)) return {kind: 'locked', week};
   const level = levelNeeded(assetId);
   if (levels[building] < level) return {kind: 'needs_level', building, level};
   return {kind: 'ready', building, spec};
