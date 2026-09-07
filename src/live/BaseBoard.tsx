@@ -471,8 +471,13 @@ export default function BaseBoard({
               }}
             >
               {isSel && !lifted && (
+                // The name sits above the building - except on the top row,
+                // where "above" is off the top of the board and under the
+                // header, so the two upper pads print theirs below instead.
                 <div
-                  className="pointer-events-none absolute inset-x-0 -top-1 z-20 flex -translate-y-full flex-col items-center"
+                  className={`pointer-events-none absolute inset-x-0 z-20 flex flex-col items-center ${
+                    pad.y < 0.2 ? '-bottom-1 translate-y-full' : '-top-1 -translate-y-full'
+                  }`}
                   style={{fontSize: labelPx}}
                 >
                   <span className="whitespace-nowrap rounded bg-black/80 px-2 py-0.5 font-semibold text-neutral-50 shadow">
