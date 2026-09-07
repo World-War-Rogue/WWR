@@ -279,18 +279,6 @@ export function squadPower(
   }, 0);
 }
 
-/**
- * Total lift standing in a squad.
- *
- * Nothing is refused for exceeding anything any more - this is a readout, kept
- * because the weight of a squad is still worth seeing.
- */
-export function squadLiftUsed(board: SquadBoard, squad: SquadName): number {
-  return board[squad].reduce<number>(
-    (sum, id) => sum + (id ? ASSET_BY_ID[id]?.lift ?? 0 : 0),
-    0,
-  );
-}
 
 /**
  * Move an asset to another slot, swapping with whatever is already there.

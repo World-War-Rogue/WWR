@@ -27,29 +27,12 @@ import {buildingLabel, remaining} from './BuildingPanel';
 import {type SeasonState, ApiError} from '../net/api';
 import {t} from '../i18n';
 import {taskForceName} from './taskForce';
-import {
-  ASSETS,
-  ASSET_BY_ID,
-  ATTRIBUTE_MAX,
-  type Asset,
-  type AssetCategory,
-  CATEGORY_LABEL,
-  ROLE_BLURB,
-  ROLE_LABEL,
-  SQUAD_NAMES,
-  pointsSpent,
-} from '../../shared/assets';
+import {ASSETS, ASSET_BY_ID, ATTRIBUTE_MAX, type Asset, type AssetCategory, CATEGORY_LABEL, ROLE_BLURB, ROLE_LABEL, SQUAD_NAMES, pointsSpent, assetLabel, SEASON_ASSETS} from '../../shared/assets';
 import {counterWeb} from '../../shared/combat';
 import {PACKAGE_KEYS} from '../../shared/upgrades';
 
-const CATEGORIES: AssetCategory[] = [
-  'armour',
-  'rotary',
-  'fixed_wing',
-  'artillery',
-  'drone',
-  'naval',
-];
+/** The Season 1 tabs. Naval is not in the game until Season 3. */
+const CATEGORIES: AssetCategory[] = ['armour', 'rotary', 'fixed_wing', 'artillery', 'drone'];
 
 const ATTRS = [
   ['firepower', 'Firepower'],
@@ -197,12 +180,12 @@ function Card({
           is where the picture gets room.
         */}
         <span className="mt-0.5 shrink-0">
-          <AssetIcon asset={asset} size={held ? 56 : 34} level={held?.level ?? 1} />
+          <AssetIcon asset={asset} size={64} level={held?.level ?? 1} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-neutral-100">{asset.name}</p>
-          <p className="truncate font-mono text-[10px] text-neutral-600">
-            {asset.code} · {asset.operator}
+          <p className="truncate text-[15px] font-semibold text-neutral-100">{assetLabel(asset)}</p>
+          <p className="truncate text-[11px] uppercase tracking-wider text-neutral-500">
+            {CATEGORY_LABEL[asset.category]}
           </p>
         </div>
         <span
@@ -286,8 +269,7 @@ function Card({
 
       <div className="mt-2 flex items-center justify-between border-t border-neutral-900 pt-2 text-[10px]">
         <span className="text-neutral-500">
-          Lift <span className="font-mono text-neutral-300">{asset.lift}</span>
-          <span className="text-neutral-700"> · {pointsSpent(asset.attributes)} pts</span>
+          <span className="font-mono text-neutral-300">{pointsSpent(asset.attributes)}</span> pts
         </span>
         {asset.draftable === false ? (
           <span className="text-neutral-600">Coastal season</span>
@@ -325,6 +307,7 @@ export default function Assets({
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [base, setBase] = useState<BaseLevelsView | null>(null);
   const [season1, setSeason1] = useState<SeasonState | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const [upgrading, setUpgrading] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -371,6 +354,7 @@ export default function Assets({
         setWallet(view.wallet);
         setBase(view.base);
         setSeason1(view.season1);
+        setLoaded(true);
       })
       .catch(() => undefined);
     return () => {
@@ -383,7 +367,7 @@ export default function Assets({
     // In the order they become available: starters first, then week by
     // week; naval (no week this season) last. Within a week, by name.
     const week = (a: Asset) => unlockWeekOf(a.id) ?? 99;
-    return ASSETS.filter((a) => {
+    return SEASON_ASSETS.filter((a) => {
       if (category !== 'all' && a.category !== category) return false;
       if (!q) return true;
       return (
@@ -404,7 +388,7 @@ export default function Assets({
           ‹ Back
         </button>
         <ForcesTabs active="assets" onChange={(tab) => tab === 'squads' && onShowSquads()} />
-        <span className="text-[11px] text-neutral-600">{shown.length} of {ASSETS.length}</span>
+        <span className="text-[12px] text-neutral-500">{shown.length} of {SEASON_ASSETS.length}</span>
         {wallet && (
           <span className="font-mono text-[11px]">
             <span className="text-emerald-300">{wallet.credits.toLocaleString()}</span>
@@ -456,9 +440,9 @@ export default function Assets({
             />
           </div>
         )}
-        <p className="mb-3 text-[11px] leading-relaxed text-neutral-600">
-          No asset is stronger than another. Bigger numbers cost more lift, and a squad has a
-          lift budget — so the choice is what a squad is <em>for</em>, not which entries are best.
+        <p className="mb-3 text-[12px] leading-relaxed text-neutral-500">
+          Every asset spends the same points. The choice is what a Task Force is <em>for</em>, not
+          which entries are best.
         </p>
         {notice && <p className="mb-3 text-[11px] text-red-400">{notice}</p>}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -470,7 +454,13 @@ export default function Assets({
                 held={roster.get(asset.id) ?? null}
                 onUpgrade={wallet ? () => setUpgrading(asset.id) : null}
                 onView={wallet ? () => setUpgrading(asset.id) : null}
-                lock={roster.get(asset.id) ? null : unlockLabel(asset.id, base?.levels ?? null, season1?.build ?? null, Date.now())}
+                lock={
+                  // Nothing is "locked" until the roster has arrived - an owned
+                  // starter must never flash as unlocked-soon while loading.
+                  !loaded || roster.get(asset.id)
+                    ? null
+                    : unlockLabel(asset.id, base?.levels ?? null, season1?.build ?? null, Date.now())
+                }
                 onBuild={() => void build(asset.id)}
                 onRepair={() => void repair(asset.id)}
                 boost={base ? categoryBoost(base.levels, asset.category) : 1}

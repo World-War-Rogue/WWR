@@ -249,17 +249,25 @@ export function DepartmentSheet({id, onClose}: {id: string; onClose: () => void}
             </>
           )}
           {levelled === 'signals_center' && (
-            <p className="text-[11px] text-neutral-500">
+            <p className="text-[12px] text-neutral-400">
               Incoming attacks appear on the World map once they are within your warning lead time.
+            </p>
+          )}
+          {levelled === 'alliance_trading_post' && (
+            <p className="text-[12px] text-neutral-400">
+              Trading opens when your alliance eligibility is met: 48 hours of membership in the same
+              alliance. Offer → counteroffer → both accept → the exchange lands at once.
             </p>
           )}
           <p className="text-xs text-neutral-500">{blurb}</p>
         </div>
       ) : (
-        <>
-          <p className="text-sm text-neutral-200">{blurb}</p>
-          <p className="mt-3 text-xs text-neutral-500">{t('department.soonBody')}</p>
-        </>
+        // Levels are still loading: a skeleton, never a placeholder that reads
+        // as a design decision.
+        <div className="animate-pulse space-y-2" aria-busy="true">
+          <div className="h-16 rounded border border-neutral-800 bg-neutral-900/50" />
+          <p className="text-[12px] text-neutral-500">{blurb}</p>
+        </div>
       )}
     </Sheet>
   );

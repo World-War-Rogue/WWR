@@ -265,7 +265,7 @@ export async function launch(
   // Nothing marches broken. A disabled asset is repaired first; one in the
   // shop waits or is moved out. GAME-MATH v1 §5.
   for (const u of units) {
-    const label = ASSET_BY_ID[u.assetId]?.name ?? u.assetId;
+    const label = ASSET_BY_ID[u.assetId]?.code ?? u.assetId;
     if (u.repairing) return {ok: false, error: REPAIR_WORDING.repairing(label)};
     if (isDisabled(u.hpFraction ?? 1)) return {ok: false, error: REPAIR_WORDING.disabled(label)};
   }
@@ -590,7 +590,7 @@ export async function settleArrivals(
                 {
                   side: 'attacker',
                   squad: march.squad,
-                  heroes: attackUnits.map((u) => ASSET_BY_ID[u.assetId]?.name ?? u.assetId),
+                  heroes: attackUnits.map((u) => ASSET_BY_ID[u.assetId]?.code ?? u.assetId),
                   losses: 0,
                   survived: true,
                 },
@@ -693,14 +693,14 @@ export async function settleArrivals(
               {
                 side: 'attacker',
                 squad: march.squad,
-                heroes: attackUnits.map((u) => ASSET_BY_ID[u.assetId]?.name ?? u.assetId),
+                heroes: attackUnits.map((u) => ASSET_BY_ID[u.assetId]?.code ?? u.assetId),
                 losses: result.attacker.losses,
                 survived: result.outcome !== 'defender',
               },
               {
                 side: 'defender',
                 squad: 'Home',
-                heroes: defendUnits.map((u) => ASSET_BY_ID[u.assetId]?.name ?? u.assetId),
+                heroes: defendUnits.map((u) => ASSET_BY_ID[u.assetId]?.code ?? u.assetId),
                 losses: result.defender.losses,
                 survived: result.outcome !== 'attacker',
               },

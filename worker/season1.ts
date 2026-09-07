@@ -183,7 +183,7 @@ export async function startBuild(
 
   const state = await readSeasonState(db, playerId, now);
   if (state.build) {
-    return {ok: false, error: `${ASSET_BY_ID[state.build.assetId]?.name ?? 'An asset'} is already under construction. One at a time.`};
+    return {ok: false, error: `${ASSET_BY_ID[state.build.assetId]?.code ?? 'An asset'} is already under construction. One at a time.`};
   }
   const base = await readBase(db, playerId, now);
   const can = buildState(assetId, base.levels, now);

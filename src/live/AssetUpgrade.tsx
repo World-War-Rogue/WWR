@@ -22,15 +22,7 @@ import {DRONE_WORDING} from '../../shared/drones';
 import {guideEvent} from './guide/bus';
 import {unlockWeekOf} from '../../shared/season';
 
-import {
-  type Asset,
-  ASSET_MAX_LEVEL,
-  ATTRIBUTE_MAX,
-  RANK_GROWTH,
-  isMilestone,
-  attributeAtLevel,
-  maxRankForSeason,
-} from '../../shared/assets';
+import {type Asset, ASSET_MAX_LEVEL, ATTRIBUTE_MAX, RANK_GROWTH, isMilestone, attributeAtLevel, maxRankForSeason, assetLabel, CATEGORY_LABEL, ROLE_LABEL} from '../../shared/assets';
 import {packageCost, rankCost} from '../../shared/economy';
 import {
   type PackageKey,
@@ -312,9 +304,9 @@ export default function AssetUpgrade({
       <div className="w-full max-w-md rounded-lg border border-neutral-800 bg-neutral-950 p-4 shadow-2xl">
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
-            <p className="truncate text-base font-semibold text-neutral-100">{asset.name}</p>
-            <p className="truncate font-mono text-[10px] text-neutral-600">
-              {asset.code} · {asset.operator}
+            <p className="truncate text-base font-semibold text-neutral-100">{assetLabel(asset)}</p>
+            <p className="truncate text-[11px] uppercase tracking-wider text-neutral-500">
+              {CATEGORY_LABEL[asset.category]} · {ROLE_LABEL[asset.role]}
             </p>
           </div>
           <button

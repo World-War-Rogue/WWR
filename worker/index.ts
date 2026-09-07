@@ -6,7 +6,7 @@
  */
 import {handleAdminRequests} from './admin';
 import {ensureRally, lastRalliedAt, rallyTo, readRally, setRally} from './rally';
-import {assignSlot, deltaOpen, ensureRoster, moveSlot, readSquads, squadLiftUsed, squadPower} from './squads';
+import {assignSlot, deltaOpen, ensureRoster, moveSlot, readSquads, squadPower} from './squads';
 import {packageUp, rankUp, resetPackages, settleWallet} from './upgrades';
 import {buyResource, buySecondTeam, readBase, readLevels, startLevel} from './buildings';
 import {applyShield, buyDelta, readSeasonState, saveGuide, startBuild} from './season1';
@@ -1065,13 +1065,6 @@ async function handleSquads(env: Env, player: PlayerRow): Promise<Response> {
     // is a second request for nothing.
     wallet: {tokens: wallet.tokens, credits: wallet.credits},
     squads: board,
-    // Weight standing in each squad. A readout now, not a budget - the lift cap
-    // was removed on 2026-09-06 and any six assets fit in any squad.
-    lift: {
-      used: Object.fromEntries(
-        SQUAD_NAMES.map((name) => [name, squadLiftUsed(board, name)]),
-      ),
-    },
     power: Object.fromEntries(
       SQUAD_NAMES.map((name) => [name, squadPower(board, roster, name, base.levels)]),
     ),

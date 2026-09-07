@@ -1016,6 +1016,19 @@ export const DRAFTABLE_CATEGORIES: AssetCategory[] = [
   ...new Set(DRAFTABLE.map((a) => a.category)),
 ];
 
+/**
+ * What the player sees an asset called: its designation (`code`), never the
+ * nickname or the operator. Owner's decision 2026-09-07 (LIVE REVIEW FIXES
+ * v1): designation-first, no nicknames, no country labels on live cards.
+ * `name` stays on the catalogue for search and for a later rename pass.
+ */
+export function assetLabel(asset: Pick<Asset, 'code'>): string {
+  return asset.code;
+}
+
+/** The Season 1 catalogue: everything draftable. Naval waits for Season 3. */
+export const SEASON_ASSETS: Asset[] = DRAFTABLE;
+
 export function assetById(id: string): Asset | null {
   return ASSET_BY_ID[id] ?? null;
 }

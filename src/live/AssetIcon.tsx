@@ -16,7 +16,7 @@ import {
   CATEGORY_PATH,
   ROLE_MARK,
 } from '../../shared/assetArt';
-import type {Asset} from '../../shared/assets';
+import {type Asset, assetLabel} from '../../shared/assets';
 import {assetArtUrl} from '../../shared/assetVisuals';
 
 export default function AssetIcon({
@@ -46,7 +46,7 @@ export default function AssetIcon({
     return (
       <img
         src={art}
-        alt={`${asset.name}, ${asset.category}`}
+        alt={`${assetLabel(asset)}, ${asset.category}`}
         width={size}
         height={size}
         decoding="async"
@@ -66,7 +66,7 @@ export default function AssetIcon({
       width={size}
       height={size}
       role="img"
-      aria-label={`${asset.name}, ${asset.category}`}
+      aria-label={`${assetLabel(asset)}, ${asset.category}`}
       style={{display: 'block'}}
     >
       <g transform={heading ? `rotate(${heading} 12 12)` : undefined}>

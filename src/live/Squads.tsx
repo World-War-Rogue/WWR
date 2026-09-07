@@ -15,15 +15,7 @@
  * is refused for it any more and nothing here greys out because of it.
  */
 import {type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {
-  ASSET_BY_ID,
-  CATEGORY_LABEL,
-  ROLE_LABEL,
-  SQUAD_NAMES,
-  SQUAD_SLOTS,
-  type Asset,
-  type AssetCategory,
-} from '../../shared/assets';
+import {ASSET_BY_ID, CATEGORY_LABEL, ROLE_LABEL, SQUAD_NAMES, SQUAD_SLOTS, type Asset, type AssetCategory, assetLabel} from '../../shared/assets';
 import {ApiError, type SquadView, api} from '../net/api';
 import {attributesWith} from '../../shared/upgrades';
 import {categoryBoost} from '../../shared/buildings';
@@ -86,7 +78,7 @@ function Slot({
       // The browser's own drag would fight the pointer handling and, on touch,
       // scroll the page instead of moving the asset.
       style={{touchAction: 'none'}}
-      className={`flex h-[4.5rem] flex-col justify-center rounded border px-2 text-left transition ${
+      className={`flex min-h-[5.25rem] flex-col justify-center rounded border px-2 py-1 text-left transition ${
         dropTarget
           ? 'border-orange-400 bg-orange-900/40 ring-2 ring-orange-500'
           : dragging
@@ -100,17 +92,15 @@ function Slot({
     >
       {asset ? (
         <span className="flex items-center gap-1.5">
-          <AssetIcon asset={asset} size={26} level={level} />
+          <AssetIcon asset={asset} size={40} level={level} />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-xs font-semibold text-neutral-100">
-              {asset.name}
+              {assetLabel(asset)}
             </span>
             <span className={`block truncate text-[10px] ${ROLE_TINT[asset.role]}`}>
               {ROLE_LABEL[asset.role]}
             </span>
-            <span className="block font-mono text-[10px] text-neutral-600">
-              lift {asset.lift} · lv {level}
-            </span>
+            <span className="block font-mono text-[11px] text-neutral-500">lv {level}</span>
             <HpBar hp={hp} repairing={repairing} />
           </span>
         </span>
@@ -357,7 +347,6 @@ export default function Squads({
       .sort(
         (a, b) =>
           a.category.localeCompare(b.category) ||
-          b.lift - a.lift ||
           a.name.localeCompare(b.name),
       );
   }, [view, pickCategory, pickQuery]);
@@ -375,8 +364,8 @@ export default function Squads({
         </button>
         <ForcesTabs active="squads" onChange={(tab) => tab === 'assets' && onShowAssets()} />
         {view && (
-          <span className="ml-auto text-[11px] text-neutral-500">
-            {only ? taskForceName(only) : 'Any six assets, any task force'}
+          <span className="ml-auto text-[12px] text-neutral-400">
+            {only ? taskForceName(only) : t('squads.sixSlots')}
           </span>
         )}
       </div>
@@ -389,12 +378,36 @@ export default function Squads({
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {!view ? (
-          <p className="text-sm text-neutral-500">Reading the roster…</p>
+          error ? (
+            // The request failed: say so and offer the retry, never a blank.
+            <div className="rounded border border-red-900 bg-red-950/40 p-4 text-center">
+              <p className="text-sm text-red-200">{t('squads.loadFailed')}</p>
+              <button
+                onClick={() => void load()}
+                className="mt-3 min-h-[44px] rounded border border-orange-600 bg-orange-950/40 px-5 text-sm font-semibold text-orange-200"
+              >
+                {t('squads.retry')}
+              </button>
+            </div>
+          ) : (
+            // A compact skeleton of the four cards while the roster loads.
+            <div className="grid gap-3 lg:grid-cols-2" aria-busy="true" aria-label={t('squads.readingRoster')}>
+              {SQUAD_NAMES.map((name) => (
+                <div key={name} className="animate-pulse rounded border border-neutral-800 bg-neutral-950 p-3">
+                  <div className="h-4 w-32 rounded bg-neutral-800" />
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    {Array.from({length: SQUAD_SLOTS}, (_, i) => (
+                      <div key={i} className="h-[5.25rem] rounded border border-neutral-800 bg-neutral-900/60" />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
         ) : (
           <>
             <div className={only ? 'mx-auto max-w-xl' : 'grid gap-3 lg:grid-cols-2'}>
               {SQUAD_NAMES.filter((name) => !only || name === only).map((name) => {
-                const used = view.lift.used[name] ?? 0;
                 const filled = (view.squads[name] ?? []).filter(Boolean).length;
                 const out = away.has(name);
                 // Bravo and Charlie open with the Command Center (5/10); Delta is
@@ -483,13 +496,11 @@ export default function Squads({
                           </span>
                         )}
                       </h3>
-                      <span className="text-[11px] text-neutral-500">
+                      <span className="text-[12px] text-neutral-400">
                         power{' '}
-                        <span className="font-mono text-neutral-300">
+                        <span className="font-mono text-neutral-200">
                           {(view.power[name] ?? 0).toLocaleString()}
                         </span>
-                        <span className="text-neutral-700"> · </span>
-                        lift <span className="font-mono text-neutral-300">{used}</span>
                       </span>
                     </div>
 
@@ -506,12 +517,15 @@ export default function Squads({
                     </span>
 
                     <p
-                      className={`mt-2 text-[11px] ${
-                        droneIds.length === 0 ? 'text-orange-300' : 'text-neutral-400'
+                      role={droneIds.length === 0 ? 'alert' : undefined}
+                      className={`mt-2 rounded px-2 py-1 text-[12px] ${
+                        droneIds.length === 0
+                          ? 'border border-red-800 bg-red-950/50 font-semibold text-red-200'
+                          : 'text-neutral-400'
                       }`}
                     >
                       {droneIds.length === 0
-                        ? DRONE_WORDING.needDrone
+                        ? `${filled === 0 ? '' : '⚠ '}${DRONE_WORDING.needDrone}`
                         : DRONE_WORDING.network(network, droneIds.length)}
                     </p>
 
@@ -528,7 +542,16 @@ export default function Squads({
                         </button>
                       )}
 
-                    <div className="mt-3 grid grid-cols-3 gap-2">
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[11px] font-semibold uppercase tracking-[0.2em]">
+                      <span className="text-red-300/80">Front</span>
+                      <span className="text-neutral-400">Centre</span>
+                      <span className="text-cyan-300/80">Rear</span>
+                    </div>
+                    {/*
+                      Column-major: slots 0-1 stack in the Front column, 2-3 in
+                      Centre, 4-5 in Rear, under the band labels above.
+                    */}
+                    <div className="mt-1 grid grid-flow-col grid-cols-3 grid-rows-2 gap-2">
                       {Array.from({length: SQUAD_SLOTS}, (_, slot) => {
                         const id = view.squads[name]?.[slot] ?? null;
                         const asset = id ? ASSET_BY_ID[id] ?? null : null;
@@ -607,10 +630,10 @@ export default function Squads({
               return (
                 <>
                   <div className="flex items-center gap-2">
-                    <AssetIcon asset={held} size={32} level={levels.get(held.id) ?? 1} />
+                    <AssetIcon asset={held} size={56} level={levels.get(held.id) ?? 1} />
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-neutral-100">
-                        {held.name}
+                        {assetLabel(held)}
                       </p>
                       <p className="truncate text-[11px] text-neutral-500">
                         {t('squads.inSlot', {
@@ -752,10 +775,10 @@ export default function Squads({
                             : 'border-neutral-900 bg-neutral-950/50 opacity-40'
                         }`}
                       >
-                        <AssetIcon asset={asset} size={28} level={levels.get(asset.id) ?? 1} />
+                        <AssetIcon asset={asset} size={48} level={levels.get(asset.id) ?? 1} />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-xs font-semibold text-neutral-100">
-                            {asset.name}
+                            {assetLabel(asset)}
                           </span>
                           <span className="block truncate text-[10px] text-neutral-600">
                             {CATEGORY_LABEL[asset.category]} ·{' '}
@@ -774,11 +797,8 @@ export default function Squads({
                           )}
                         </span>
                         <span className="shrink-0 text-right">
-                          <span className="block font-mono text-[11px] text-neutral-400">
-                            {asset.lift}
-                          </span>
-                          <span className="block text-[9px] uppercase text-neutral-700">
-                            {t('squads.lift')}
+                          <span className="block font-mono text-[12px] text-neutral-300">
+                            lv {levels.get(asset.id) ?? 1}
                           </span>
                         </span>
                       </button>

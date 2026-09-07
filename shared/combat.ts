@@ -623,7 +623,7 @@ export function resolve(
       );
       if (side === 'A') dmgA += dealt;
       else dmgD += dealt;
-      if (target.hp <= 0) broken.push(target.asset.name);
+      if (target.hp <= 0) broken.push(target.asset.code);
     }
 
     rounds.push({
@@ -663,7 +663,7 @@ export function resolve(
     strength: start === 0 ? 0 : sum(units.map((u) => Math.max(0, u.hp))) / start,
     units: units.map((u) => ({
       assetId: u.asset.id,
-      name: u.asset.name,
+      name: u.asset.code,
       damaged: u.hp <= 0,
       remaining: u.maxHp === 0 ? 0 : Math.max(0, u.hp) / u.maxHp,
     })),

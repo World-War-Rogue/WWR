@@ -2,12 +2,9 @@
 export const SQUADS = {
   // Squads
   'squads.title': 'Task Forces',
-  'squads.liftBudget': 'Lift budget {budget} per task force',
   'squads.power': 'power',
-  'squads.lift': 'lift',
   'squads.empty': 'empty',
   'squads.slot': '{squad} · slot {slot}',
-  'squads.liftFree': '{amount} lift free',
   'squads.clearSlot': 'Clear slot',
   'squads.cancel': 'Cancel',
   'squads.inSquad': 'in {squad}',
@@ -16,10 +13,11 @@ export const SQUADS = {
   'squads.replace': 'Replace',
   'squads.inSlot': '{name} is in {squad}, slot {slot}',
   'squads.dragHint': 'Drag an asset onto another slot to move or swap it.',
-  'squads.nothingFits': 'Nothing you hold fits in {amount} lift.',
-  'squads.nothingFitsHint': 'Clear a slot to make room.',
   'squads.away': 'in the field',
   'squads.awayHint': 'A task force that is out cannot be changed, and neither can what is in it.',
   'squads.assetAway': 'out with {squad}',
-  'squads.hint': 'Tap a slot to fill it. Any six assets, any task force — but a mixed one covers every band, and that is the point.',
+  'squads.hint': 'Tap a slot to fill it. Six slots: two front, two centre, two rear. Deploy at least one Drone — the Drone Network speeds the march, capped at ×1.25.',
+  'squads.sixSlots': 'Six slots. Deploy at least one Drone.',
+  'squads.retry': 'Retry',
+  'squads.loadFailed': 'Could not read the roster.',
 } as const;

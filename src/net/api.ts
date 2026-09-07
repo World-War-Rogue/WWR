@@ -268,8 +268,6 @@ export interface SquadView {
   owned: OwnedAsset[];
   wallet: Wallet;
   squads: Record<string, Array<string | null>>;
-  /** Weight standing in each squad. A readout - there is no budget any more. */
-  lift: {used: Record<string, number>};
   power: Record<string, number>;
   buildings: {motor_pool: number; airfield: number; barracks: number};
   /** Squads in the field. Locked: what marched out is what fights. */

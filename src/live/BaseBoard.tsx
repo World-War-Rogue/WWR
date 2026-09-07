@@ -120,10 +120,13 @@ export default function BaseBoard({
 
   const fit = fitBoard(view.w, view.h);
   // The pan is the board's top-left in viewport pixels. Clamped so the ground
-  // always covers the screen; centred until the player moves it.
+  // always covers the screen. Opens at the TOP - the Command Center visible
+  // and tappable at once - and the player pans down to the Task Force line;
+  // the position is kept while the screen stays open. (Centred, on a phone,
+  // showed neither end of the base.)
   const minX = view.w - fit.w;
   const minY = view.h - fit.h;
-  const cur = pan ?? {x: minX / 2, y: minY / 2};
+  const cur = pan ?? {x: minX / 2, y: 0};
   const px = clamp(cur.x, minX, 0);
   const py = clamp(cur.y, minY, 0);
 

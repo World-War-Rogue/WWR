@@ -437,17 +437,23 @@ export default function Chat({
             guideEvent('open:chat');
           }}
           data-guide="chat"
-          className="flex w-full items-center gap-3 border-t border-neutral-800 bg-neutral-950/95 px-4 py-3 text-left backdrop-blur"
+          className="flex min-h-[48px] w-full items-center gap-3 border-t border-orange-900/60 bg-neutral-900/95 px-4 py-2.5 text-left backdrop-blur"
         >
-          <span className="min-w-0 flex-1 truncate text-sm">
+          <span className="shrink-0 rounded border border-orange-700/70 bg-orange-950/40 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-orange-300">
+            {t('chat.comms')}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-[13px]">
             {preview ? (
               <>
-                <span className="font-semibold text-neutral-300">{preview.author}</span>
-                <span className="text-neutral-500"> {preview.body}</span>
+                <span className="font-semibold text-neutral-200">{preview.author}</span>
+                <span className="text-neutral-400"> {preview.body}</span>
               </>
             ) : (
-              <span className="text-neutral-600">{t('chat.comms')}</span>
+              <span className="text-neutral-400">Tap to open alliance and world chat</span>
             )}
+          </span>
+          <span className="shrink-0 text-neutral-500" aria-hidden>
+            ›
           </span>
           {totalUnread > 0 && (
             <span className="shrink-0 rounded-full bg-orange-600 px-2 py-0.5 text-xs font-semibold text-white">
