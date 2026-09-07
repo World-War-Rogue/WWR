@@ -30,7 +30,7 @@ import Gate from './Gate';
 import {GameClock} from './GameClock';
 import {noteServerTime, serverNow} from './serverClock';
 import {installErrorTap} from './recentErrors';
-import WorldMap from './WorldMap';
+import WorldMap, {forgetMap} from './WorldMap';
 import {
   ApiError,
   type BaseView,
@@ -292,6 +292,7 @@ export default function LiveApp() {
   // branch having to know about it.
   const signOut = async () => {
     await api.logout();
+    forgetMap();
     setMenuOpen(false);
     setSettingsOpen(false);
     setSheet(null);

@@ -98,6 +98,18 @@ function useCanvasSize(ref: RefObject<HTMLCanvasElement | null>) {
 }
 
 /**
+ * The last camera and world view, kept across mounts of the map. Cleared on
+ * sign-out (see forgetMap) so the next player does not open on the last
+ * one's neighbourhood.
+ */
+const lastMap: {camera: Camera | null; view: WorldView | null} = {camera: null, view: null};
+
+export function forgetMap(): void {
+  lastMap.camera = null;
+  lastMap.view = null;
+}
+
+/**
  * The plate that names a base.
  *
  * `footY` is the base's ground line - the bottom edge of its plot. The plate
@@ -596,8 +608,16 @@ export default function WorldMap({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const {w, h} = useCanvasSize(canvasRef);
 
-  const [camera, setCamera] = useState<Camera>({cx: 0, cy: 0, zoom: HOME_ZOOM});
-  const [view, setView] = useState<WorldView | null>(null);
+  // Where the map was when it was last on screen. The map unmounts whenever
+  // the player goes to the base or a Task Force and mounts again on the way
+  // back; started from scratch it sat at (0,0) painting nothing until the
+  // first fetch landed, then recentred on the player's base and fetched
+  // again - and if that first fetch was slow or failed (the backoff runs to
+  // ten seconds) the map stayed blank until Home moved the camera. Picking
+  // up the last camera and the last view instead paints the map at once,
+  // where the player left it, and refetches from there.
+  const [camera, setCamera] = useState<Camera>(() => lastMap.camera ?? {cx: 0, cy: 0, zoom: HOME_ZOOM});
+  const [view, setView] = useState<WorldView | null>(() => lastMap.view);
   const [selected, setSelected] = useState<{x: number; y: number} | null>(null);
   const [error, setError] = useState<string | null>(null);
   // True only while the map's own reload is failing and will retry. A refusal
@@ -612,7 +632,13 @@ export default function WorldMap({
   useModal(attacking !== null);
   const [squads, setSquads] = useState<SquadView | null>(null);
   const [sending, setSending] = useState(false);
-  const [centred, setCentred] = useState(false);
+  const [centred, setCentred] = useState(() => lastMap.camera !== null);
+  useEffect(() => {
+    lastMap.camera = camera;
+  }, [camera]);
+  useEffect(() => {
+    if (view) lastMap.view = view;
+  }, [view]);
   /** Bumped to ask for another attempt after a failed load. */
   const [retry, setRetry] = useState(0);
   /** Consecutive failures, for the backoff. A ref because it must not re-render. */
