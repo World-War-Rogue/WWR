@@ -23,6 +23,7 @@ import {BUILDING_MAX_LEVEL, LEVELLED_BUILDINGS, isLevelledBuilding} from '../sha
 import {COMBAT_SYSTEM_MAX_LEVEL, isCombatSystemLane} from '../shared/combatSystems';
 import {PROGRESSION_TRACKS, validateRegistry} from '../shared/progression';
 import {isPackageKey} from '../shared/upgrades';
+import {dailyWindow} from '../shared/season1Ops';
 import {hashPassword, newId} from './auth';
 import {ensureRoster} from './squads';
 
@@ -276,15 +277,27 @@ export async function devAction(
       return {ok: true, message: `Granted ${tokens.toLocaleString()} Tokens and ${credits.toLocaleString()} Credits.`};
     }
     case 'clear-limits': {
+      // Today's Season 1 counters go too, so a tester can run the day again:
+      // Arena attempts and their two caches, Daily Operations lanes and the
+      // Cache, today's map exercises, today's Warfront points. The rows are
+      // deleted, not the wallet - what was paid stays paid.
+      const day = dailyWindow(now);
       await db.batch([
         db.prepare(`DELETE FROM depot_purchases WHERE player_id = ?1`).bind(target.id),
         db.prepare(`DELETE FROM trade_purchases WHERE player_id = ?1`).bind(target.id),
         db
           .prepare(`UPDATE players SET coupon_week = -1, coupon_8_used = 0, coupon_4_used = 0, shield_cooldown_until = NULL WHERE id = ?1`)
           .bind(target.id),
-        log(db, actorId, target.id, 'clear-limits', {}, now),
+        db.prepare(`DELETE FROM arena_attempts WHERE player_id = ?1 AND day_key = ?2`).bind(target.id, day.key),
+        db.prepare(`DELETE FROM daily_ops WHERE player_id = ?1 AND day_key = ?2`).bind(target.id, day.key),
+        db.prepare(`DELETE FROM daily_meter WHERE player_id = ?1 AND day_key = ?2`).bind(target.id, day.key),
+        db.prepare(`DELETE FROM map_exercises WHERE player_id = ?1 AND day_key = ?2`).bind(target.id, day.key),
+        db.prepare(`DELETE FROM warfront_points WHERE player_id = ?1 AND day_key = ?2`).bind(target.id, day.key),
+        db.prepare(`DELETE FROM warfront_days WHERE player_id = ?1 AND day_key = ?2`).bind(target.id, day.key),
+        db.prepare(`DELETE FROM event_reward_grants WHERE player_id = ?1 AND day_key = ?2`).bind(target.id, day.key),
+        log(db, actorId, target.id, 'clear-limits', {day: day.key}, now),
       ]);
-      return {ok: true, message: 'Depot daily caps, Trade Post windows, shield coupons and cooldown cleared.'};
+      return {ok: true, message: 'Depot caps, Trade Post windows, shield coupons, and today’s Arena attempts, Daily Operations, exercises, Warfront points and reward grants cleared.'};
     }
     case 'drop-shields': {
       // Every fresh account - bots included - carries the 48-hour new-player
