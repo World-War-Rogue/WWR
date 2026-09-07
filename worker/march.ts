@@ -308,7 +308,7 @@ export async function launch(
   // Attacks burn Fuel: a conditional debit against the stock revision, so a
   // column never leaves on Fuel that was spent elsewhere a moment before.
   if (kind === 'attack') {
-    const fuel = attackFuel(units.length, plots);
+    const fuel = attackFuel(units.length);
     const base = await readBase(db, attackerId, now);
     if (base.resources.fuel < fuel) {
       return {

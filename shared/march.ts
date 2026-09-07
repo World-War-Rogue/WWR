@@ -108,14 +108,13 @@ export interface Deployment {
 /**
  * Attacking burns Fuel. Owner's decision 2026-09-07: Fuel is the material
  * that sends attacks - stored without limit, produced at a fixed rate, won
- * in raids and daily tasks, and spent on every attack from the map. A
- * flat call-out plus a share per vehicle and per plot of distance, so a
- * big column sent far costs the most. Reinforcing an ally is free.
+ * in raids and daily tasks, and spent on every attack from the map. A flat
+ * call-out plus a share per vehicle; distance does not matter.
+ * Reinforcing an ally is free.
  */
 export const ATTACK_FUEL_BASE = 100;
 export const ATTACK_FUEL_PER_UNIT = 20;
-export const ATTACK_FUEL_PER_PLOT = 5;
 
-export function attackFuel(units: number, plots: number): number {
-  return Math.round(ATTACK_FUEL_BASE + ATTACK_FUEL_PER_UNIT * Math.max(0, units) + ATTACK_FUEL_PER_PLOT * Math.max(0, plots));
+export function attackFuel(units: number): number {
+  return Math.round(ATTACK_FUEL_BASE + ATTACK_FUEL_PER_UNIT * Math.max(0, units));
 }

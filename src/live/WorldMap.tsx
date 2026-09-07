@@ -10,7 +10,7 @@
  * exactly one base, so plot coordinates are the only unit this file thinks in;
  * pixels appear only at the moment of drawing.
  */
-import {attackFuel, plotsBetween} from '../../shared/march';
+import {attackFuel} from '../../shared/march';
 import {guideEvent} from './guide/bus';
 import {SHIELD_WORDING, isShielded} from '../../shared/shields';
 import {remaining} from './BuildingPanel';
@@ -1714,12 +1714,8 @@ export default function WorldMap({
                 const doing = awaySquads.get(name);
                 const filled = (squads?.squads[name] ?? []).filter(Boolean).length;
                 const power = squads?.power[name] ?? 0;
-                // What the attack burns: Fuel by column size and distance.
-                const from = view?.you.plot;
-                const fuel =
-                  !allied && attacking && from
-                    ? attackFuel(filled, plotsBetween(from.x, from.y, attacking.x, attacking.y))
-                    : null;
+                // What the attack burns: Fuel by column size. Distance is free.
+                const fuel = !allied && attacking ? attackFuel(filled) : null;
                 const haveFuel = squads?.base.resources.fuel ?? 0;
                 // A squad that is out cannot be sent, and an empty one has
                 // nothing to send. Both are said rather than merely disabled -
