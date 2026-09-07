@@ -23,6 +23,8 @@ export interface PlacedBase {
   skin: string;
   username: string;
   level: number;
+  /** The instant the base's shield ends, if one is up; null otherwise. */
+  shieldUntil: number | null;
   worldId: number;
   /**
    * The world this player calls home, which is not the world they are standing
@@ -165,7 +167,8 @@ export async function basesInViewport(
       `SELECT pl.plot_x AS x, pl.plot_y AS y, b.skin AS skin, p.username AS username,
               COALESCE(MAX(bd.level, 1), 1) AS level, pl.world_id AS worldId,
               b.banner AS banner, b.emblem AS emblem, b.lights AS lights, b.decal AS decal,
-              b.home_world_id AS homeWorldId, am.alliance_id AS allianceId
+              b.home_world_id AS homeWorldId, am.alliance_id AS allianceId,
+              p.shield_until AS shieldUntil
          FROM placements pl
          JOIN players p ON p.id = pl.player_id
          JOIN bases b ON b.player_id = pl.player_id

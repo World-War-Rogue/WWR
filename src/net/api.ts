@@ -165,6 +165,8 @@ export interface PlacedBase {
   skin: string;
   username: string;
   level: number;
+  /** The instant its shield ends, while one is up. */
+  shieldUntil: number | null;
   worldId: number;
   /** Home world, not current world - what "same server" means in an event. */
   homeWorldId: number | null;
@@ -268,6 +270,19 @@ export interface SquadView {
   away: string[];
   /** The Command Center and asset-building levels, and the job running. */
   base: BaseLevelsView;
+  /** Construction, shield and guide state. */
+  season1: SeasonState;
+}
+
+export interface SeasonState {
+  build: {id: string; assetId: string; startedAt: number; completesAt: number} | null;
+  shield: {
+    until: number | null;
+    kind: string | null;
+    cooldownUntil: number | null;
+    coupons: {h8: boolean; h4: boolean};
+  };
+  guide: {step: number; enabled: boolean; completed: boolean; tips: string[]};
 }
 
 export interface BaseJobView {
@@ -404,6 +419,16 @@ export const api = {
       {method: 'POST'},
     ),
   squads: () => call<SquadView>('/api/squads'),
+  season: () => call<SeasonState>('/api/season'),
+  buildAsset: (assetId: string) =>
+    call<SquadView>('/api/assets/build', {method: 'POST', body: JSON.stringify({assetId})}),
+  applyShield: (kind: string, split?: Wallet) =>
+    call<{ok: true; wallet: Wallet; season1: SeasonState}>('/api/shield', {
+      method: 'POST',
+      body: JSON.stringify({kind, split}),
+    }),
+  guide: (patch: {step?: number; enabled?: boolean; completed?: boolean; tip?: string}) =>
+    call<{ok: true; season1: SeasonState}>('/api/guide', {method: 'POST', body: JSON.stringify(patch)}),
 
   /**
    * Buy a Service Rank, or fit a package.

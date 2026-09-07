@@ -18,7 +18,12 @@ import {type BaseLevelsView, type OwnedAsset, type Wallet, api} from '../net/api
 import BuildingPanel from './BuildingPanel';
 import {HUB_OF_CATEGORY, categoryBoost, rankCeiling} from '../../shared/buildings';
 import {NO_PACKAGES} from '../../shared/upgrades';
-import {seasonWeek, unlockWeekOf} from '../../shared/season';
+import {unlockWeekOf, weekStart} from '../../shared/season';
+import {buildState} from '../../shared/construction';
+import {type BuildingLevels, NO_BUILDINGS} from '../../shared/buildings';
+import {formatClock, formatGameDate} from '../../shared/gametime';
+import {buildingLabel, remaining} from './BuildingPanel';
+import {type SeasonState, ApiError} from '../net/api';
 import {t} from '../i18n';
 import {taskForceName} from './taskForce';
 import {
@@ -88,11 +93,43 @@ function Bars({asset}: {asset: Asset}) {
   );
 }
 
-/** The overlay text for an asset the player does not hold, or null. */
-export function unlockLabel(assetId: string, now: number): string | null {
-  const week = unlockWeekOf(assetId);
-  if (week === null) return 'Coastal season';
-  return seasonWeek(now) >= week ? `Unlocked week ${week} · construction coming` : `Unlocks week ${week}`;
+/**
+ * The overlay for an asset the player does not hold. ONBOARDING, SHIELDS &
+ * CONSTRUCTION v1 §1 - one state, one line, and the next action.
+ */
+export function unlockLabel(assetId: string, levels: BuildingLevels | null, building: SeasonState['build'], now: number): {
+  head: string;
+  body: string;
+  canBuild: boolean;
+} {
+  if (building?.assetId === assetId) {
+    return {head: 'Under construction', body: `Completes ${formatClock(building.completesAt)} RST`, canBuild: false};
+  }
+  const state = buildState(assetId, levels ?? NO_BUILDINGS, now);
+  switch (state.kind) {
+    case 'locked':
+      return {
+        head: `Opens week ${state.week} · ${formatGameDate(weekStart(state.week))} 00:00 RST`,
+        body: 'Blueprint not yet available.',
+        canBuild: false,
+      };
+    case 'needs_level':
+      return {
+        head: `Available now · requires ${buildingLabel(state.building)} level ${state.level}`,
+        body: 'Upgrade this building to begin construction.',
+        canBuild: false,
+      };
+    case 'ready': {
+      const c = state.spec.cost;
+      return {
+        head: `Available now · build at ${buildingLabel(state.building)}`,
+        body: `Cost: Fuel ${c.fuel.toLocaleString()} · Steel ${c.steel.toLocaleString()} · Munitions ${c.munitions.toLocaleString()} · Alloy ${c.alloy.toLocaleString()} · Time: ${remaining(state.spec.ms)}`,
+        canBuild: true,
+      };
+    }
+    default:
+      return {head: 'Coastal season', body: 'Naval assets arrive in Season 3.', canBuild: false};
+  }
 }
 
 function Card({
@@ -101,6 +138,8 @@ function Card({
   held,
   onUpgrade,
   onView,
+  lock,
+  onBuild,
 }: {
   asset: Asset;
   squad: string | null;
@@ -108,8 +147,9 @@ function Card({
   onUpgrade: (() => void) | null;
   /** For an asset not held: open it to look, not to buy. */
   onView: (() => void) | null;
+  lock: ReturnType<typeof unlockLabel> | null;
+  onBuild: (() => void) | null;
 }) {
-  const lock = held ? null : unlockLabel(asset.id, Date.now());
   const counters = counterWeb(asset.category);
   const fitted = held
     ? PACKAGE_KEYS.reduce((n, k) => n + (held.packages[k] > 1 ? 1 : 0), 0)
@@ -127,12 +167,24 @@ function Card({
     >
       {lock && (
         // The overlay: the asset is visible in full underneath, and this is
-        // the one thing that says why it cannot be used yet.
-        <span className="pointer-events-none absolute right-2 top-2 z-10 rounded border border-orange-800/70 bg-neutral-950/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-orange-300">
-          {lock}
-        </span>
+        // the one thing that says why it cannot be used yet - and what to do.
+        <div className="absolute inset-x-2 top-2 z-10 rounded border border-orange-800/70 bg-neutral-950/95 px-2 py-1.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-orange-300">{lock.head}</p>
+          <p className="mt-0.5 text-[10px] text-neutral-400">{lock.body}</p>
+          {lock.canBuild && onBuild && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onBuild();
+              }}
+              className="mt-1.5 w-full rounded border border-orange-600 bg-orange-950/40 px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-orange-200 transition hover:bg-orange-900/40"
+            >
+              Build asset
+            </button>
+          )}
+        </div>
       )}
-      <div className={`flex items-start gap-2 ${lock ? 'opacity-60' : ''}`}>
+      <div className={`flex items-start gap-2 ${lock ? 'pt-14 opacity-60' : ''}`}>
         {/*
           The asset at its current stage, when it has art; the silhouette
           icon until then. Sized so the card stays a card - the upgrade sheet
@@ -233,7 +285,21 @@ export default function Assets({
   const [roster, setRoster] = useState<Map<string, OwnedAsset>>(new Map());
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [base, setBase] = useState<BaseLevelsView | null>(null);
+  const [season1, setSeason1] = useState<SeasonState | null>(null);
   const [upgrading, setUpgrading] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const build = async (assetId: string) => {
+    setNotice(null);
+    try {
+      const view = await api.buildAsset(assetId);
+      setSeason1(view.season1);
+      setRoster(new Map(view.owned.map((o) => [o.assetId, o])));
+      setBase(view.base);
+    } catch (err) {
+      setNotice(err instanceof ApiError ? err.message : 'Could not reach the server.');
+    }
+  };
 
   // Squad placement, so each card can say where it is. Read once when the
   // screen opens: nothing here changes while it is on screen, and the squad
@@ -254,6 +320,7 @@ export default function Assets({
         setRoster(new Map(view.owned.map((o) => [o.assetId, o])));
         setWallet(view.wallet);
         setBase(view.base);
+        setSeason1(view.season1);
       })
       .catch(() => undefined);
     return () => {
@@ -340,6 +407,7 @@ export default function Assets({
           No asset is stronger than another. Bigger numbers cost more lift, and a squad has a
           lift budget — so the choice is what a squad is <em>for</em>, not which entries are best.
         </p>
+        {notice && <p className="mb-3 text-[11px] text-red-400">{notice}</p>}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {shown.map((asset) => (
             <div key={asset.id}>
@@ -349,6 +417,8 @@ export default function Assets({
                 held={roster.get(asset.id) ?? null}
                 onUpgrade={wallet ? () => setUpgrading(asset.id) : null}
                 onView={wallet ? () => setUpgrading(asset.id) : null}
+                lock={roster.get(asset.id) ? null : unlockLabel(asset.id, base?.levels ?? null, season1?.build ?? null, Date.now())}
+                onBuild={() => void build(asset.id)}
               />
             </div>
           ))}
@@ -362,7 +432,17 @@ export default function Assets({
         <AssetUpgrade
           asset={ASSET_BY_ID[upgrading]}
           held={roster.get(upgrading) ?? {assetId: upgrading, level: 1, packages: NO_PACKAGES, packageCredits: 0}}
-          locked={roster.get(upgrading) ? null : unlockLabel(upgrading, Date.now())}
+          locked={
+            roster.get(upgrading)
+              ? null
+              : (() => {
+                  const w = unlockWeekOf(upgrading);
+                  const b = ASSET_BY_ID[upgrading] ? HUB_OF_CATEGORY[ASSET_BY_ID[upgrading].category] : null;
+                  return w === null || !b
+                    ? 'Not this season'
+                    : `This asset opens in Week ${w}. Inspect it now; build it at ${buildingLabel(b)} when it becomes available`;
+                })()
+          }
           wallet={wallet}
           boost={base ? categoryBoost(base.levels, ASSET_BY_ID[upgrading].category) : 1}
           rankCeiling={base ? rankCeiling(base.levels) : undefined}

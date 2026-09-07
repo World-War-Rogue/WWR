@@ -22,6 +22,7 @@ import {readBase} from './buildings';
 import {categoryBoost, marchMultiplier} from '../shared/buildings';
 import {readLevels} from './buildings';
 import {TASK_FORCE_UNLOCK, taskForceOpen} from '../shared/season';
+import {SHIELD_COOLDOWN_MS, SHIELD_WORDING, isShielded} from '../shared/shields';
 import {DRONE_WORDING, droneCount, droneNetworkMultiplier, isDrone, paceMobility} from '../shared/drones';
 
 export interface MarchRow {
@@ -222,6 +223,15 @@ export async function launch(
 ): Promise<LaunchResult> {
   if (attackerId === defenderId) return {ok: false, error: 'That is your own base.'};
 
+  if (kind === 'attack') {
+    // A shielded base is not a target. SHIELDS v1.
+    const target = await db
+      .prepare(`SELECT shield_until AS until FROM players WHERE id = ?1`)
+      .bind(defenderId)
+      .first<{until: number | null}>();
+    if (isShielded(target?.until, now)) return {ok: false, error: SHIELD_WORDING.targetBlocked};
+  }
+
   const units = await unitsOf(db, attackerId, squad);
   if (units.length === 0) return {ok: false, error: `Task Force ${squad} is empty.`};
   const levels = await readLevels(db, attackerId);
@@ -294,6 +304,18 @@ export async function launch(
           ? 'You already have a squad reinforcing them.'
           : `Task Force ${squad} is already marching.`,
     };
+  }
+
+  // Ordering an attack drops your own shield, for good, and starts the
+  // cooldown. Reinforcing does not. SHIELDS v1 with the owner's ruling.
+  if (kind === 'attack') {
+    await db
+      .prepare(
+        `UPDATE players SET shield_until = NULL, shield_kind = NULL, shield_cooldown_until = ?2
+          WHERE id = ?1 AND shield_until IS NOT NULL AND shield_until > ?3`,
+      )
+      .bind(attackerId, now + SHIELD_COOLDOWN_MS, now)
+      .run();
   }
 
   return {ok: true, arrivesAt, seconds};
@@ -468,23 +490,103 @@ export async function settleArrivals(
       attackUnits = [];
     }
 
-    const [ownUnits, reinforcements, defenderBase] = await Promise.all([
+    const [ownUnits, reinforcements, defenderLevels, defenderShield] = await Promise.all([
       homeUnits(db, march.defender_id),
       garrisonUnits(db, march.defender_id, now),
+      readLevels(db, march.defender_id),
       db
-        .prepare(`SELECT command_post FROM buildings WHERE player_id = ?1`)
+        .prepare(`SELECT shield_until AS until FROM players WHERE id = ?1`)
         .bind(march.defender_id)
-        .first<{command_post: number}>()
-        .catch(() => null),
+        .first<{until: number | null}>(),
     ]);
+
+    // A shield raised after the march left: it does not land. No fight, no
+    // raid, a blocked-attack report, and the column turns for home at once.
+    // SHIELDS v1 - a shield already up when the attack was ordered would
+    // have refused the launch.
+    if (isShielded(defenderShield?.until, march.arrives_at)) {
+      const battleId = newId();
+      await db.batch([
+        db
+          .prepare(
+            `INSERT INTO battles
+               (id, world_id, plot_x, plot_y, fought_at, attacker_id, defender_id,
+                attacker_name, defender_name, outcome,
+                attacker_power, defender_power, attacker_losses, defender_losses, detail)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,'blocked',0,0,0,0,?10)`,
+          )
+          .bind(
+            battleId,
+            worldId,
+            march.to_x,
+            march.to_y,
+            now,
+            march.attacker_id,
+            march.defender_id,
+            march.attacker,
+            march.defender,
+            JSON.stringify({
+              version: 1,
+              rounds: [],
+              squads: [
+                {
+                  side: 'attacker',
+                  squad: march.squad,
+                  heroes: attackUnits.map((u) => ASSET_BY_ID[u.assetId]?.name ?? u.assetId),
+                  losses: 0,
+                  survived: true,
+                },
+              ],
+              notes: [`${march.defender} was shielded. The attack could not land and turned for home.`],
+            }),
+          ),
+        db
+          .prepare(
+            `INSERT INTO battle_participants (battle_id, player_id, side, alliance_id)
+             VALUES (?1, ?2, 'attacker', NULL)`,
+          )
+          .bind(battleId, march.attacker_id),
+        db
+          .prepare(
+            `INSERT INTO battle_participants (battle_id, player_id, side, alliance_id)
+             VALUES (?1, ?2, 'defender', NULL)`,
+          )
+          .bind(battleId, march.defender_id),
+        db.prepare(`UPDATE marches SET battle_id = ?2 WHERE id = ?1`).bind(march.id, battleId),
+        db
+          .prepare(
+            `INSERT INTO marches
+               (id, world_id, attacker_id, squad, defender_id, units,
+                from_x, from_y, to_x, to_y, departed_at, arrives_at, kind)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,'return')`,
+          )
+          .bind(
+            newId(),
+            march.world_id,
+            march.attacker_id,
+            march.squad,
+            march.attacker_id,
+            march.units,
+            march.to_x,
+            march.to_y,
+            march.from_x,
+            march.from_y,
+            now,
+            now + (march.arrives_at - march.departed_at),
+          ),
+      ]);
+      fought += 1;
+      continue;
+    }
 
     // Everything at home, plus whatever allies have parked here. This is the
     // payoff for reinforcing and the reason it is worth a squad.
     const defendUnits = [...ownUnits, ...reinforcements];
 
     // Home ground. Passed IN to the resolver rather than read inside it, so
-    // the arena - which has no base - cannot inherit a bonus.
-    const cp = defenderBase?.command_post ?? 0;
+    // the arena - which has no base - cannot inherit a bonus. The Command
+    // Center's level (base levels v2), not the old command_post row.
+    const cp = defenderLevels.command_center - 1;
     const attacker: SideSpec = {name: march.attacker, units: attackUnits};
     const defender: SideSpec = {
       name: march.defender,

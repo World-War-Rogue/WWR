@@ -9,6 +9,8 @@ import {ensureRally, lastRalliedAt, rallyTo, readRally, setRally} from './rally'
 import {assignSlot, ensureRoster, moveSlot, readSquads, squadLiftUsed, squadPower} from './squads';
 import {packageUp, rankUp, resetPackages, settleWallet} from './upgrades';
 import {buyResource, buySecondTeam, readBase, readLevels, startLevel} from './buildings';
+import {applyShield, readSeasonState, saveGuide, startBuild} from './season1';
+import {NEW_SHIELD_MS, isShielded} from '../shared/shields';
 import {type LevelledBuilding, rankCeiling, signalsLeadMs} from '../shared/buildings';
 import {BOARD_BUILDING_BY_ID} from '../shared/base';
 import {isPackageKey} from '../shared/upgrades';
@@ -522,8 +524,9 @@ async function handleDecision(request: Request, env: Env): Promise<Response> {
     const playerId = newId();
     await env.DB.prepare(
       `INSERT INTO players (id, username, username_key, password_hash, created_at, last_seen_at,
-                            email, email_key, country, locale, approved_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6, ?7, ?8, ?9, ?5)`,
+                            email, email_key, country, locale, approved_at,
+                            shield_until, shield_kind)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6, ?7, ?8, ?9, ?5, ?10, 'new')`,
     )
       .bind(
         playerId,
@@ -535,6 +538,7 @@ async function handleDecision(request: Request, env: Env): Promise<Response> {
         row.email.toLowerCase(),
         row.country,
         row.locale,
+        now + NEW_SHIELD_MS,
       )
       .run();
     await seedBase(env, playerId, row.username, isSkinId(row.skin) ? row.skin : STARTER_SKIN_IDS[0], now);
@@ -747,7 +751,9 @@ async function handleWorld(request: Request, env: Env, player: PlayerRow): Promi
       kind: m.kind,
     })),
     skins: SKINS,
-    bases,
+    // A shield shows on the map only while it is up; the instant itself is
+    // public, since the popup says how long is left.
+    bases: bases.map((b) => ({...b, shieldUntil: isShielded(b.shieldUntil, now) ? b.shieldUntil : null})),
     // The map refetches on every camera settle, which makes it the most
     // frequent corrector of the client's clock offset. Everything with a
     // countdown on it is drawn against this rather than against the device.
@@ -1068,6 +1074,7 @@ async function handleSquads(env: Env, player: PlayerRow): Promise<Response> {
     // The Command Center and asset-building levels, so every asset card can
     // draw the attributes the building boost gives without a second request.
     base: {...baseLevelsView(base), season: CURRENT_SEASON, wallet: {tokens: wallet.tokens, credits: wallet.credits}},
+    season1: await readSeasonState(env.DB, player.id, now),
     // Echoed so the squad screen can show them without asking for the base
     // separately. They no longer affect what fits in a squad.
     buildings: {
@@ -2622,6 +2629,43 @@ async function route(
   }
 
   if (endpoint === 'POST /api/assets/rank') return handleRankUp(request, env, player);
+
+  if (endpoint === 'GET /api/season') {
+    return json(await readSeasonState(env.DB, player.id, Date.now()));
+  }
+
+  if (endpoint === 'POST /api/assets/build') {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const assetId = typeof body?.assetId === 'string' ? body.assetId : '';
+    const result = await startBuild(env.DB, player.id, assetId, Date.now(), (b) => buildingName(b as LevelledBuilding));
+    if (!result.ok) return fail(400, result.error);
+    return handleSquads(env, player);
+  }
+
+  if (endpoint === 'POST /api/shield') {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const kind = typeof body?.kind === 'string' ? body.kind : '';
+    const split = readSplit(body);
+    if (split === 'bad') return fail(400, 'That payment does not make sense.');
+    const result = await applyShield(env.DB, player.id, kind, split, Date.now());
+    if (!result.ok) return fail(400, result.error);
+    return json({
+      ok: true,
+      wallet: {tokens: result.wallet.tokens, credits: result.wallet.credits},
+      season1: await readSeasonState(env.DB, player.id, Date.now()),
+    });
+  }
+
+  if (endpoint === 'POST /api/guide') {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    await saveGuide(env.DB, player.id, {
+      step: typeof body?.step === 'number' ? body.step : undefined,
+      enabled: typeof body?.enabled === 'boolean' ? body.enabled : undefined,
+      completed: body?.completed === true ? true : undefined,
+      tip: typeof body?.tip === 'string' ? body.tip : undefined,
+    });
+    return json({ok: true, season1: await readSeasonState(env.DB, player.id, Date.now())});
+  }
 
   if (endpoint === 'GET /api/base/levels') {
     const now = Date.now();
