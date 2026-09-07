@@ -21,6 +21,7 @@ import {ensureRally, lastRalliedAt, rallyTo, readRally, setRally} from './rally'
 import {assignSlot, deltaOpen, ensureRoster, moveSlot, readSquads, squadPower} from './squads';
 import {packageUp, rankUp, resetPackages, settleWallet} from './upgrades';
 import {readSystems, systemUp} from './combatSystems';
+import {powerBreakdown} from '../shared/powerBreakdown';
 import {createQaAccount, devAction, devSeedsEnabled, devStatus} from './devProgression';
 import {isCombatSystemLane} from '../shared/combatSystems';
 import {buyResource, buySecondTeam, readBase, readLevels, startLevel} from './buildings';
@@ -2981,6 +2982,19 @@ async function route(
   }
 
   if (endpoint === 'GET /api/profile') return handleProfile(request, env);
+
+  // Where your own power comes from: the same inputs worker/power.ts sums,
+  // itemised per asset and per source (shared/powerBreakdown.ts).
+  if (endpoint === 'GET /api/power') {
+    const now = Date.now();
+    const [owned, base, board, systems] = await Promise.all([
+      ensureRoster(env.DB, player.id, now),
+      readBase(env.DB, player.id, now),
+      readSquads(env.DB, player.id),
+      readSystems(env.DB, player.id),
+    ]);
+    return json(powerBreakdown(owned, base.levels, board, systems));
+  }
 
   if (endpoint === 'POST /api/profile') return handleEditProfile(request, env, player);
 

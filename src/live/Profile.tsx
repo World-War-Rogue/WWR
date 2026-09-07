@@ -108,11 +108,16 @@ function GlyphPortrait({
   );
 }
 
-function Stat({label, value}: {label: string; value: string}) {
+function Stat({label, value, onMore}: {label: string; value: string; onMore?: () => void}) {
   return (
     <div className="rounded border border-neutral-800 bg-neutral-900/60 px-3 py-2">
       <p className="text-[10px] uppercase tracking-[0.2em] text-neutral-500">{label}</p>
       <p className="mt-0.5 font-mono text-sm text-neutral-100">{value}</p>
+      {onMore && (
+        <button onClick={onMore} className="mt-1 text-[10px] text-orange-400 underline underline-offset-2 hover:text-orange-300">
+          Where it comes from ›
+        </button>
+      )}
     </div>
   );
 }
@@ -121,10 +126,13 @@ export default function Profile({
   username,
   editable,
   onClose,
+  onPowerBreakdown,
 }: {
   username: string;
   editable: boolean;
   onClose: () => void;
+  /** Your own profile only: the itemised power screen. */
+  onPowerBreakdown?: () => void;
 }) {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [glyph, setGlyph] = useState<string>('star');
@@ -339,7 +347,7 @@ export default function Profile({
           )}
 
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Stat label={t('menu.power')} value={formatNumber(profile.power)} />
+            <Stat label={t('menu.power')} value={formatNumber(profile.power)} onMore={editable ? onPowerBreakdown : undefined} />
             <Stat
               label={t('nav.alliance')}
               value={

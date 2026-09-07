@@ -705,7 +705,11 @@ export default function Squads({
         choices have to arrive over it.
       */}
       {picking && view && (
-        <div className="absolute inset-0 z-30 flex flex-col bg-black/70 backdrop-blur-sm">
+        // Padded for the chat bar: the Squads screen is a fixed wrapper (its
+        // own stacking context), so the bar - a fixed sibling - paints over
+        // the bottom of this overlay whatever z-index it carries. Same fix as
+        // the map's Task Force composer.
+        <div className="absolute inset-0 z-30 flex flex-col bg-black/70 pb-[calc(3.5rem+env(safe-area-inset-bottom))] backdrop-blur-sm">
           <button
             aria-label={t('squads.cancel')}
             onClick={() => setPicking(null)}

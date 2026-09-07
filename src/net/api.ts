@@ -12,6 +12,7 @@ import type {BattleDetail, BattleSummary} from '../../shared/battles';
 import type {Deployment, MarchKind} from '../../shared/march';
 import type {PackageKey, Packages} from '../../shared/upgrades';
 import type {CombatSystemLane, CombatSystems} from '../../shared/combatSystems';
+import type {PowerBreakdown} from '../../shared/powerBreakdown';
 import type {BuildingLevels} from '../../shared/buildings';
 
 export interface ChatMessage {
@@ -512,6 +513,7 @@ export const api = {
   tradePost: () => call<TradePostView>('/api/trade-post'),
   tradePostBuy: (body: {purchaseId: string; offerId: string; assetId: string; package: PackageKey; route: 'tokens' | 'credits'}) =>
     call<TradePostBuyResponse>('/api/trade-post/buy', {method: 'POST', body: JSON.stringify(body)}),
+  power: () => call<PowerBreakdown>('/api/power'),
   /** Development-only progression seeds; 404 anywhere but the test realm. */
   devStatus: () => call<DevStatus>('/api/dev/progression'),
   devAction: (body: Record<string, unknown>) =>
