@@ -237,6 +237,37 @@ without anyone noticing the snapshot was stale.
   cache across mounts (`forgetMap()` on sign-out), so the map does not open
   blank when the player comes back from the base.
 
+## Progression registry and Combat Systems
+
+`shared/progression.ts` is the table every permanent track reads: Service
+Rank, four packages, three Combat Systems lanes, sixteen buildings, levels
+1-50 each. It is BUILT FROM the curves in `shared/economy.ts`,
+`shared/buildings.ts` and `shared/combatSystems.ts` - change a curve there
+and the registry follows; never restate a price anywhere else. `npm test`
+pins registry = resolver prices, Tokens = Credits on every row, and
+cumulative power = sum of steps. Buildings past 10 are a flagged placeholder
+until ChatGPT's designed table lands.
+
+Combat Systems are PER TASK FORCE (not per asset): `squad_systems` rows,
+`worker/combatSystems.ts`, lanes ride on every unit into the resolver
+(`CombatantSpec.systems`), and every lane above 1 must appear in the battle
+report notes. Sustainment is a repair-time effect and never a battle line.
+
+Package strips refund only the Credits paid; Tokens never come back (Matt's
+final ruling 2026-09-07, overriding a ChatGPT proposal to refund in the
+original currency). `pkg_credits` banks only the Credit share.
+
+## Dev tools (test realm only)
+
+`/api/dev/progression` (worker/devProgression.ts) exists only where
+`ALLOW_DEV_PROGRESSION_SEEDS` is `"true"` - `env.test` in wrangler.jsonc and
+nowhere else - and only answers the owner. It seeds `qa-progression-max`
+and nothing else, one transaction per action, logged in `dev_seed_log`. The
+screen is "Dev · progression seeds" in the account menu, shown only when
+the probe answers. Migrate the test realm with
+`npx wrangler d1 migrations apply wwr-test-db --remote --env test` and deploy
+it with `npx wrangler deploy --env test`.
+
 ## Claude session log
 
 Chats get lost; the repo does not. Every commit carries its session link in
