@@ -27,6 +27,8 @@ import {claimCache, listGrants, noteDailyProgress, readDaily} from './dailyOps';
 import {ensureExercises, readExercise, viewOf} from './exercises';
 import {arenaView, listAttempts, makeAttempt, readAttempt} from './arena';
 import {arenaSquadView, saveArenaSlots} from './arenaSquad';
+import {noteWarfront} from './warfrontLedger';
+import {warfrontView} from './warfront';
 import {seasonPhase} from '../shared/season1Ops';
 import {FARM_ROLE} from './bots';
 import {isCombatSystemLane} from '../shared/combatSystems';
@@ -1448,6 +1450,8 @@ async function handleAttack(request: Request, env: Env, player: PlayerRow): Prom
   // the moment it leaves; an attack is Mobilization now and Engagement (or,
   // for a contract, Cooperation) when the battle resolves.
   await noteDailyProgress(env.DB, player.id, allied ? 'cooperation' : 'mobilization', now).catch(() => undefined);
+  // Warfront: a reinforcement is Support Score the moment it leaves.
+  if (allied) await noteWarfront(env.DB, player.id, 'reinforce', `reinforce:${player.id}:${now}`, 'Reinforced an ally', now).catch(() => undefined);
 
   return json({
     arrivesAt: result.arrivesAt,
@@ -3046,6 +3050,15 @@ async function route(
     return json({ok: true, reward: result.reward, daily: await readDaily(env.DB, player.id, Date.now())});
   }
   if (endpoint === 'GET /api/ops/grants') return json({grants: await listGrants(env.DB, player.id)});
+
+  // Dominion Warfront: the screen. Standings, the treasury, today's tally.
+  if (endpoint === 'GET /api/warfront') {
+    const now = Date.now();
+    const worlds = await reachableWorlds(env.DB, player.id, now);
+    const world = worlds.find((entry) => entry.kind === 'home') ?? worlds[0];
+    if (!world) return fail(409, 'You have not been deployed yet.');
+    return json(await warfrontView(env.DB, player.id, world.id, now));
+  }
 
   // The Arena Squad: the setup screen, and the save. Slots only; every
   // figure and every rule is the server's (worker/arenaSquad.ts).

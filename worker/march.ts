@@ -21,6 +21,7 @@ import {type SideSpec, resolve} from '../shared/combat';
 import {type CombatSystems} from '../shared/combatSystems';
 import {readSystems} from './combatSystems';
 import {noteDailyProgress} from './dailyOps';
+import {noteWarfront} from './warfrontLedger';
 import {type ExerciseRow, markMarching, readExercise, settleExercise} from './exercises';
 import {EXERCISES, PATROL_NAME, isExerciseType} from '../shared/exercises';
 import type {CombatantSpec} from '../shared/combat';
@@ -953,6 +954,10 @@ export async function settleArrivals(
     await noteDailyProgress(db, march.attacker_id, (march as {contract?: number}).contract ? 'cooperation' : 'engagement', now).catch(
       () => undefined,
     );
+    // Warfront: a contract WON is Operations Score, once per march.
+    if ((march as {contract?: number}).contract && result.outcome === 'attacker') {
+      await noteWarfront(db, march.attacker_id, 'contract', `contract:${march.id}`, 'Neutral contract won', now).catch(() => undefined);
+    }
     fought += 1;
   }
   return fought;

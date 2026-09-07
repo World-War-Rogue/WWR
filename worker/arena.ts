@@ -32,6 +32,7 @@ import {hashSeed, seeded} from '../shared/exercises';
 import {dailyWindow, describeReward, seasonPhase, weeklyWindow} from '../shared/season1Ops';
 import {ARENA_SYSTEMS_KEY} from './combatSystems';
 import {grantReward} from './dailyOps';
+import {noteWarfront} from './warfrontLedger';
 import {arenaForce} from './arenaSquad';
 
 interface DayRow {
@@ -227,6 +228,10 @@ export async function makeAttempt(
   const fullEngagement =
     n === ARENA_ATTEMPTS_PER_DAY &&
     (await grantReward(db, playerId, `arena-full:${playerId}:${day.key}`, 'arena-full-engagement', FULL_ENGAGEMENT_BONUS, `Arena Full Engagement · ${describeReward(FULL_ENGAGEMENT_BONUS)}`, now));
+  // Warfront: three attempts in a day is Assault Score, once a day.
+  if (n === ARENA_ATTEMPTS_PER_DAY) {
+    await noteWarfront(db, playerId, 'arenaDay', `arena:${playerId}:${day.key}`, 'Three Arena attempts', now).catch(() => undefined);
+  }
 
   return {
     ok: true,

@@ -207,13 +207,25 @@ export function DepotSheet({onClose, onCustomise, onGoTo}: {onClose: () => void;
 }
 
 /** A department that has a building but no screen yet: its name and its job. */
-export function DepartmentSheet({id, onClose, onGoTo, onOpenArena}: {id: string; onClose: () => void; onGoTo?: (where: LevelledBuilding) => void; onOpenArena?: () => void}) {
+export function DepartmentSheet({
+  id,
+  onClose,
+  onGoTo,
+  onOpenArena,
+  onOpenWarfront,
+}: {
+  id: string;
+  onClose: () => void;
+  onGoTo?: (where: LevelledBuilding) => void;
+  onOpenArena?: () => void;
+  onOpenWarfront?: () => void;
+}) {
   const name = t(`building.${id}` as MessageKey);
   const blurb = t(`blurb.${id}` as MessageKey);
   const [base, setBase] = useBase();
   const levelled = isLevelledBuilding(id) ? id : null;
   // The Tactical Operations Center is where operations are run from: Events
-  // (Daily Operations and the Arena today; Warfront when it exists) and, once
+  // (Daily Operations, the Arena and the Warfront) and, once
   // built, Wars.
   const toc = id === 'tactical_operations_center';
   // Wars gets its tab here the day it exists; nothing is teased before then.
@@ -237,6 +249,18 @@ export function DepartmentSheet({id, onClose, onGoTo, onOpenArena}: {id: string;
               <span>
                 <span className="block text-sm font-semibold text-neutral-100">Iron Dominion Arena</span>
                 <span className="block text-[11px] text-neutral-500">Three attempts a day against the Benchmark Squad. Daily and weekly boards.</span>
+              </span>
+              <span className="text-neutral-500">›</span>
+            </button>
+          )}
+          {onOpenWarfront && (
+            <button
+              onClick={onOpenWarfront}
+              className="flex w-full items-center justify-between rounded border border-red-900/60 bg-neutral-900/40 p-3 text-left hover:border-red-600"
+            >
+              <span>
+                <span className="block text-sm font-semibold text-neutral-100">Dominion Warfront</span>
+                <span className="block text-[11px] text-neutral-500">The weekly alliance competition. Your day against the caps, server standings, the treasury.</span>
               </span>
               <span className="text-neutral-500">›</span>
             </button>

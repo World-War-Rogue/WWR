@@ -28,6 +28,8 @@ import {
   rewardIsEmpty,
   seasonPhase,
 } from '../shared/season1Ops';
+import {EXERCISES, isExerciseType} from '../shared/exercises';
+import {noteWarfront} from './warfrontLedger';
 
 /**
  * The Warehouse levels, for the stock caps. A local read rather than
@@ -120,10 +122,13 @@ export async function noteDailyProgress(db: D1Database, playerId: string, lane: 
     .run();
   if (!done.meta.changes) return false;
   const reward = laneReward(lane, seasonPhase(now).week);
-  if (rewardIsEmpty(reward)) return true;
-  await db.batch(
-    await grantStatements(db, playerId, grantKey.lane(playerId, day.key, lane), `daily-lane:${lane}`, day.key, reward, `Daily Operations · ${lane} · ${describeReward(reward)}`, now),
-  );
+  if (!rewardIsEmpty(reward)) {
+    await db.batch(
+      await grantStatements(db, playerId, grantKey.lane(playerId, day.key, lane), `daily-lane:${lane}`, day.key, reward, `Daily Operations · ${lane} · ${describeReward(reward)}`, now),
+    );
+  }
+  // Warfront: a completed lane is Operations Score, once per lane per day.
+  await noteWarfront(db, playerId, 'dailyLane', `lane:${playerId}:${day.key}:${lane}`, `Daily Operations lane · ${lane}`, now).catch(() => undefined);
   return true;
 }
 
@@ -169,6 +174,12 @@ export async function grantExerciseReward(
     await db.batch(await grantStatements(db, playerId, `exercise:${exerciseId}`, `exercise:${type}`, day.key, reward, `Map exercise · ${detail} · ${describeReward(reward)}`, now));
   }
   await noteDailyProgress(db, playerId, lane, now);
+  // Warfront: a battle exercise is Assault, a hold is Operations. Once per target.
+  if (isExerciseType(type)) {
+    await noteWarfront(db, playerId, EXERCISES[type].kind === 'battle' ? 'exerciseBattle' : 'exerciseHold', `exercise:${exerciseId}`, `Map exercise · ${EXERCISES[type].name}`, now).catch(
+      () => undefined,
+    );
+  }
 }
 
 /**
@@ -259,6 +270,7 @@ export async function claimCache(db: D1Database, playerId: string, now: number):
   // The insert is the claim. If it changed nothing, another request beat this
   // one to the same day and the wallet updates guarded on it did nothing.
   if (!results[0].meta.changes) return {ok: false, error: 'Today’s Cache is already claimed.'};
+  await noteWarfront(db, playerId, 'dailyCache', `cache:${playerId}:${view.dayKey}`, 'Daily Operations Cache claimed', now).catch(() => undefined);
   return {ok: true, reward};
 }
 

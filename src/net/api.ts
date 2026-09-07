@@ -392,6 +392,56 @@ export interface ArenaView {
   lastSettlement: {at: number; ranked: number} | null;
 }
 
+export interface WarfrontStandingRow {
+  rank: number;
+  allianceId: string;
+  tag: string;
+  name: string;
+  total: number;
+  memberSum: number;
+  contributors: number;
+  activeMembers: number;
+  activeBonus: number;
+  coordinatedOps: number;
+  division: string;
+  mine: boolean;
+}
+
+export interface WarfrontView {
+  phase: 'pre' | 'proving_ground' | 'head_to_head' | 'offseason';
+  seasonWeek: number;
+  weekKey: string;
+  closesAt: number;
+  resetAt: number;
+  today: {
+    earned: Record<'assault' | 'operations' | 'support', number>;
+    counted: Record<'assault' | 'operations' | 'support', number>;
+    score: number;
+    caps: Record<'assault' | 'operations' | 'support', number>;
+    dailyCap: number;
+  };
+  weekScore: number;
+  weekForAlliance: number;
+  membership: {allianceId: string; tag: string; name: string; joinedAt: number; eligibleAt: number | null; eligible: boolean} | null;
+  standings: WarfrontStandingRow[];
+  mine: {
+    rank: number;
+    score: {memberSum: number; contributors: number; activeMembers: number; activeBonus: number; coordinatedOps: number; coordinatedBonus: number; total: number; reachedAt: number};
+    division: {name: string; label: string; pool: Reward | null; member: Reward; memberThreshold: number};
+    members: Array<{username: string; score: number; active: boolean; me: boolean}>;
+  } | null;
+  treasury: {
+    credits: number;
+    fuel: number;
+    steel: number;
+    munitions: number;
+    alloy: number;
+    ledger: Array<{id: string; kind: string; credits: number; fuel: number; steel: number; munitions: number; alloy: number; detail: string; createdAt: number}>;
+  } | null;
+  recent: Array<{id: string; metric: 'assault' | 'operations' | 'support'; points: number; source: string; detail: string; countedFor: string | null; createdAt: number}>;
+  lastWeek: Array<{allianceId: string; rank: number; tag: string; name: string; score: number; contributors: number; division: string; mine: boolean}>;
+}
+
 export interface RewardGrant {
   id: string;
   source: string;
@@ -658,6 +708,7 @@ export const api = {
     }),
   daily: () => call<DailyView>('/api/ops/daily'),
   arena: () => call<ArenaView>('/api/arena'),
+  warfront: () => call<WarfrontView>('/api/warfront'),
   arenaSquad: () => call<ArenaSquadView>('/api/arena/squad'),
   arenaSaveSquad: (slots: Array<string | null>) => call<ArenaSquadView>('/api/arena/squad', {method: 'POST', body: JSON.stringify({slots})}),
   arenaReport: (id: string) => call<{attempt: ArenaAttempt}>(`/api/arena/report?id=${encodeURIComponent(id)}`),
