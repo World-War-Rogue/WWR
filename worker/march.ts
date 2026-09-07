@@ -20,6 +20,7 @@ import {
 import {type SideSpec, resolve} from '../shared/combat';
 import {type CombatSystems} from '../shared/combatSystems';
 import {readSystems} from './combatSystems';
+import {noteDailyProgress} from './dailyOps';
 import {deltaOpen, lockedMessage, readSquads} from './squads';
 import {readBase} from './buildings';
 import {type Resources, RESOURCE_KINDS, categoryBoost, marchMultiplier, raidLoot} from '../shared/buildings';
@@ -273,6 +274,13 @@ export async function launch(
   now: number,
   newId: () => string,
   kind: MarchKind = 'attack',
+  /**
+   * A neutral contract: an attack on a Dominion outpost (farm bot) taken by a
+   * commander with no alliance, which counts for the Cooperation lane of Daily
+   * Operations instead of Engagement. Validated by the handler; stored on the
+   * march so the settle knows which lane the battle belongs to.
+   */
+  contract = false,
 ): Promise<LaunchResult> {
   if (attackerId === defenderId) return {ok: false, error: 'That is your own base.'};
 
@@ -356,8 +364,8 @@ export async function launch(
       .prepare(
         `INSERT INTO marches
            (id, world_id, attacker_id, squad, defender_id, units,
-            from_x, from_y, to_x, to_y, departed_at, arrives_at, kind)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)`,
+            from_x, from_y, to_x, to_y, departed_at, arrives_at, kind, contract)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)`,
       )
       .bind(
         newId(),
@@ -374,6 +382,7 @@ export async function launch(
         now,
         arrivesAt,
         kind,
+        contract ? 1 : 0,
       )
       .run();
   } catch {
@@ -502,7 +511,7 @@ export async function settleArrivals(
   const due = await db
     .prepare(
       `SELECT m.id, m.world_id, m.attacker_id, a.username AS attacker, m.squad, m.units,
-              m.defender_id, d.username AS defender, m.kind,
+              m.defender_id, d.username AS defender, m.kind, m.contract,
               m.from_x, m.from_y, m.to_x, m.to_y, m.departed_at, m.arrives_at
          FROM marches m
          JOIN players a ON a.id = m.attacker_id
@@ -845,6 +854,12 @@ export async function settleArrivals(
         .catch(() => undefined);
     }
 
+    // Daily Operations: the attacker fought a battle today. A neutral contract
+    // against an outpost is the solo Cooperation route; every other attack is
+    // Engagement. One battle, one lane - never both.
+    await noteDailyProgress(db, march.attacker_id, (march as {contract?: number}).contract ? 'cooperation' : 'engagement', now).catch(
+      () => undefined,
+    );
     fought += 1;
   }
   return fought;

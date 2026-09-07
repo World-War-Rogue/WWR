@@ -10,11 +10,13 @@
 import {type ReactNode, useCallback, useEffect, useState} from 'react';
 import {taskForceName} from './taskForce';
 import {type MessageKey, t} from '../i18n';
-import {api, type ApiError} from '../net/api';
+import {api, type ApiError, type RewardGrant} from '../net/api';
+import {describeReward} from '../../shared/season1Ops';
+import {formatClock, formatGameDate} from '../../shared/gametime';
 import type {BattleDetail, BattleSummary} from '../../shared/battles';
 import {verdictFor} from '../../shared/battles';
 
-type Scope = 'mine' | 'alliance';
+type Scope = 'mine' | 'alliance' | 'rewards';
 
 // The relative-time phrases live in core: every screen that stamps something
 // with an age says it the same way, and a translator should only have to
@@ -287,9 +289,23 @@ export default function Battles({onClose, account}: {onClose: () => void; accoun
   const [open, setOpen] = useState<{summary: BattleSummary; detail: BattleDetail} | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [grants, setGrants] = useState<RewardGrant[] | null>(null);
+
   const load = useCallback(async (which: Scope) => {
     setList(null);
     setError(null);
+    if (which === 'rewards') {
+      // Reward history straight from event_reward_grants: every Daily
+      // Operations lane and Cache the server paid, with its grant id.
+      try {
+        setGrants((await api.rewardGrants()).grants);
+      } catch (e) {
+        setError((e as ApiError).message);
+        setGrants([]);
+      }
+      setList([]);
+      return;
+    }
     try {
       const result = await api.battles(which);
       setList(result.battles);
@@ -319,7 +335,7 @@ export default function Battles({onClose, account}: {onClose: () => void; accoun
         <h2 className="font-semibold text-neutral-100">{t('battles.title')}</h2>
         <div className="ml-auto flex items-center gap-1">
           {account}
-          {(['mine', 'alliance'] as const).map((which) => (
+          {(['mine', 'alliance', 'rewards'] as const).map((which) => (
             <button
               key={which}
               onClick={() => setScope(which)}
@@ -329,7 +345,7 @@ export default function Battles({onClose, account}: {onClose: () => void; accoun
                   : 'border-neutral-700 text-neutral-400 hover:border-neutral-500'
               }`}
             >
-              {which === 'mine' ? t('battles.mine') : t('battles.alliance')}
+              {which === 'mine' ? t('battles.mine') : which === 'alliance' ? t('battles.alliance') : 'Rewards'}
             </button>
           ))}
         </div>
@@ -337,10 +353,37 @@ export default function Battles({onClose, account}: {onClose: () => void; accoun
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {error && <p className="px-3 py-4 text-sm text-red-300">{error}</p>}
-        {list === null && !error && (
+        {scope === 'rewards' && grants !== null && (
+          grants.length === 0 ? (
+            <div className="px-3 py-8 text-center">
+              <p className="text-sm text-neutral-400">No rewards yet.</p>
+              <p className="mt-1 text-xs text-neutral-600">Daily Operations pay out here as you complete lanes and claim the Cache.</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-neutral-900">
+              {grants.map((g) => (
+                <li key={g.id} className="px-3 py-2">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-[12px] font-semibold text-neutral-200">
+                      {g.source === 'daily-cache' ? 'Daily Operations Cache' : g.source.startsWith('daily-lane:') ? `Daily Operations · ${g.source.slice('daily-lane:'.length)}` : g.source}
+                    </span>
+                    <span className="shrink-0 font-mono text-[10px] text-neutral-500">
+                      {formatGameDate(g.createdAt)} {formatClock(g.createdAt)} RST · wk {g.week}
+                    </span>
+                  </div>
+                  <p className="font-mono text-[11px] text-emerald-300">
+                    {describeReward({credits: g.credits, fuel: g.fuel, steel: g.steel, munitions: g.munitions, alloy: g.alloy})}
+                  </p>
+                  <p className="truncate font-mono text-[9px] text-neutral-700">grant {g.id}</p>
+                </li>
+              ))}
+            </ul>
+          )
+        )}
+        {scope !== 'rewards' && list === null && !error && (
           <p className="px-3 py-4 text-sm text-neutral-500">{t('battles.reading')}</p>
         )}
-        {list?.length === 0 && !error && (
+        {scope !== 'rewards' && list?.length === 0 && !error && (
           <div className="px-3 py-8 text-center">
             <p className="text-sm text-neutral-400">{t('battles.none')}</p>
             <p className="mt-1 text-xs text-neutral-600">{t('battles.noneHint')}</p>

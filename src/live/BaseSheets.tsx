@@ -28,6 +28,7 @@ import {
   formatNumber,
 } from '../net/api';
 import {serverNow} from './serverClock';
+import DailyOperations from './DailyOperations';
 
 function Sheet({
   title,
@@ -137,7 +138,7 @@ export function CommandCenterSheet({
         ) : (
           <Soon text="Reading…" />
         ))}
-      {tab === 'events' && <Soon text={t('cc.eventsSoon')} />}
+      {tab === 'events' && <DailyOperations />}
       {tab === 'wars' && <Soon text={t('cc.warsSoon')} />}
       {tab === 'trade' && (
         <Suspense fallback={<Soon text="Loading…" />}>

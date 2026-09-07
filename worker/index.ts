@@ -23,6 +23,8 @@ import {packageUp, rankUp, resetPackages, settleWallet} from './upgrades';
 import {readSystems, systemUp} from './combatSystems';
 import {powerBreakdown} from '../shared/powerBreakdown';
 import {createQaAccount, devAction, devSeedsEnabled, devStatus} from './devProgression';
+import {claimCache, listGrants, noteDailyProgress, readDaily} from './dailyOps';
+import {FARM_ROLE} from './bots';
 import {isCombatSystemLane} from '../shared/combatSystems';
 import {buyResource, buySecondTeam, readBase, readLevels, startLevel} from './buildings';
 import {applyShield, buyDelta, readSeasonState, saveGuide, startBuild} from './season1';
@@ -847,7 +849,15 @@ async function handleWorld(request: Request, env: Env, player: PlayerRow): Promi
     skins: SKINS,
     // A shield shows on the map only while it is up; the instant itself is
     // public, since the popup says how long is left.
-    bases: bases.map((b) => ({...b, shieldUntil: isShielded(b.shieldUntil, now) ? b.shieldUntil : null})),
+    // `contract` marks a Dominion outpost a solo commander may take a neutral
+    // contract against (Daily Operations, Cooperation lane). Only offered to
+    // players with no alliance - members reinforce instead - and the role
+    // itself is not sent.
+    bases: bases.map(({role, ...b}) => ({
+      ...b,
+      shieldUntil: isShielded(b.shieldUntil, now) ? b.shieldUntil : null,
+      contract: !ownAlliance && role === FARM_ROLE,
+    })),
     // The map refetches on every camera settle, which makes it the most
     // frequent corrector of the client's clock offset. Everything with a
     // countdown on it is drawn against this rather than against the device.
@@ -1252,6 +1262,7 @@ async function handleRankUp(
     rankCeiling(base.levels),
   );
   if (!result.ok) return fail(400, result.error);
+  await noteDailyProgress(env.DB, player.id, 'readiness', Date.now()).catch(() => undefined);
   return json({
     ok: true,
     wallet: {tokens: result.wallet.tokens, credits: result.wallet.credits},
@@ -1274,6 +1285,7 @@ async function handlePackageUp(
 
   const result = await packageUp(env.DB, player.id, assetId, key, target, split, Date.now());
   if (!result.ok) return fail(400, result.error);
+  await noteDailyProgress(env.DB, player.id, 'readiness', Date.now()).catch(() => undefined);
   return json({
     ok: true,
     wallet: {tokens: result.wallet.tokens, credits: result.wallet.credits},
@@ -1308,6 +1320,7 @@ async function handleSystemUp(request: Request, env: Env, player: PlayerRow): Pr
     rankCeiling(base.levels),
   );
   if (!result.ok) return fail(400, result.error);
+  await noteDailyProgress(env.DB, player.id, 'readiness', Date.now()).catch(() => undefined);
   return json({
     ok: true,
     wallet: {tokens: result.wallet.tokens, credits: result.wallet.credits},
@@ -1344,6 +1357,7 @@ async function handleAttack(request: Request, env: Env, player: PlayerRow): Prom
   const squad = body?.squad;
   const x = Number(body?.x);
   const y = Number(body?.y);
+  const contract = body?.contract === true;
   if (!isSquadName(squad)) return fail(400, 'No such squad.');
   if (!Number.isInteger(x) || !Number.isInteger(y)) return fail(400, 'Pick a plot on the map.');
 
@@ -1359,10 +1373,11 @@ async function handleAttack(request: Request, env: Env, player: PlayerRow): Prom
       .bind(world.id, player.id)
       .first<{x: number; y: number}>(),
     env.DB.prepare(
-      `SELECT player_id AS id FROM placements WHERE world_id = ?1 AND plot_x = ?2 AND plot_y = ?3`,
+      `SELECT pl.player_id AS id, p.role AS role FROM placements pl JOIN players p ON p.id = pl.player_id
+        WHERE pl.world_id = ?1 AND pl.plot_x = ?2 AND pl.plot_y = ?3`,
     )
       .bind(world.id, x, y)
-      .first<{id: string}>(),
+      .first<{id: string; role: string}>(),
   ]);
 
   if (!mine) return fail(409, 'You are not standing anywhere yet.');
@@ -1388,6 +1403,15 @@ async function handleAttack(request: Request, env: Env, player: PlayerRow): Prom
   ]);
   const allied = !!mineAlliance && mineAlliance.id === theirs?.id;
 
+  // A neutral contract is the solo commander's Cooperation route: an attack on
+  // a Dominion outpost (farm bot) by somebody with no alliance to reinforce.
+  // Anyone in an alliance has allies to stand with instead, and a contract
+  // against a real player is just an attack.
+  if (contract) {
+    if (mineAlliance) return fail(409, 'Contracts are for commanders without an alliance. Reinforce an ally instead.');
+    if (target.role !== FARM_ROLE) return fail(409, 'Contracts are only issued against Dominion outposts.');
+  }
+
   const result = await launch(
     env.DB,
     world.id,
@@ -1399,8 +1423,14 @@ async function handleAttack(request: Request, env: Env, player: PlayerRow): Prom
     now,
     newId,
     allied ? 'reinforce' : 'attack',
+    contract && !allied,
   );
   if (!result.ok) return fail(409, result.error);
+
+  // Daily Operations. One action, one lane: a reinforcement is Cooperation
+  // the moment it leaves; an attack is Mobilization now and Engagement (or,
+  // for a contract, Cooperation) when the battle resolves.
+  await noteDailyProgress(env.DB, player.id, allied ? 'cooperation' : 'mobilization', now).catch(() => undefined);
 
   return json({
     arrivesAt: result.arrivesAt,
@@ -1450,6 +1480,8 @@ async function handleMove2(request: Request, env: Env, player: PlayerRow): Promi
     state.baseLevel,
   );
   if (!result.ok) return fail(409, result.error);
+  // Daily Operations, Mobilization lane: a real formation change.
+  await noteDailyProgress(env.DB, player.id, 'mobilization', now).catch(() => undefined);
   return handleSquads(env, player);
 }
 
@@ -1479,6 +1511,8 @@ async function handleAssign(request: Request, env: Env, player: PlayerRow): Prom
     state.baseLevel,
   );
   if (!result.ok) return fail(409, result.error);
+  // Daily Operations, Mobilization lane: a slot filled, moved or cleared.
+  await noteDailyProgress(env.DB, player.id, 'mobilization', now).catch(() => undefined);
 
   return handleSquads(env, player);
 }
@@ -2799,6 +2833,7 @@ async function route(
       (b) => buildingName(b as LevelledBuilding),
     );
     if (!result.ok) return fail(400, result.error);
+    await noteDailyProgress(env.DB, player.id, 'readiness', Date.now()).catch(() => undefined);
     return handleSquads(env, player);
   }
 
@@ -2857,6 +2892,8 @@ async function route(
     const building = typeof body?.building === 'string' ? body.building : '';
     const result = await startLevel(env.DB, player.id, building, CURRENT_SEASON, Date.now(), buildingName);
     if (!result.ok) return fail(400, result.error);
+    // Daily Operations, Command lane: the upgrade has started and been paid for.
+    await noteDailyProgress(env.DB, player.id, 'command', Date.now()).catch(() => undefined);
     const wallet = await settleWallet(env.DB, player.id, Date.now());
     return json({
       ok: true,
@@ -2982,6 +3019,16 @@ async function route(
   }
 
   if (endpoint === 'GET /api/profile') return handleProfile(request, env);
+
+  // Season 1 Daily Operations: today's lanes and Cache, the claim, and the
+  // reward history the Reports screen shows (straight from event_reward_grants).
+  if (endpoint === 'GET /api/ops/daily') return json(await readDaily(env.DB, player.id, Date.now()));
+  if (endpoint === 'POST /api/ops/daily/claim') {
+    const result = await claimCache(env.DB, player.id, Date.now());
+    if (!result.ok) return fail(409, result.error);
+    return json({ok: true, reward: result.reward, daily: await readDaily(env.DB, player.id, Date.now())});
+  }
+  if (endpoint === 'GET /api/ops/grants') return json({grants: await listGrants(env.DB, player.id)});
 
   // Where your own power comes from: the same inputs worker/power.ts sums,
   // itemised per asset and per source (shared/powerBreakdown.ts).

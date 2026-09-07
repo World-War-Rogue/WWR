@@ -25,6 +25,8 @@ export interface PlacedBase {
   level: number;
   /** The instant the base's shield ends, if one is up; null otherwise. */
   shieldUntil: number | null;
+  /** The account's role; read server-side to mark outposts, never sent as-is. */
+  role?: string;
   worldId: number;
   /**
    * The world this player calls home, which is not the world they are standing
@@ -168,7 +170,7 @@ export async function basesInViewport(
               COALESCE(MAX(bd.level, 1), 1) AS level, pl.world_id AS worldId,
               b.banner AS banner, b.emblem AS emblem, b.lights AS lights, b.decal AS decal,
               b.home_world_id AS homeWorldId, am.alliance_id AS allianceId,
-              p.shield_until AS shieldUntil
+              p.shield_until AS shieldUntil, p.role AS role
          FROM placements pl
          JOIN players p ON p.id = pl.player_id
          JOIN bases b ON b.player_id = pl.player_id

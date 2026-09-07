@@ -13,6 +13,7 @@ import type {Deployment, MarchKind} from '../../shared/march';
 import type {PackageKey, Packages} from '../../shared/upgrades';
 import type {CombatSystemLane, CombatSystems} from '../../shared/combatSystems';
 import type {PowerBreakdown} from '../../shared/powerBreakdown';
+import type {Lane, Reward} from '../../shared/season1Ops';
 import type {BuildingLevels} from '../../shared/buildings';
 
 export interface ChatMessage {
@@ -171,6 +172,8 @@ export interface PlacedBase {
   level: number;
   /** The instant its shield ends, while one is up. */
   shieldUntil: number | null;
+  /** A Dominion outpost a solo commander may take a neutral contract against. */
+  contract?: boolean;
   worldId: number;
   /** Home world, not current world - what "same server" means in an event. */
   homeWorldId: number | null;
@@ -282,6 +285,33 @@ export interface SquadView {
   deltaOpen: boolean;
   /** Every Task Force's Combat Systems lanes (shared/combatSystems.ts). */
   systems: Record<string, CombatSystems>;
+}
+
+export interface DailyView {
+  season: number;
+  week: number;
+  dayKey: string;
+  resetAt: number;
+  lanes: Array<{lane: Lane; done: boolean; doneAt: number | null; reward: Reward}>;
+  doneCount: number;
+  lanesForCache: number;
+  cache: {reward: Reward; claimable: boolean; claimedAt: number | null};
+  industryMs: number;
+}
+
+export interface RewardGrant {
+  id: string;
+  source: string;
+  season: number;
+  week: number;
+  dayKey: string;
+  credits: number;
+  fuel: number;
+  steel: number;
+  munitions: number;
+  alloy: number;
+  detail: string;
+  createdAt: number;
 }
 
 export interface DevStatus {
@@ -528,11 +558,14 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({assetId}),
     }),
-  attack: (squad: string, x: number, y: number) =>
+  attack: (squad: string, x: number, y: number, contract = false) =>
     call<{arrivesAt: number; seconds: number}>('/api/attack', {
       method: 'POST',
-      body: JSON.stringify({squad, x, y}),
+      body: JSON.stringify({squad, x, y, contract}),
     }),
+  daily: () => call<DailyView>('/api/ops/daily'),
+  claimDailyCache: () => call<{ok: true; reward: Reward; daily: DailyView}>('/api/ops/daily/claim', {method: 'POST', body: '{}'}),
+  rewardGrants: () => call<{grants: RewardGrant[]}>('/api/ops/grants'),
   recall: (squad: string) =>
     call<{arrivesAt: number}>('/api/recall', {
       method: 'POST',

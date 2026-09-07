@@ -46,6 +46,7 @@ import {
 import {type Split, defaultSplit, splitIsValid} from '../shared/economy';
 import {gameDayStart} from '../shared/gametime';
 import {type Wallet, claimWallet, ledger, settleWallet} from './upgrades';
+import {meterProduction} from './dailyOps';
 
 export interface BaseJob {
   id: string;
@@ -138,14 +139,14 @@ async function settleResources(
   playerId: string,
   levels: BuildingLevels,
   now: number,
-): Promise<{stock: Resources; rev: number}> {
+): Promise<{stock: Resources; rev: number; elapsedMs: number}> {
   const base = await db
     .prepare(
       `SELECT fuel, steel, munitions, alloy, resources_at AS at, stock_rev AS rev FROM bases WHERE player_id = ?1`,
     )
     .bind(playerId)
     .first<Resources & {at: number; rev: number}>();
-  if (!base) return {stock: {...NO_RESOURCES}, rev: 0};
+  if (!base) return {stock: {...NO_RESOURCES}, rev: 0, elapsedMs: 0};
   const rate = productionPerHour(levels);
   const hours = Math.max(0, now - base.at) / 3_600_000;
   const out = {...NO_RESOURCES};
@@ -164,7 +165,7 @@ async function settleResources(
     )
     .bind(playerId, out.fuel, out.steel, out.munitions, out.alloy, now, base.at)
     .run();
-  return {stock: out, rev: base.rev};
+  return {stock: out, rev: base.rev, elapsedMs: Math.max(0, now - base.at)};
 }
 
 export async function readBase(db: D1Database, playerId: string, now: number): Promise<BaseState> {
@@ -176,7 +177,10 @@ export async function readBase(db: D1Database, playerId: string, now: number): P
       .bind(playerId)
       .first<{at: number | null}>(),
   ]);
-  const {stock, rev} = await settleResources(db, playerId, levels, now);
+  const {stock, rev, elapsedMs} = await settleResources(db, playerId, levels, now);
+  // Daily Operations, Industry lane: the production time just settled counts
+  // toward today's hour. After the settle, so a failure here cannot stop it.
+  if (elapsedMs > 0) await meterProduction(db, playerId, elapsedMs, now).catch(() => undefined);
   const secondTeamAt = team?.at ?? null;
   return {
     levels,

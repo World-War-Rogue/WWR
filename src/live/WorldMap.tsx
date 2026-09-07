@@ -657,7 +657,7 @@ export default function WorldMap({
   const [moving, setMoving] = useState(false);
   const [rallying, setRallying] = useState(false);
   /** The plot an attack is being aimed at, while a squad is chosen. */
-  const [attacking, setAttacking] = useState<{x: number; y: number} | null>(null);
+  const [attacking, setAttacking] = useState<{x: number; y: number; contract?: boolean} | null>(null);
   // The composer is a modal: Rider steps aside while it is up.
   useModal(attacking !== null);
   const [squads, setSquads] = useState<SquadView | null>(null);
@@ -1347,7 +1347,7 @@ export default function WorldMap({
     setSending(true);
     setError(null);
     try {
-      await api.attack(squad, attacking.x, attacking.y);
+      await api.attack(squad, attacking.x, attacking.y, attacking.contract === true);
       guideEvent('tip:march');
       setAttacking(null);
       setSelected(null);
@@ -1617,6 +1617,25 @@ export default function WorldMap({
                 {!allied && selectedBase.username !== view?.you.username && isShielded(selectedBase.shieldUntil, Date.now()) && (
                   <p className="mt-1 text-[10px] text-neutral-500">{SHIELD_WORDING.targetBlocked}</p>
                 )}
+                {/*
+                  A Dominion outpost, and this commander has no alliance: the
+                  same raid can be taken as a neutral contract, which counts for
+                  the Cooperation lane of Daily Operations (never Engagement).
+                  The server decides who sees this; the button never appears
+                  for a member of an alliance or against a real player.
+                */}
+                {selectedBase.contract && !allied && !isShielded(selectedBase.shieldUntil, Date.now()) && (
+                  <button
+                    onClick={() => {
+                      setAttacking({x: selected.x, y: selected.y, contract: true});
+                      void api.squads().then(setSquads).catch(() => undefined);
+                    }}
+                    className="mt-2 w-full rounded border border-amber-800 bg-amber-950/30 px-3 py-2 text-sm font-semibold text-amber-200 hover:border-amber-500"
+                    title="A raid on this outpost that counts for the Cooperation lane of Daily Operations"
+                  >
+                    Neutral contract
+                  </button>
+                )}
               </>
             ) : (
               <button
@@ -1769,7 +1788,7 @@ export default function WorldMap({
           <div className="max-h-[70vh] overflow-y-auto rounded-t-xl border-t border-neutral-700 bg-neutral-950 p-3 shadow-2xl">
             <div className="flex items-center gap-2 pb-3">
               <h3 className="text-sm font-semibold text-neutral-100">
-                {allied ? t('map.chooseSquadReinforce') : t('map.chooseSquad')}
+                {allied ? t('map.chooseSquadReinforce') : attacking.contract ? 'Neutral contract · choose a Task Force' : t('map.chooseSquad')}
               </h3>
               <span className="font-mono text-[11px] text-neutral-500">
                 {attacking.x}, {attacking.y}
