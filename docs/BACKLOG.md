@@ -52,7 +52,8 @@ Each item is one or more commits; Claude updates this file in the same commit.
 - [ ] Dominion Impact: the separate individual honor metric (capped damage credit + elite completions → badges/cosmetics/resources) — no numbers yet [?] ChatGPT
 - [ ] Treasury spend path (posted alliance operations only) — lands with alliance operations
 - [ ] Arena phase B (weeks 5–10): head-to-head ladder
-- [ ] Small alliance operations (convoy_escort, relay_triangulation, factory_sabotage)
+- [x] Alliance Convoy (3b493ea; migration 0038): free Daily Convoy for 50+ alliances plus one paid Contract Convoy a day; two-hour join window over five trucks (20 each, one per member, atomic first-come + guarded switch); leadership Guardian with a six-asset escort; Vanguard 1-3 / trucks / Rear Guard 1-3 moving formation on the map; Contract paid in Tokens only; no Season 1 attack surface. Static truck art installed; Guardian escort drawn from real assets. DECISION: Contract Convoy join window is two hours from purchase (not tied to 00:00), so it's usable whenever bought
+- [ ] Other small alliance operations (relay_triangulation, factory_sabotage) — these plus the Convoy are what feed Warfront coordinated-operation scoring (500 each, 10/week) and the Support/alliance-operation-objective lanes; wire noteWarfront('allianceOperation') and coordinated-op completion when they land
 - [ ] Weekly settlement job, "Calculating rewards" state
 - [ ] Replace week-1 reward numbers with ChatGPT's finalized tables when docs/SEASON-1-EVENTS-AND-ALLIANCE-v1.md lands (constants in shared/season1Ops.ts)
 
