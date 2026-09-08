@@ -37,7 +37,11 @@ import {noteServerTime} from './serverClock';
 import {onPropsLoaded, paintGround} from './terrainPaint';
 import {normaliseLoadout} from '../../shared/cosmetics';
 import {ALLEGIANCE, allegianceOf, drawAllegianceMarker} from './allegiance';
-import {artPending, onArtLoaded, skinIsAnimated} from './skinArt';
+import {artPending, atlas, onArtLoaded, skinIsAnimated} from './skinArt';
+import {convoyTruckUrl} from '../../shared/allianceConvoyVisuals';
+import {assetArtUrl} from '../../shared/assetVisuals';
+import {VANGUARD_SLOTS} from '../../shared/allianceConvoy';
+import type {ConvoyOnMap} from '../net/api';
 import {drawBase as paintBase, skinSpec} from './skins';
 import {formatCooldown} from '../../shared/rally';
 import {marchProgress} from '../../shared/march';
@@ -523,6 +527,95 @@ function drawRallyEdge(
  * faintly whoever it belongs to, because a squad going home is the one march
  * on the map that nobody has to answer.
  */
+const CONVOY_PLOTS_PER_SEC = 2.2;
+const CONVOY_SPACING_PLOTS = 1.15;
+const GUARD_ORDER = ['vanguard_1', 'vanguard_2', 'vanguard_3'] as const;
+const REAR_ORDER = ['rear_1', 'rear_2', 'rear_3'] as const;
+
+/**
+ * A launched Alliance Convoy as one moving formation: Vanguard 1-3 ahead,
+ * cargo trucks 1-5 in a tight column, Rear Guard 1-3 behind. The lead crawls
+ * the route at a steady plots-per-second and the train follows at fixed
+ * spacing, looping so the Convoy is always visibly on the move. Guard slots
+ * draw the Guardian's real asset art (silhouette chevron until it loads);
+ * the trucks are the static cargo art. Nothing here is tappable - a Season 1
+ * Convoy has no attack affordance and no target marker.
+ */
+function drawConvoy(
+  ctx: CanvasRenderingContext2D,
+  convoy: ConvoyOnMap,
+  toScreenX: (x: number) => number,
+  toScreenY: (y: number) => number,
+  zoom: number,
+  now: number,
+) {
+  const fx = toScreenX(convoy.route.from.x) + zoom / 2;
+  const fy = toScreenY(convoy.route.from.y) + zoom / 2;
+  const tx = toScreenX(convoy.route.to.x) + zoom / 2;
+  const ty = toScreenY(convoy.route.to.y) + zoom / 2;
+  const lenP = Math.max(1, Math.hypot(convoy.route.to.x - convoy.route.from.x, convoy.route.to.y - convoy.route.from.y));
+  const travelMs = (lenP / CONVOY_PLOTS_PER_SEC) * 1000;
+  const spacing = CONVOY_SPACING_PLOTS / lenP;
+  const guard = new Map(convoy.guard.map((g) => [g.slot, g]));
+  const size = Math.max(14, zoom * 1.15);
+
+  type El = {kind: 'guard' | 'truck'; slot?: string; truck?: number};
+  const els: El[] = [
+    ...GUARD_ORDER.map((slot) => ({kind: 'guard' as const, slot})),
+    ...[0, 1, 2, 3, 4].map((t) => ({kind: 'truck' as const, truck: t})),
+    ...REAR_ORDER.map((slot) => ({kind: 'guard' as const, slot})),
+  ];
+  const tail = spacing * els.length;
+  const lead = ((now - convoy.startsAt) / travelMs) % (1 + tail);
+  const angle = Math.atan2(ty - fy, tx - fx);
+
+  els.forEach((el, i) => {
+    const frac = lead - i * spacing;
+    if (frac < 0 || frac > 1) return;
+    const px = fx + (tx - fx) * frac;
+    const py = fy + (ty - fy) * frac;
+    let img: HTMLImageElement | null = null;
+    if (el.kind === 'truck') {
+      img = atlas(convoyTruckUrl(el.truck ?? 0));
+    } else if (el.slot) {
+      const g = guard.get(el.slot);
+      const url = g ? assetArtUrl(g.assetId, g.level) : null;
+      if (url) img = atlas(url);
+    }
+    if (img) {
+      ctx.drawImage(img, px - size / 2, py - size * 0.62, size, size * 0.78);
+    } else {
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(angle);
+      ctx.fillStyle = el.kind === 'guard' ? 'rgba(148,163,184,0.9)' : 'rgba(120,130,110,0.95)';
+      const r = size * 0.28;
+      ctx.beginPath();
+      ctx.moveTo(r, 0);
+      ctx.lineTo(-r * 0.7, r * 0.7);
+      ctx.lineTo(-r * 0.3, 0);
+      ctx.lineTo(-r * 0.7, -r * 0.7);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+  });
+
+  const lg = lead - 3 * spacing;
+  if (lg >= 0 && lg <= 1) {
+    const lx = fx + (tx - fx) * lg;
+    const ly = fy + (ty - fy) * lg;
+    ctx.save();
+    ctx.font = `${Math.max(9, Math.round(size * 0.32))}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillText(`[${convoy.tag}]`, lx + 1, ly - size * 0.66 + 1);
+    ctx.fillStyle = 'rgba(226,232,240,0.95)';
+    ctx.fillText(`[${convoy.tag}]`, lx, ly - size * 0.66);
+    ctx.restore();
+  }
+}
+
 function drawMarch(
   ctx: CanvasRenderingContext2D,
   fromX: number,
@@ -1221,6 +1314,12 @@ export default function WorldMap({
       }
     }
 
+    // Alliance Convoys: launched formations crossing the world, over the
+    // bases like a march. Cosmetic and unattackable in Season 1.
+    for (const convoy of view?.convoys ?? []) {
+      drawConvoy(ctx, convoy, toScreenX, toScreenY, zoom, Date.now());
+    }
+
     // Marches, under the rendezvous marker but over the bases: a column
     // crossing somebody's plot is in front of it, not behind.
     for (const m of view?.marches ?? []) {
@@ -1278,7 +1377,7 @@ export default function WorldMap({
     // A march in transit is a fourth reason, and unlike the others it applies
     // at EVERY zoom - the whole point of a column crossing the map is being
     // seen from far away, and a frozen chevron reads as a bug.
-    const marching = (view?.marches ?? []).length > 0;
+    const marching = (view?.marches ?? []).length > 0 || (view?.convoys ?? []).length > 0;
     const running = () =>
       layer.busy || marching || (detailed && (animatedInView || artPending()));
     const step = (time: number) => {

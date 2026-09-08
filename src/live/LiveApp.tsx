@@ -21,6 +21,7 @@ const DevTools = lazy(() => import('./DevTools'));
 const PowerBreakdownScreen = lazy(() => import('./PowerBreakdown'));
 const ArenaScreen = lazy(() => import('./Arena'));
 const WarfrontScreen = lazy(() => import('./Warfront'));
+const ConvoyScreen = lazy(() => import('./Convoy'));
 import {guideEvent} from './guide/bus';
 import {HUB_OF_CATEGORY} from '../../shared/buildings';
 import {remaining} from './BuildingPanel';
@@ -185,7 +186,7 @@ export default function LiveApp() {
   /** Bumped when the language changes, purely to force a redraw. */
   const [, setLangTick] = useState(0);
   const [screen, setScreen] = useState<
-    'base' | 'world' | 'customize' | 'profile' | 'alliance' | 'battles' | 'assets' | 'squads' | 'dev' | 'power' | 'arena' | 'warfront'
+    'base' | 'world' | 'customize' | 'profile' | 'alliance' | 'battles' | 'assets' | 'squads' | 'dev' | 'power' | 'arena' | 'warfront' | 'convoy'
     // The map, not the base. A player opening the game wants to see where they
     // are and what is around them - the base screen is a menu, and starting on
     // a menu hides the thing the game is actually about. The map already opens
@@ -550,7 +551,7 @@ export default function LiveApp() {
 
   // Reports take the whole viewport too: a battle report is a page you read,
   // not a panel you glance at over the map.
-  if (screen === 'arena' || screen === 'warfront') {
+  if (screen === 'arena' || screen === 'warfront' || screen === 'convoy') {
     const backToToc = () => {
       setScreen('base');
       setSheet({department: 'tactical_operations_center'});
@@ -558,7 +559,7 @@ export default function LiveApp() {
     return (
       <>
         <div className="fixed inset-0 overflow-y-auto bg-[#0a0906] pb-16 text-neutral-200">
-          <Suspense fallback={<ScreenLoading />}>{screen === 'arena' ? <ArenaScreen onClose={backToToc} /> : <WarfrontScreen onClose={backToToc} />}</Suspense>
+          <Suspense fallback={<ScreenLoading />}>{screen === 'arena' ? <ArenaScreen onClose={backToToc} /> : screen === 'warfront' ? <WarfrontScreen onClose={backToToc} /> : <ConvoyScreen onClose={backToToc} />}</Suspense>
         </div>
         {chat}
       </>
@@ -715,6 +716,10 @@ export default function LiveApp() {
           onOpenWarfront={() => {
             setSheet(null);
             setScreen('warfront');
+          }}
+          onOpenConvoy={() => {
+            setSheet(null);
+            setScreen('convoy');
           }}
         />
       )}

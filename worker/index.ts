@@ -27,6 +27,7 @@ import {claimCache, listGrants, noteDailyProgress, readDaily} from './dailyOps';
 import {ensureExercises, readExercise, viewOf} from './exercises';
 import {arenaView, listAttempts, makeAttempt, readAttempt} from './arena';
 import {arenaSquadView, saveArenaSlots} from './arenaSquad';
+import {allianceConvoyView, joinTruck, leaveTruck, setGuard, setGuardian, startContract, worldConvoys} from './allianceConvoy';
 import {noteWarfront} from './warfrontLedger';
 import {warfrontView} from './warfront';
 import {seasonPhase} from '../shared/season1Ops';
@@ -866,6 +867,9 @@ async function handleWorld(request: Request, env: Env, player: PlayerRow): Promi
     })),
     skins: SKINS,
     exercises,
+    // Launched Alliance Convoys crossing this world, drawn as moving
+    // formations. Cosmetic and unattackable in Season 1.
+    convoys: await worldConvoys(env.DB, world.id, now),
     // A shield shows on the map only while it is up; the instant itself is
     // public, since the popup says how long is left.
     // `contract` marks a Dominion outpost a solo commander may take a neutral
@@ -3058,6 +3062,44 @@ async function route(
     const world = worlds.find((entry) => entry.kind === 'home') ?? worlds[0];
     if (!world) return fail(409, 'You have not been deployed yet.');
     return json(await warfrontView(env.DB, player.id, world.id, now));
+  }
+
+  // Alliance Convoy: the screen, boarding, the Guardian and their escort,
+  // and the paid Contract Convoy. A Season 1 Convoy has no attack route.
+  if (endpoint.startsWith('GET /api/convoy') || endpoint.startsWith('POST /api/convoy')) {
+    const now = Date.now();
+    const worlds = await reachableWorlds(env.DB, player.id, now);
+    const world = worlds.find((entry) => entry.kind === 'home') ?? worlds[0];
+    if (!world) return fail(409, 'You have not been deployed yet.');
+    const view = () => allianceConvoyView(env.DB, player.id, world.id, world.extent, now);
+
+    if (endpoint === 'GET /api/convoy') return json(await view());
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    if (endpoint === 'POST /api/convoy/join') {
+      const r = await joinTruck(env.DB, player.id, String(body?.convoyId ?? ''), Number(body?.truck), now);
+      if (!r.ok) return fail(409, r.error);
+      return json({ok: true, view: await view()});
+    }
+    if (endpoint === 'POST /api/convoy/leave') {
+      const r = await leaveTruck(env.DB, player.id, String(body?.convoyId ?? ''), now);
+      if (!r.ok) return fail(409, r.error);
+      return json({ok: true, view: await view()});
+    }
+    if (endpoint === 'POST /api/convoy/contract') {
+      const r = await startContract(env.DB, player.id, world.id, world.extent, now);
+      if (!r.ok) return fail(409, r.error);
+      return json({ok: true, wallet: {tokens: r.wallet.tokens, credits: r.wallet.credits}, view: await view()});
+    }
+    if (endpoint === 'POST /api/convoy/guardian') {
+      const r = await setGuardian(env.DB, player.id, String(body?.convoyId ?? ''), String(body?.username ?? ''), now);
+      if (!r.ok) return fail(409, r.error);
+      return json({ok: true, view: await view()});
+    }
+    if (endpoint === 'POST /api/convoy/guard') {
+      const r = await setGuard(env.DB, player.id, String(body?.convoyId ?? ''), body?.guard, now);
+      if (!r.ok) return fail(409, r.error);
+      return json({ok: true, view: await view()});
+    }
   }
 
   // The Arena Squad: the setup screen, and the save. Slots only; every

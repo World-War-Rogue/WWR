@@ -214,6 +214,8 @@ export interface WorldView {
   marches: MarchView[];
   /** Today's daily map exercises - yours alone, on your home world. */
   exercises: ExerciseView[];
+  /** Launched Alliance Convoys crossing this world, drawn as moving formations. */
+  convoys: ConvoyOnMap[];
   /** The server's clock at the moment this was built. */
   serverTime: number;
 }
@@ -392,6 +394,51 @@ export interface ArenaView {
   lastSettlement: {at: number; ranked: number} | null;
 }
 
+export interface ConvoyRoutePoint {
+  x: number;
+  y: number;
+}
+
+export interface ConvoyGuardAsset {
+  slot: string;
+  assetId: string;
+  level: number;
+}
+
+export interface ConvoyOnMap {
+  id: string;
+  tag: string;
+  route: {from: ConvoyRoutePoint; to: ConvoyRoutePoint};
+  startsAt: number;
+  guard: ConvoyGuardAsset[];
+}
+
+export interface ConvoyView {
+  id: string;
+  kind: 'daily' | 'contract';
+  state: 'joining' | 'launched';
+  startsAt: number;
+  locksAt: number;
+  route: {from: ConvoyRoutePoint; to: ConvoyRoutePoint};
+  trucks: number[];
+  capacity: number;
+  myTruck: number | null;
+  guardian: {username: string; isMe: boolean} | null;
+  guard: ConvoyGuardAsset[] | null;
+  guardConfigured: boolean;
+}
+
+export interface AllianceConvoyView {
+  inAlliance: boolean;
+  isLeadership: boolean;
+  members: number;
+  minMembers: number;
+  contractTokens: number;
+  daily: ConvoyView | null;
+  contract: ConvoyView | null;
+  roster: Array<{username: string}>;
+  myAssets: Array<{assetId: string; level: number; ready: boolean; reason: string | null}>;
+}
 export interface WarfrontStandingRow {
   rank: number;
   allianceId: string;
@@ -709,6 +756,12 @@ export const api = {
   daily: () => call<DailyView>('/api/ops/daily'),
   arena: () => call<ArenaView>('/api/arena'),
   warfront: () => call<WarfrontView>('/api/warfront'),
+  convoy: () => call<AllianceConvoyView>('/api/convoy'),
+  convoyJoin: (convoyId: string, truck: number) => call<{ok: true; view: AllianceConvoyView}>('/api/convoy/join', {method: 'POST', body: JSON.stringify({convoyId, truck})}),
+  convoyLeave: (convoyId: string) => call<{ok: true; view: AllianceConvoyView}>('/api/convoy/leave', {method: 'POST', body: JSON.stringify({convoyId})}),
+  convoyContract: () => call<{ok: true; wallet: Wallet; view: AllianceConvoyView}>('/api/convoy/contract', {method: 'POST', body: '{}'}),
+  convoyGuardian: (convoyId: string, username: string) => call<{ok: true; view: AllianceConvoyView}>('/api/convoy/guardian', {method: 'POST', body: JSON.stringify({convoyId, username})}),
+  convoyGuard: (convoyId: string, guard: Array<{slot: string; assetId: string}>) => call<{ok: true; view: AllianceConvoyView}>('/api/convoy/guard', {method: 'POST', body: JSON.stringify({convoyId, guard})}),
   arenaSquad: () => call<ArenaSquadView>('/api/arena/squad'),
   arenaSaveSquad: (slots: Array<string | null>) => call<ArenaSquadView>('/api/arena/squad', {method: 'POST', body: JSON.stringify({slots})}),
   arenaReport: (id: string) => call<{attempt: ArenaAttempt}>(`/api/arena/report?id=${encodeURIComponent(id)}`),

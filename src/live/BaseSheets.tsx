@@ -213,12 +213,14 @@ export function DepartmentSheet({
   onGoTo,
   onOpenArena,
   onOpenWarfront,
+  onOpenConvoy,
 }: {
   id: string;
   onClose: () => void;
   onGoTo?: (where: LevelledBuilding) => void;
   onOpenArena?: () => void;
   onOpenWarfront?: () => void;
+  onOpenConvoy?: () => void;
 }) {
   const name = t(`building.${id}` as MessageKey);
   const blurb = t(`blurb.${id}` as MessageKey);
@@ -261,6 +263,18 @@ export function DepartmentSheet({
               <span>
                 <span className="block text-sm font-semibold text-neutral-100">Dominion Warfront</span>
                 <span className="block text-[11px] text-neutral-500">The weekly alliance competition. Your day against the caps, server standings, the treasury.</span>
+              </span>
+              <span className="text-neutral-500">›</span>
+            </button>
+          )}
+          {onOpenConvoy && (
+            <button
+              onClick={onOpenConvoy}
+              className="flex w-full items-center justify-between rounded border border-red-900/60 bg-neutral-900/40 p-3 text-left hover:border-red-600"
+            >
+              <span>
+                <span className="block text-sm font-semibold text-neutral-100">Alliance Convoy</span>
+                <span className="block text-[11px] text-neutral-500">Board a truck in the daily two-hour window and ride under your alliance’s escort.</span>
               </span>
               <span className="text-neutral-500">›</span>
             </button>
