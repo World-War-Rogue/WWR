@@ -1,0 +1,20 @@
+﻿WORLD WAR ROGUE - recovery snapshot
+===================================
+
+Taken     2026-09-06 10:13
+Branch    main
+Commit    c349d1fc61eec8175d633e0583ef4d3139a64297
+          "Call squads Task Forces"
+Files     281
+
+This is a copy of every file git tracked at that commit. It holds no secrets
+and no node_modules; both are meant to be absent. Read START-HERE.md first - it
+explains what to do with all of this.
+
+To prove this snapshot really is that commit, in a fresh clone run
+
+    git checkout c349d1f
+
+and compare. To refresh this folder after more work, run
+
+    npm run recovery

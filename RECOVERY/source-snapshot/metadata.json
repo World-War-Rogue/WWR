@@ -1,0 +1,6 @@
+{
+  "name": "World War Rogue",
+  "description": "Tactical modern warfare strategy game featuring multi-server deployment, 100-member military alliances with strict Admiral/Colonel/Lieutenant command hierarchies, task/event war planning, survival base-building, and ballistic combat.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

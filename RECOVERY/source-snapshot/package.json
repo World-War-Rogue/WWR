@@ -1,0 +1,36 @@
+{
+  "name": "world-war-rogue",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port=3000 --host=0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "lint": "tsc --noEmit && tsc --noEmit -p worker && node scripts/simulate.mjs --only audit && node scripts/terrain-audit.mjs",
+    "sim": "node scripts/simulate.mjs",
+    "terrain": "node scripts/terrain-audit.mjs",
+    "db:migrate": "wrangler d1 migrations apply wwr-db --remote",
+    "db:migrate:local": "wrangler d1 migrations apply wwr-db --local",
+    "db:status": "wrangler d1 migrations list wwr-db --remote",
+    "recovery": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/refresh-recovery.ps1",
+    "i18n": "node scripts/translate-ui.mjs"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.1.14",
+    "@vitejs/plugin-react": "^5.0.4",
+    "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
+    "react": "^19.0.1",
+    "react-dom": "^19.0.1",
+    "vite": "^6.2.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260903.1",
+    "@types/node": "^22.14.0",
+    "tailwindcss": "^4.1.14",
+    "typescript": "~5.8.2",
+    "wrangler": "^4.129.0"
+  }
+}

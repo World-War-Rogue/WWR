@@ -1,0 +1,38 @@
+{
+  "name": "world-war-rogue-game-intelligence-agent",
+  "version": "1.0.0",
+  "description": "A.E.G.I.S. - Autonomous Engine & Game Intelligence System: Data collection, game design balance, UI/UX audit, upgrade progression, and computing profiler.",
+  "type": "module",
+  "main": "aegis.mjs",
+  "bin": {
+    "aegis": "./aegis.mjs"
+  },
+  "scripts": {
+    "start": "agy-node aegis.mjs all",
+    "test": "agy-node tests/test_suite.mjs",
+    "analyze": "agy-node aegis.mjs analyze",
+    "simulate": "agy-node aegis.mjs simulate",
+    "audit:ui": "agy-node aegis.mjs audit-ui",
+    "audit:upgrades": "agy-node aegis.mjs audit-upgrades",
+    "audit:compute": "agy-node aegis.mjs audit-compute",
+    "dashboard": "agy-node aegis.mjs dashboard",
+    "skin": "agy-node src/tools/blender_runner.mjs",
+    "skin:create": "agy-node src/tools/blender_runner.mjs create",
+    "skin:refine": "agy-node src/tools/blender_runner.mjs refine",
+    "skin:render": "agy-node src/tools/blender_runner.mjs render",
+    "skin:export": "agy-node src/tools/blender_runner.mjs export",
+    "skin:test": "agy-node src/tools/blender_runner.mjs test"
+  },
+  "keywords": [
+    "game-intelligence",
+    "game-design",
+    "game-balance",
+    "ui-ux-audit",
+    "upgrades-progression",
+    "performance-profiler",
+    "telemetry",
+    "monte-carlo"
+  ],
+  "author": "Antigravity & World War Rogue Command",
+  "license": "MIT"
+}

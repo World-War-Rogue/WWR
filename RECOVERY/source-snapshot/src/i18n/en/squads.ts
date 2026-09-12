@@ -1,0 +1,25 @@
+/** squads strings. See ../en.ts for what this file is part of. */
+export const SQUADS = {
+  // Squads
+  'squads.title': 'Task Forces',
+  'squads.liftBudget': 'Lift budget {budget} per task force',
+  'squads.power': 'power',
+  'squads.lift': 'lift',
+  'squads.empty': 'empty',
+  'squads.slot': '{squad} · slot {slot}',
+  'squads.liftFree': '{amount} lift free',
+  'squads.clearSlot': 'Clear slot',
+  'squads.cancel': 'Cancel',
+  'squads.inSquad': 'in {squad}',
+  'squads.readingRoster': 'Reading the roster…',
+  'squads.remove': 'Remove',
+  'squads.replace': 'Replace',
+  'squads.inSlot': '{name} is in {squad}, slot {slot}',
+  'squads.dragHint': 'Drag an asset onto another slot to move or swap it.',
+  'squads.nothingFits': 'Nothing you hold fits in {amount} lift.',
+  'squads.nothingFitsHint': 'Clear a slot to make room.',
+  'squads.away': 'in the field',
+  'squads.awayHint': 'A task force that is out cannot be changed, and neither can what is in it.',
+  'squads.assetAway': 'out with {squad}',
+  'squads.hint': 'Tap a slot to fill it. Any six assets, any task force — but a mixed one covers every band, and that is the point.',
+} as const;

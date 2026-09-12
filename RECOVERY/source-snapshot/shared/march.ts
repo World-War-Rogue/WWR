@@ -1,0 +1,106 @@
+/**
+ * Marching.
+ *
+ * A squad leaves your plot, crosses the map, and arrives. The defender sees it
+ * coming, which is the whole point: it is the difference between a strategy
+ * game and a slot machine, and it is what makes the rendezvous point, the
+ * alliance and the map itself matter.
+ */
+
+/**
+ * Seconds to cross one plot at mobility 5, the middle of the range.
+ *
+ * Quartered on 2026-09-06 (was 7): marches on the live map felt far too slow.
+ * The floor and ceiling were quartered with it so the whole curve moved
+ * together rather than the short marches pinning on the floor.
+ */
+export const SECONDS_PER_PLOT = 1.75;
+
+/** Nothing arrives instantly, however close or however fast. */
+export const MIN_MARCH_SECONDS = 12;
+
+/** And nothing is an evening's commitment. */
+export const MAX_MARCH_SECONDS = 10 * 60;
+
+/**
+ * How long a squad takes to cross a distance.
+ *
+ * The SLOWEST asset sets the pace, because a column moves at the speed of its
+ * slowest vehicle. That is a real cost of bringing heavy armour and a real
+ * reason to build a fast squad for answering calls, without either being
+ * written into a stat nobody can see.
+ */
+export function marchSeconds(plots: number, slowestMobility: number): number {
+  const speed = Math.max(1, slowestMobility) / 5;
+  const raw = (plots * SECONDS_PER_PLOT) / speed;
+  return Math.round(Math.min(MAX_MARCH_SECONDS, Math.max(MIN_MARCH_SECONDS, raw)));
+}
+
+export function plotsBetween(ax: number, ay: number, bx: number, by: number): number {
+  return Math.hypot(bx - ax, by - ay);
+}
+
+/** Where a march has got to, 0 at departure and 1 on arrival. */
+export function marchProgress(departedAt: number, arrivesAt: number, now: number): number {
+  if (arrivesAt <= departedAt) return 1;
+  return Math.min(1, Math.max(0, (now - departedAt) / (arrivesAt - departedAt)));
+}
+
+/**
+ * What a march is for.
+ *
+ * A return leg is a march like any other on purpose - drawn on the map, taking
+ * the same time, watched by everybody. The squad is away for the whole round
+ * trip rather than only the journey out, which is most of what attacking
+ * actually costs.
+ */
+export type MarchKind = 'attack' | 'reinforce' | 'return';
+
+/**
+ * How long a reinforcing squad stands at an ally's base before coming home.
+ *
+ * Long enough to actually be there when a raid lands, short enough that
+ * parking a squad on somebody is a decision you revisit rather than a place
+ * you leave it.
+ */
+export const GARRISON_HOURS = 8;
+
+export interface MarchView {
+  id: string;
+  attacker: string;
+  defender: string;
+  squad: string;
+  from: {x: number; y: number};
+  to: {x: number; y: number};
+  departedAt: number;
+  arrivesAt: number;
+  /** True when this march is one of yours. */
+  mine: boolean;
+  /** True when it is heading at you. */
+  incoming: boolean;
+  kind: MarchKind;
+}
+
+/**
+ * One of your squads, away from home.
+ *
+ * Not the same thing as a march. A squad standing at an ally's base has no
+ * march in flight - its row was settled on arrival - but it is still away, and
+ * the one screen that has to tell you where all four squads are cannot have a
+ * blind spot exactly where the eight-hour commitment is.
+ */
+export type DeploymentKind = MarchKind | 'garrison';
+
+export interface Deployment {
+  /** The march this came from, and what a recall names. */
+  marchId: string;
+  squad: string;
+  kind: DeploymentKind;
+  /** Whose base: the target of an attack, the ally being held, or your own. */
+  target: string;
+  to: {x: number; y: number};
+  /** When it lands. Null for a garrison, which has already landed. */
+  arrivesAt: number | null;
+  /** When the garrison ends and it walks home on its own. Null otherwise. */
+  until: number | null;
+}

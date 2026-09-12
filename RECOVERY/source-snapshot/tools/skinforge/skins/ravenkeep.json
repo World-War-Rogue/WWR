@@ -1,0 +1,26 @@
+{
+  "id": "ravenkeep",
+
+  "mode": "billboard",
+
+  "//cards": "Ordered back to front. The castle carries the plot; the raven and the energy ride above it as separate planes, so they parallax against the stone when the base moves.",
+  "cards": [
+    {"name": "castle", "image": "art/ravenkeep/castle.png", "z": 0.0, "lean": 0},
+    {"name": "energy", "image": "art/ravenkeep/energy.png", "z": 0.14, "lean": 0, "emission": 3.2},
+    {"name": "raven",  "image": "art/ravenkeep/raven.png",  "z": 0.24, "lean": 0, "emission": 1.4}
+  ],
+
+  "frame": {"w": 512, "h": 640, "frames": 24, "fps": 12},
+  "cols": 6,
+
+  "//emission": "Card-level emission overrides this for energy (arcane glow) and raven (rim light); the stone castle keeps a modest default.",
+  "emission": 1.6,
+
+  "//motion": "bob is in footprint units, sway in degrees, spin in full turns per loop.",
+  "motion": {"bob": 0.025, "sway": 2.5, "spin": 0.0},
+
+  "light": {"key_energy": 4.0, "key_tilt": 48.0, "key_turn": -38.0, "fill_energy": 1.2, "ambient": 0.35},
+  "samples": 64,
+
+  "framing": {"lift": 0.0}
+}

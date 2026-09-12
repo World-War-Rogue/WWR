@@ -1,0 +1,308 @@
+{
+  "version": 5,
+  "image": "forward-command-base-board-v5.png",
+  "canvas": {
+    "widthPx": 1080,
+    "heightPx": 1920,
+    "aspectRatio": "9:16"
+  },
+  "fixedBuilding": {
+    "id": "command_center",
+    "displayName": "Command Center",
+    "asset": "building-command-center-v2.png",
+    "bakedIntoBoard": true,
+    "movable": false,
+    "removable": false,
+    "renderBoxPx": {
+      "x": 375,
+      "y": 7,
+      "width": 330,
+      "height": 330
+    },
+    "hitBoxPx": {
+      "x": 385,
+      "y": 20,
+      "width": 310,
+      "height": 300
+    },
+    "position": {
+      "x": 0.5,
+      "y": 0.175521
+    },
+    "note": "Fixed top-center Command Center visual. Do not render a second copy over this board image."
+  },
+  "standardPad": {
+    "widthPx": 190,
+    "heightPx": 120,
+    "tilt": 0,
+    "orientation": "front-bottom; horizontal front edge",
+    "sourceArt": "1024x1440 transparent building canvas; bottom-center anchor; no rotation or per-pad scaling"
+  },
+  "pads": [
+    {
+      "id": "upper_01",
+      "centerPx": {
+        "x": 270,
+        "y": 230
+      },
+      "x": 0.25,
+      "y": 0.119792,
+      "widthPx": 190,
+      "heightPx": 120,
+      "tilt": 0
+    },
+    {
+      "id": "upper_02",
+      "centerPx": {
+        "x": 810,
+        "y": 230
+      },
+      "x": 0.75,
+      "y": 0.119792,
+      "widthPx": 190,
+      "heightPx": 120,
+      "tilt": 0
+    },
+    {
+      "id": "left_01",
+      "centerPx": {
+        "x": 173,
+        "y": 538
+      },
+      "x": 0.160185,
+      "y": 0.280208,
+      "widthPx": 190,
+      "heightPx": 120,
+      "tilt": 0
+    },
+    {
+      "id": "left_02",
+      "centerPx": {
+        "x": 173,
+        "y": 768
+      },
+      "x": 0.160185,
+      "y": 0.4,
+      "widthPx": 190,
+      "heightPx": 120,
+      "tilt": 0
+    },
+    {
+      "id": "left_03",
+      "centerPx": {
+        "x": 173,
+        "y": 998
+      },
+      "x": 0.160185,
+      "y": 0.519792,
+      "widthPx": 190,
+      "heightPx": 120,
+      "tilt": 0
+    },
+    {
+      "id": "left_04",
+      "centerPx": {
+        "x": 173,
+        "y": 1229
+      },
+      "x": 0.160185,
+      "y": 0.640104,
+      "widthPx": 190,
+      "heightPx": 120,
+      "tilt": 0
+    },
+    {
+      "id": "right_01",
+      "centerPx": {
+        "x": 907,
+        "y": 384
+      },
+      "x": 0.839815,
+      "y": 0.2,
+      "widthPx": 190,
+      "heightPx": 120,
+      "tilt": 0,
+      "zone": "asset_runway",
+      "assetSlot": 1
+    },
+    {
+      "id": "right_02",
+      "centerPx": {
+        "x": 907,
+        "y": 614
+      },
+      "x": 0.839815,
+      "y": 0.319792,
+      "widthPx": 190,
+      "heightPx": 120,
+      "tilt": 0,
+      "zone": "asset_runway",
+      "assetSlot": 2
+    },
+    {
+      "id": "right_03",
+      "centerPx": {
+        "x": 907,
+        "y": 845
+      },
+      "x": 0.839815,
+      "y": 0.440104,
+      "widthPx": 190,
+      "heightPx": 120,
+      "tilt": 0,
+      "zone": "asset_runway",
+      "assetSlot": 3
+    },
+    {
+      "id": "right_04",
+      "centerPx": {
+        "x": 907,
+        "y": 1075
+      },
+      "x": 0.839815,
+      "y": 0.559896,
+      "widthPx": 190,
+      "heightPx": 120,
+      "tilt": 0,
+      "zone": "asset_runway",
+      "assetSlot": 4
+    },
+    {
+      "id": "right_05",
+      "centerPx": {
+        "x": 907,
+        "y": 1306
+      },
+      "x": 0.839815,
+      "y": 0.680208,
+      "widthPx": 190,
+      "heightPx": 120,
+      "tilt": 0,
+      "zone": "asset_runway",
+      "assetSlot": 5
+    },
+    {
+      "id": "lower_01",
+      "centerPx": {
+        "x": 216,
+        "y": 1459
+      },
+      "x": 0.2,
+      "y": 0.759896,
+      "widthPx": 190,
+      "heightPx": 120,
+      "tilt": 0
+    },
+    {
+      "id": "lower_02",
+      "centerPx": {
+        "x": 432,
+        "y": 1459
+      },
+      "x": 0.4,
+      "y": 0.759896,
+      "widthPx": 190,
+      "heightPx": 120,
+      "tilt": 0
+    },
+    {
+      "id": "lower_03",
+      "centerPx": {
+        "x": 648,
+        "y": 1459
+      },
+      "x": 0.6,
+      "y": 0.759896,
+      "widthPx": 190,
+      "heightPx": 120,
+      "tilt": 0
+    },
+    {
+      "id": "lower_04",
+      "centerPx": {
+        "x": 864,
+        "y": 1459
+      },
+      "x": 0.8,
+      "y": 0.759896,
+      "widthPx": 190,
+      "heightPx": 120,
+      "tilt": 0
+    },
+    {
+      "id": "tf_01",
+      "centerPx": {
+        "x": 216,
+        "y": 1805
+      },
+      "x": 0.2,
+      "y": 0.940104,
+      "widthPx": 190,
+      "heightPx": 120,
+      "tilt": 0,
+      "zone": "outside_southern_gate",
+      "taskForce": "alpha",
+      "movable": false,
+      "removable": false
+    },
+    {
+      "id": "tf_02",
+      "centerPx": {
+        "x": 432,
+        "y": 1805
+      },
+      "x": 0.4,
+      "y": 0.940104,
+      "widthPx": 190,
+      "heightPx": 120,
+      "tilt": 0,
+      "zone": "outside_southern_gate",
+      "taskForce": "bravo",
+      "movable": false,
+      "removable": false
+    },
+    {
+      "id": "tf_03",
+      "centerPx": {
+        "x": 648,
+        "y": 1805
+      },
+      "x": 0.6,
+      "y": 0.940104,
+      "widthPx": 190,
+      "heightPx": 120,
+      "tilt": 0,
+      "zone": "outside_southern_gate",
+      "taskForce": "charlie",
+      "movable": false,
+      "removable": false
+    },
+    {
+      "id": "tf_04",
+      "centerPx": {
+        "x": 864,
+        "y": 1805
+      },
+      "x": 0.8,
+      "y": 0.940104,
+      "widthPx": 190,
+      "heightPx": 120,
+      "tilt": 0,
+      "zone": "outside_southern_gate",
+      "taskForce": "delta",
+      "movable": false,
+      "removable": false
+    }
+  ],
+  "verification": {
+    "movablePadCount": 15,
+    "fixedTaskForceSlotCount": 4,
+    "fixedBuildingCount": 1,
+    "allPadSizesIdentical": true,
+    "allTiltsZero": true,
+    "runwayPadCount": 5,
+    "taskForcePadCount": 4,
+    "taskForceCenterSpacingPx": 216,
+    "result": "pass"
+  }
+}

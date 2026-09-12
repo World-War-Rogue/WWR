@@ -1,0 +1,1115 @@
+<title>Dry Basin Terrain Study</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+  /*
+   * Committed dark chrome, deliberately single-theme.
+   * The whole point of this page is judging a pale terrain palette, and a bright
+   * surround biases how those sand and salt values read. Imaging tools stay dark
+   * for the same reason. Every colour is painted explicitly so the page holds on
+   * either host ground.
+   */
+  :root {
+    --ground:    #12161d;
+    --panel:     #1a212c;
+    --panel-2:   #212a37;
+    --line:      #2f3a4a;
+    --line-soft: #232c39;
+    --text:      #dfd8c6;
+    --text-dim:  #93a0b2;
+    --text-faint:#6b788a;
+    --brass:     #c9974a;
+    --brass-dim: #8a6832;
+    --sand:      #d8c39a;
+    --alert:     #cc6b4a;
+
+    --f-display: 'Barlow Condensed', 'Arial Narrow', system-ui, sans-serif;
+    --f-body: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+    --f-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--text);
+    font-family: var(--f-body);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 22px 18px 64px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  /* ---- masthead ---- */
+  header { display: flex; flex-direction: column; gap: 6px; }
+
+  .eyebrow {
+    font-family: var(--f-display);
+    font-size: 13px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--brass);
+  }
+
+  h1 {
+    font-family: var(--f-display);
+    font-weight: 600;
+    font-size: clamp(30px, 6vw, 44px);
+    line-height: 1.02;
+    letter-spacing: 0.01em;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .standfirst {
+    margin: 0;
+    max-width: 62ch;
+    color: var(--text-dim);
+    font-size: 15px;
+  }
+
+  /* ---- the map ---- */
+  .stage {
+    position: relative;
+    border: 1px solid var(--line);
+    background: #0a0906;
+    overflow: hidden;
+    touch-action: none;
+  }
+
+  canvas { display: block; width: 100%; height: auto; cursor: grab; }
+  canvas.dragging { cursor: grabbing; }
+
+  .tag {
+    position: absolute;
+    top: 10px;
+    font-family: var(--f-display);
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    padding: 4px 9px;
+    background: rgba(10, 12, 16, 0.78);
+    border: 1px solid var(--line);
+    color: var(--text-dim);
+    pointer-events: none;
+  }
+  .tag.now { left: 10px; }
+  .tag.prop { right: 10px; color: var(--sand); border-color: var(--brass-dim); }
+
+  .busy {
+    position: absolute;
+    left: 50%;
+    bottom: 10px;
+    transform: translateX(-50%);
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    padding: 3px 10px;
+    background: rgba(10, 12, 16, 0.8);
+    border: 1px solid var(--line);
+    color: var(--text-faint);
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .busy.on { opacity: 1; }
+
+  /* ---- controls ---- */
+  .rack {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    border: 1px solid var(--line-soft);
+    background: var(--panel);
+    padding: 15px 16px 17px;
+  }
+
+  .rack-row { display: flex; flex-direction: column; gap: 7px; }
+
+  .label {
+    font-family: var(--f-display);
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .label .val {
+    font-family: var(--f-mono);
+    font-size: 12px;
+    letter-spacing: 0;
+    color: var(--sand);
+    font-variant-numeric: tabular-nums;
+  }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 22px;
+    background: transparent;
+    margin: 0;
+  }
+  input[type=range]::-webkit-slider-runnable-track {
+    height: 3px; background: var(--line); border-radius: 0;
+  }
+  input[type=range]::-moz-range-track { height: 3px; background: var(--line); }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 15px; height: 21px; margin-top: -9px;
+    background: var(--brass); border: none; border-radius: 1px;
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 15px; height: 21px; background: var(--brass);
+    border: none; border-radius: 1px;
+  }
+  input[type=range]:focus-visible { outline: 2px solid var(--sand); outline-offset: 3px; }
+
+  .stops {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--f-mono);
+    font-size: 10.5px;
+    color: var(--text-faint);
+    letter-spacing: 0.02em;
+  }
+  .stops button {
+    background: none; border: none; padding: 2px 0; margin: 0;
+    color: inherit; font: inherit; cursor: pointer;
+    border-bottom: 1px solid transparent;
+  }
+  .stops button:hover { color: var(--sand); border-bottom-color: var(--brass-dim); }
+  .stops button:focus-visible { outline: 2px solid var(--sand); outline-offset: 2px; }
+
+  .toggles { display: flex; flex-wrap: wrap; gap: 7px; }
+
+  .chip {
+    font-family: var(--f-display);
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 6px 11px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    color: var(--text-faint);
+    cursor: pointer;
+    transition: none;
+  }
+  .chip[aria-pressed="true"] {
+    background: #2c2415;
+    border-color: var(--brass-dim);
+    color: var(--sand);
+  }
+  .chip:focus-visible { outline: 2px solid var(--sand); outline-offset: 2px; }
+
+  /* ---- reading ---- */
+  .note {
+    border-left: 2px solid var(--brass-dim);
+    padding: 2px 0 2px 14px;
+    color: var(--text-dim);
+    font-size: 14.5px;
+    max-width: 66ch;
+  }
+  .note strong { color: var(--text); font-weight: 600; }
+
+  h2 {
+    font-family: var(--f-display);
+    font-size: 13px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--brass);
+    margin: 8px 0 0;
+    font-weight: 600;
+  }
+
+  .grid2 { display: grid; grid-template-columns: 1fr; gap: 14px; }
+  @media (min-width: 720px) { .grid2 { grid-template-columns: 1fr 1fr; gap: 18px; } }
+
+  .col { display: flex; flex-direction: column; gap: 8px; }
+  .col p { margin: 0; color: var(--text-dim); font-size: 14.5px; }
+  .col h3 {
+    font-family: var(--f-body);
+    font-size: 14.5px;
+    font-weight: 600;
+    margin: 0;
+    color: var(--text);
+  }
+
+  ul { margin: 0; padding-left: 18px; color: var(--text-dim); font-size: 14.5px; }
+  li { margin-bottom: 5px; }
+  li::marker { color: var(--brass-dim); }
+
+  code {
+    font-family: var(--f-mono);
+    font-size: 0.88em;
+    color: var(--sand);
+    background: var(--panel-2);
+    padding: 1px 4px;
+  }
+
+  .caveat {
+    border: 1px solid var(--line-soft);
+    background: var(--panel);
+    padding: 13px 15px;
+    font-size: 14px;
+    color: var(--text-dim);
+    max-width: 68ch;
+  }
+  .caveat strong { color: var(--sand); font-weight: 600; }
+
+  footer {
+    border-top: 1px solid var(--line-soft);
+    padding-top: 14px;
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    color: var(--text-faint);
+    letter-spacing: 0.02em;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Season 1 · Iron Dominion · look-dev</div>
+    <h1>Dry Basin Terrain Study</h1>
+    <p class="standfirst">
+      Drag the divider to wipe between the ground layer that ships today and the
+      proposed one, at the same camera. Drag the map to pan. Nothing here touches
+      the game — it exists so the terrain direction can be judged by looking at it
+      rather than from a description.
+    </p>
+  </header>
+
+  <div class="stage" id="stage">
+    <canvas id="map" width="1000" height="620"></canvas>
+    <div class="tag now">Ships today</div>
+    <div class="tag prop">Proposed</div>
+    <div class="busy" id="busy">rendering</div>
+  </div>
+
+  <div class="rack">
+    <div class="rack-row">
+      <div class="label">
+        <span>Zoom</span>
+        <span class="val" id="zoomVal">94 px / plot</span>
+      </div>
+      <input type="range" id="zoom" min="14" max="190" value="94" step="1" aria-label="Zoom, pixels per plot">
+      <div class="stops">
+        <button type="button" data-z="14">14 · world</button>
+        <button type="button" data-z="26">26 · grid on</button>
+        <button type="button" data-z="42">42 · identity</button>
+        <button type="button" data-z="94">94 · home</button>
+        <button type="button" data-z="190">190 · max</button>
+      </div>
+    </div>
+
+    <div class="rack-row">
+      <div class="label"><span>Layers</span></div>
+      <div class="toggles" id="toggles">
+        <button type="button" class="chip" data-k="relief" aria-pressed="true">Relief</button>
+        <button type="button" class="chip" data-k="props" aria-pressed="true">Props</button>
+        <button type="button" class="chip" data-k="base" aria-pressed="true">Base</button>
+        <button type="button" class="chip" data-k="march" aria-pressed="true">Marches</button>
+        <button type="button" class="chip" data-k="rings" aria-pressed="false">Rings</button>
+        <button type="button" class="chip" data-k="grid" aria-pressed="false">Plot grid</button>
+        <button type="button" class="chip" data-k="recentre" aria-pressed="false">Recentre</button>
+      </div>
+    </div>
+  </div>
+
+  <p class="note" id="hint"></p>
+
+  <h2>What the wipe is showing</h2>
+  <div class="grid2">
+    <div class="col">
+      <h3>Left — one filled square per plot</h3>
+      <p>
+        A faithful port of the live renderer. It samples <code>terrainAt</code> once
+        at each plot's integer coordinate and paints a single <code>fillRect</code>.
+        Shade is one bit — <code>shade &gt; 0.5 ? fill : alt</code> — so every plot is
+        one of two colours per biome, which is the checkerboard. Biome edges snap to
+        plot corners because the biome is decided per plot and never blended.
+      </p>
+    </div>
+    <div class="col">
+      <h3>Right — sampled per pixel, lit by a sun</h3>
+      <p>
+        The same noise functions, sampled in world space instead of once per plot,
+        with biomes as blended weights rather than one enum. A height field carries
+        relief shading from the upper left, which is what makes it read as land
+        rather than colour. Salt cracks, wash channels and sandstone terraces fall
+        out of that height field rather than being drawn on.
+      </p>
+    </div>
+  </div>
+
+  <h2>Worth checking at each stop</h2>
+  <ul>
+    <li><strong>14 — world.</strong> The view used to read the war. Today it is at its
+      most grid-like; the proposal should read as regional country with no squares at all.</li>
+    <li><strong>42 — identity.</strong> Where bases stop being art. Terrain has to carry
+      the map on its own just below this line.</li>
+    <li><strong>94 — home.</strong> Where the map opens and where a base should look
+      placed into the ground rather than pasted onto it.</li>
+    <li><strong>190 — max.</strong> Close enough that material has to hold up: cracks,
+      track ruts, debris.</li>
+  </ul>
+
+  <div class="caveat">
+    <strong>Props here are placeholders, and deliberately so.</strong> The plan calls for
+    a pre-rendered sprite atlas through the existing Blender pipeline, because
+    procedurally-drawn canvas art was rejected twice on this project and trees and
+    wrecks will fail the same way. What is drawn here is shape, scale, density and
+    placement — enough to judge whether the <em>composition</em> works. Assume every
+    prop is replaced by real art. The ground, by contrast, is the real technique at
+    something close to final quality.
+    <br><br>
+    One difference from the shipping version: this page redraws the whole visible
+    ground on every change. The real implementation caches ground into offscreen
+    tiles keyed by zoom bucket, so it pays that cost once per pan rather than per
+    frame. If a change feels briefly slow here, that is this page, not the plan.
+  </div>
+
+  <footer>
+    Terrain is visual only — it never changes march paths, timing, combat, detection
+    or objective eligibility. Deterministic from world, season and position: no rows,
+    no bytes over the wire.
+  </footer>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const cv = document.getElementById('map');
+  const ctx = cv.getContext('2d', {alpha: false});
+  const stage = document.getElementById('stage');
+  const busyEl = document.getElementById('busy');
+  const hintEl = document.getElementById('hint');
+  const zoomEl = document.getElementById('zoom');
+  const zoomVal = document.getElementById('zoomVal');
+
+  /* ---------------------------------------------------------------- state */
+
+  const state = {
+    zoom: 94,
+    cx: 34,
+    cy: -22,
+    split: 0.42,
+    relief: true,
+    props: true,
+    base: true,
+    march: true,
+    rings: false,
+    grid: false
+  };
+
+  const WORLD_ID = 1001;
+  const SEASON = 1;
+  const EXTENT = 200;
+  const SEED = WORLD_ID * 31 + SEASON * 7919;
+
+  /* ---------------------------------------------- noise, ported verbatim */
+
+  function hash2(x, y, seed) {
+    let h = x * 374761393 + y * 668265263 + seed * 2147483647;
+    h = (h ^ (h >>> 13)) * 1274126177;
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  }
+  function smooth(t) { return t * t * (3 - 2 * t); }
+  function valueNoise(x, y, seed) {
+    const xi = Math.floor(x), yi = Math.floor(y);
+    const xf = x - xi, yf = y - yi;
+    const a = hash2(xi, yi, seed), b = hash2(xi + 1, yi, seed);
+    const c = hash2(xi, yi + 1, seed), d = hash2(xi + 1, yi + 1, seed);
+    const u = smooth(xf), v = smooth(yf);
+    return a * (1 - u) * (1 - v) + b * u * (1 - v) + c * (1 - u) * v + d * u * v;
+  }
+  function fbm(x, y, seed) {
+    return valueNoise(x, y, seed) * 0.65 + valueNoise(x * 2.3, y * 2.3, seed + 991) * 0.35;
+  }
+  function fbm4(x, y, seed) {
+    let v = 0, amp = 0.5, f = 1;
+    for (let i = 0; i < 4; i++) {
+      v += valueNoise(x * f, y * f, seed + i * 131) * amp;
+      f *= 2.07; amp *= 0.5;
+    }
+    return v / 0.9375;
+  }
+  const clamp01 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
+  function sstep(a, b, t) {
+    if (a === b) return t < a ? 0 : 1;
+    return smooth(clamp01((t - a) / (b - a)));
+  }
+
+  /* ------------------------------------------- CURRENT: terrainAt, as-is */
+
+  const BANDS = {inner: 0.10, middle: 0.68};
+  const CUR_BIOMES = {
+    salt:   {fill: '#d9d2c0', alt: '#cfc7b3'},
+    sand:   {fill: '#a8834e', alt: '#9d7a49'},
+    wadi:   {fill: '#6d5433', alt: '#654d2f'},
+    scrub:  {fill: '#7d7a45', alt: '#736f40'},
+    rock:   {fill: '#2f2a24', alt: '#3a342c'},
+    water:  {fill: '#1f6f73', alt: '#1a5f63'},
+    forest: {fill: '#3f5a32', alt: '#37502c'}
+  };
+  const CUR_DETAIL = {sand: '#c19a63', salt: '#b9b099', wadi: '#8a6b42'};
+
+  function terrainAt(x, y) {
+    const distance = Math.sqrt(x * x + y * y) / EXTENT;
+    const warp = (fbm(x * 0.035, y * 0.035, SEED) - 0.5) * 0.22;
+    const banded = distance + warp;
+    const detail = fbm(x * 0.11, y * 0.11, SEED + 17);
+    const shade = fbm(x * 0.5, y * 0.5, SEED + 404);
+    const river = Math.abs(fbm(x * 0.045, y * 0.045, SEED + 3301) - 0.5);
+    const isWadi = river < 0.035 && banded > BANDS.inner * 0.6;
+
+    let biome;
+    if (banded < BANDS.inner) biome = 'salt';
+    else if (banded < BANDS.middle) biome = detail > 0.62 ? 'scrub' : 'sand';
+    else biome = detail > 0.55 ? 'rock' : 'sand';
+    if (isWadi && biome !== 'rock') biome = 'wadi';
+
+    let feature = null;
+    const ox = Math.floor(x / 3), oy = Math.floor(y / 3);
+    if (biome === 'sand' && hash2(ox, oy, SEED + 8081) > 0.988) {
+      if (hash2(x, y, SEED + 6060) > 0.25) { biome = 'water'; feature = 'oasis'; }
+      else biome = 'forest';
+    } else if (biome === 'salt' && hash2(x, y, SEED + 3131) > 0.997) {
+      feature = 'wreck';
+    }
+    return {biome: biome, shade: shade, feature: feature};
+  }
+
+  function drawCurrent(c, w, h) {
+    const z = state.zoom;
+    const sx = (px) => (px - state.cx) * z + w / 2;
+    const sy = (py) => (py - state.cy) * z + h / 2;
+    c.fillStyle = '#0a0906';
+    c.fillRect(0, 0, w, h);
+
+    const fx = Math.floor(state.cx - w / (2 * z)) - 1;
+    const lx = Math.ceil(state.cx + w / (2 * z)) + 1;
+    const fy = Math.floor(state.cy - h / (2 * z)) - 1;
+    const ly = Math.ceil(state.cy + h / (2 * z)) + 1;
+    const showGrid = z > 26;
+
+    for (let py = fy; py <= ly; py++) {
+      for (let px = fx; px <= lx; px++) {
+        const X = sx(px), Y = sy(py);
+        if (Math.abs(px) > EXTENT || Math.abs(py) > EXTENT) {
+          c.fillStyle = '#0a0906'; c.fillRect(X, Y, z + 1, z + 1); continue;
+        }
+        const cell = terrainAt(px, py);
+        const col = CUR_BIOMES[cell.biome];
+        c.fillStyle = cell.shade > 0.5 ? col.fill : col.alt;
+        c.fillRect(X, Y, z + 1, z + 1);
+
+        if (cell.feature === 'oasis') {
+          c.fillStyle = CUR_BIOMES.forest.fill;
+          c.beginPath(); c.arc(X + z / 2, Y + z / 2, z * 0.44, 0, 6.2832); c.fill();
+          c.fillStyle = CUR_DETAIL.sand;
+          c.beginPath(); c.arc(X + z / 2, Y + z / 2, z * 0.26, 0, 6.2832); c.fill();
+        } else if (cell.feature === 'wreck' && z > 20) {
+          c.save();
+          c.translate(X + z / 2, Y + z / 2);
+          c.rotate(cell.shade * 1.2 - 0.6);
+          c.fillStyle = '#4a4038'; c.fillRect(-z * 0.34, -z * 0.12, z * 0.68, z * 0.24);
+          c.fillStyle = '#6b5c4d'; c.fillRect(-z * 0.06, -z * 0.24, z * 0.18, z * 0.16);
+          c.restore();
+        }
+        if (showGrid) {
+          c.strokeStyle = 'rgba(0,0,0,0.10)';
+          c.lineWidth = 1;
+          c.strokeRect(X + 0.5, Y + 0.5, z, z);
+        }
+      }
+    }
+  }
+
+  /* --------------------------------------------- PROPOSED: ground fields */
+
+  // Pale dry basin. Lighter and less saturated than the shipping palette,
+  // which runs brown enough to fight the "pale salt flat" identity.
+  const P = {
+    salt:      [227, 221, 201],
+    saltCrack: [199, 191, 169],
+    hardpan:   [210, 193, 156],
+    sand:      [198, 172, 126],
+    dust:      [216, 196, 156],
+    wadi:      [154, 130, 89],
+    wadiDeep:  [122, 103, 70],
+    scrub:     [154, 150, 104],
+    stone:     [176, 138, 96],
+    stoneDeep: [110, 86, 60],
+    voidCol:   [10, 9, 6]
+  };
+
+  // How much fine relief to carry, by zoom. Held as module state and set once
+  // per render rather than threaded through every call - the real renderer picks
+  // this per LOD bucket when it builds a tile.
+  let detailScale = 1;
+
+  /** Height field. Everything visible falls out of this. */
+  function heightAt(x, y) {
+    const rolling = fbm4(x * 0.022, y * 0.022, SEED + 51);
+    const dune = fbm(x * 0.09, y * 0.09, SEED + 77) * 0.28;
+    const grain = fbm4(x * 0.55, y * 0.55, SEED + 909) * 0.055;
+
+    const distance = Math.sqrt(x * x + y * y) / EXTENT;
+    const warp = (fbm(x * 0.035, y * 0.035, SEED) - 0.5) * 0.22;
+    const banded = distance + warp;
+
+    // Sandstone shelves: terraced toward the rim, so they read as steps.
+    const rockAmt = sstep(BANDS.middle - 0.12, BANDS.middle + 0.06, banded);
+    const terraceRaw = fbm(x * 0.05, y * 0.05, SEED + 17);
+    const terrace = Math.floor(terraceRaw * 6) / 6;
+    const shelf = terrace * rockAmt * 0.55;
+
+    // Washes cut down through whatever is above them.
+    const river = Math.abs(fbm(x * 0.045, y * 0.045, SEED + 3301) - 0.5);
+    const channel = sstep(0.055, 0.012, river) * (banded > BANDS.inner * 0.6 ? 1 : 0.2);
+
+    const micro = fbm4(x * 2.4, y * 2.4, SEED + 1212) * 0.075 * detailScale;
+    const fine = fbm4(x * 7.5, y * 7.5, SEED + 1717) * 0.028 * detailScale;
+
+    return rolling * 0.5 + dune + shelf + grain + micro + fine - channel * 0.30;
+  }
+
+  /** Blended surface at a world point. */
+  function groundAt(x, y) {
+    const distance = Math.sqrt(x * x + y * y) / EXTENT;
+    const warp = (fbm(x * 0.035, y * 0.035, SEED) - 0.5) * 0.22;
+    const banded = distance + warp;
+    const detail = fbm(x * 0.11, y * 0.11, SEED + 17);
+
+    const wSalt  = 1 - sstep(BANDS.inner - 0.055, BANDS.inner + 0.055, banded);
+    const wRock  = sstep(BANDS.middle - 0.10, BANDS.middle + 0.08, banded) *
+                   sstep(0.44, 0.60, detail);
+    const wScrub = (1 - wSalt) * (1 - wRock) * sstep(0.55, 0.70, detail);
+    const wSand  = Math.max(0, 1 - wSalt - wRock - wScrub);
+
+    const river = Math.abs(fbm(x * 0.045, y * 0.045, SEED + 3301) - 0.5);
+    const wWadi = sstep(0.05, 0.014, river) * (banded > BANDS.inner * 0.6 ? 1 : 0.25);
+
+    return {salt: wSalt, rock: wRock, scrub: wScrub, sand: wSand, wadi: wWadi, banded: banded};
+  }
+
+  function drawProposed(c, w, h, quality) {
+    const z = state.zoom;
+    detailScale = clamp01((z - 30) / 60);
+    // Ground is sampled per pixel. Large canvases render at half resolution and
+    // upscale, which is this page being quick rather than the plan - the real
+    // implementation renders cached tiles at native resolution.
+    const ss = quality === 'fine' ? 1 : ((w * h > 260000) ? 2 : 1);
+    const iw = Math.ceil(w / ss), ih = Math.ceil(h / ss);
+    const img = c.createImageData(iw, ih);
+    const d = img.data;
+
+    const wx0 = state.cx - w / (2 * z);
+    const wy0 = state.cy - h / (2 * z);
+    const step = ss / z;
+
+    // Sun from the upper left, low, so relief reads without going theatrical.
+    const LX = -0.62, LY = -0.78;
+    const eps = Math.max(0.012, 1.1 / z);
+
+    for (let j = 0; j < ih; j++) {
+      const wy = wy0 + j * step;
+      for (let i = 0; i < iw; i++) {
+        const wx = wx0 + i * step;
+        const o = (j * iw + i) * 4;
+
+        if (Math.abs(wx) > EXTENT || Math.abs(wy) > EXTENT) {
+          d[o] = P.voidCol[0]; d[o + 1] = P.voidCol[1]; d[o + 2] = P.voidCol[2]; d[o + 3] = 255;
+          continue;
+        }
+
+        const g = groundAt(wx, wy);
+        let r = 0, gr = 0, b = 0;
+        const mix = (col, wgt) => { r += col[0] * wgt; gr += col[1] * wgt; b += col[2] * wgt; };
+
+        // Hardpan under everything, so nothing is ever a flat single hue.
+        const grain = fbm4(wx * 0.7, wy * 0.7, SEED + 611);
+        const bed = [
+          P.hardpan[0] + (grain - 0.5) * 18,
+          P.hardpan[1] + (grain - 0.5) * 16,
+          P.hardpan[2] + (grain - 0.5) * 14
+        ];
+        let tot = 0.22;
+        mix(bed, 0.22);
+        mix(P.salt, g.salt);   tot += g.salt;
+        mix(P.stone, g.rock);  tot += g.rock;
+        mix(P.scrub, g.scrub); tot += g.scrub;
+        mix(P.sand, g.sand);   tot += g.sand;
+        r /= tot; gr /= tot; b /= tot;
+
+        // Washes: darker damp bed, paler dry margin either side.
+        if (g.wadi > 0.001) {
+          const t = g.wadi;
+          r = r * (1 - t) + P.wadi[0] * t;
+          gr = gr * (1 - t) + P.wadi[1] * t;
+          b = b * (1 - t) + P.wadi[2] * t;
+          const deep = sstep(0.55, 1.0, t);
+          r = r * (1 - deep * 0.6) + P.wadiDeep[0] * deep * 0.6;
+          gr = gr * (1 - deep * 0.6) + P.wadiDeep[1] * deep * 0.6;
+          b = b * (1 - deep * 0.6) + P.wadiDeep[2] * deep * 0.6;
+        }
+
+        // Cracked mineral on the flats. Ridged noise thresholded to thin lines,
+        // only where salt actually is, and only once it is big enough to see.
+        if (g.salt > 0.25 && z > 30) {
+          const cr = Math.abs(fbm(wx * 5.5, wy * 5.5, SEED + 4242) - 0.5);
+          const crack = sstep(0.030, 0.006, cr) * g.salt * clamp01((z - 30) / 55) * 0.6;
+          r = r * (1 - crack) + P.saltCrack[0] * crack;
+          gr = gr * (1 - crack) + P.saltCrack[1] * crack;
+          b = b * (1 - crack) + P.saltCrack[2] * crack;
+        }
+
+        // Relief. The single change that makes it read as land.
+        if (state.relief) {
+          const hC = heightAt(wx, wy);
+          const hX = heightAt(wx + eps, wy);
+          const hY = heightAt(wx, wy + eps);
+          const gx = (hX - hC) / eps;
+          const gy = (hY - hC) / eps;
+          let lam = 1 + (gx * LX + gy * LY) * 0.55;
+          if (lam < 0.52) lam = 0.52;
+          if (lam > 1.48) lam = 1.48;
+          // A touch of ambient occlusion in the hollows.
+          const ao = 1 - clamp01((0.34 - hC) * 0.5);
+          r *= lam * ao; gr *= lam * ao; b *= lam * ao;
+        }
+
+        d[o] = r < 0 ? 0 : r > 255 ? 255 : r;
+        d[o + 1] = gr < 0 ? 0 : gr > 255 ? 255 : gr;
+        d[o + 2] = b < 0 ? 0 : b > 255 ? 255 : b;
+        d[o + 3] = 255;
+      }
+    }
+
+    if (ss === 1) {
+      c.putImageData(img, 0, 0);
+    } else {
+      const tmp = document.createElement('canvas');
+      tmp.width = iw; tmp.height = ih;
+      tmp.getContext('2d').putImageData(img, 0, 0);
+      c.imageSmoothingEnabled = true;
+      c.imageSmoothingQuality = 'high';
+      c.drawImage(tmp, 0, 0, iw, ih, 0, 0, w, h);
+    }
+
+    if (state.props) drawProps(c, w, h);
+  }
+
+  /* ------------------------------------------------- props (placeholder) */
+
+  function drawProps(c, w, h) {
+    const z = state.zoom;
+    if (z < 24) return;
+    const sx = (px) => (px - state.cx) * z + w / 2;
+    const sy = (py) => (py - state.cy) * z + h / 2;
+    const fx = Math.floor(state.cx - w / (2 * z)) - 1;
+    const lx = Math.ceil(state.cx + w / (2 * z)) + 1;
+    const fy = Math.floor(state.cy - h / (2 * z)) - 1;
+    const ly = Math.ceil(state.cy + h / (2 * z)) + 1;
+    const fade = clamp01((z - 24) / 26);
+
+    for (let py = fy; py <= ly; py++) {
+      for (let px = fx; px <= lx; px++) {
+        if (Math.abs(px) > EXTENT || Math.abs(py) > EXTENT) continue;
+        const g = groundAt(px + 0.5, py + 0.5);
+        // Three candidate slots per plot, each independently rejected.
+        for (let k = 0; k < 3; k++) {
+          const rr = hash2(px * 7 + k, py * 13 + k * 31, SEED + 2200);
+          const jx = hash2(px + k * 97, py - k * 57, SEED + 3300);
+          const jy = hash2(px - k * 41, py + k * 83, SEED + 4400);
+          const X = sx(px + jx), Y = sy(py + jy);
+
+          let kind = null;
+          if (g.scrub > 0.45 && rr > 0.55) kind = rr > 0.93 ? 'tree' : 'brush';
+          else if (g.wadi > 0.5 && rr > 0.72) kind = 'grass';
+          else if (g.rock > 0.45 && rr > 0.74) kind = 'shelf';
+          else if (g.salt > 0.55 && rr > 0.9955) kind = 'wreck';
+          else if (g.sand > 0.5 && rr > 0.955) kind = rr > 0.985 ? 'debris' : 'brush';
+          if (!kind) continue;
+
+          c.globalAlpha = fade;
+          drawProp(c, kind, X, Y, z, jx);
+          c.globalAlpha = 1;
+        }
+      }
+    }
+  }
+
+  function shadow(c, x, y, rx, ry) {
+    c.fillStyle = 'rgba(60,45,28,0.26)';
+    c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, 6.2832); c.fill();
+  }
+
+  function drawProp(c, kind, x, y, z, r) {
+    const s = z / 94;
+    if (kind === 'brush') {
+      shadow(c, x, y + 1 * s, 7 * s, 2.6 * s);
+      c.fillStyle = '#7c7a4e';
+      for (let i = 0; i < 5; i++) {
+        const a = -1.9 + i * 0.55 + r;
+        c.beginPath();
+        c.moveTo(x, y);
+        c.lineTo(x + Math.cos(a) * 7 * s, y - Math.abs(Math.sin(a)) * 9 * s);
+        c.lineWidth = 1.4 * s; c.strokeStyle = '#6f6d44'; c.stroke();
+      }
+      c.beginPath(); c.ellipse(x, y - 4 * s, 6 * s, 4.4 * s, 0, 0, 6.2832); c.fill();
+    } else if (kind === 'tree') {
+      shadow(c, x + 4 * s, y + 1 * s, 11 * s, 3.4 * s);
+      c.strokeStyle = '#5e5138'; c.lineWidth = 2.2 * s;
+      c.beginPath(); c.moveTo(x, y); c.lineTo(x - 1 * s, y - 15 * s); c.stroke();
+      c.fillStyle = '#6e7247';
+      c.beginPath(); c.ellipse(x - 1 * s, y - 18 * s, 10 * s, 6 * s, 0, 0, 6.2832); c.fill();
+      c.fillStyle = '#7d8151';
+      c.beginPath(); c.ellipse(x - 4 * s, y - 20 * s, 5.5 * s, 3.4 * s, 0, 0, 6.2832); c.fill();
+    } else if (kind === 'grass') {
+      c.strokeStyle = 'rgba(150,142,92,0.75)'; c.lineWidth = 1.1 * s;
+      for (let i = 0; i < 4; i++) {
+        c.beginPath();
+        c.moveTo(x + i * 1.8 * s, y);
+        c.quadraticCurveTo(x + i * 1.8 * s + 2 * s, y - 5 * s, x + i * 2.6 * s + 1 * s, y - 8 * s);
+        c.stroke();
+      }
+    } else if (kind === 'shelf') {
+      shadow(c, x + 5 * s, y + 2 * s, 16 * s, 4 * s);
+      c.fillStyle = '#8e7150';
+      c.beginPath();
+      c.moveTo(x - 15 * s, y); c.lineTo(x - 11 * s, y - 8 * s);
+      c.lineTo(x + 8 * s, y - 10 * s); c.lineTo(x + 15 * s, y - 1 * s);
+      c.closePath(); c.fill();
+      c.fillStyle = '#b39468';
+      c.beginPath();
+      c.moveTo(x - 11 * s, y - 8 * s); c.lineTo(x + 8 * s, y - 10 * s);
+      c.lineTo(x + 4 * s, y - 12 * s); c.lineTo(x - 8 * s, y - 11 * s);
+      c.closePath(); c.fill();
+    } else if (kind === 'wreck') {
+      c.globalAlpha *= 0.85;
+      shadow(c, x + 4 * s, y + 1 * s, 14 * s, 3.2 * s);
+      c.save(); c.translate(x, y); c.rotate(r * 0.5 - 0.25);
+      c.fillStyle = '#7a6a58'; c.fillRect(-13 * s, -5 * s, 26 * s, 6 * s);
+      c.fillStyle = '#93816b'; c.fillRect(-4 * s, -10 * s, 8 * s, 6 * s);
+      c.fillStyle = '#5d5044'; c.fillRect(-13 * s, -1 * s, 26 * s, 2 * s);
+      c.restore();
+    } else if (kind === 'debris') {
+      shadow(c, x + 2 * s, y + 1 * s, 8 * s, 2.4 * s);
+      c.fillStyle = '#6f5a46';
+      c.fillRect(x - 6 * s, y - 4 * s, 9 * s, 4 * s);
+      c.fillStyle = '#8a6a4e';
+      c.fillRect(x + 1 * s, y - 6 * s, 5 * s, 6 * s);
+    }
+  }
+
+  /* ------------------------------------------------- base, march, rings */
+
+  const BASE = {x: 32, y: -24};
+  const MARCH_FROM = {x: 24, y: -31};
+  const MARCH_T = 0.5;
+
+  function drawFurniture(c, w, h) {
+    const z = state.zoom;
+    const sx = (px) => (px - state.cx) * z + w / 2;
+    const sy = (py) => (py - state.cy) * z + h / 2;
+
+    if (state.rings) {
+      const rings = [[0, 'Core'], [12, 'Dominion Front'], [26, 'Factory Ring'], [44, 'Outer Scraplands']];
+      c.save();
+      c.setLineDash([6, 6]);
+      for (const [rad, name] of rings) {
+        c.strokeStyle = 'rgba(201,151,74,0.55)';
+        c.lineWidth = 1.5;
+        c.beginPath(); c.arc(sx(0), sy(0), rad * z, 0, 6.2832); c.stroke();
+        if (rad > 0) {
+          c.setLineDash([]);
+          c.fillStyle = 'rgba(216,195,154,0.9)';
+          c.font = '500 11px "IBM Plex Mono", monospace';
+          c.fillText(name, sx(0) + 4, sy(0) - rad * z - 5);
+          c.setLineDash([6, 6]);
+        }
+      }
+      c.restore();
+      c.fillStyle = 'rgba(201,151,74,0.9)';
+      c.beginPath(); c.arc(sx(0), sy(0), Math.max(4, z * 0.12), 0, 6.2832); c.fill();
+    }
+
+    if (state.base && z >= 20) {
+      const bx = sx(BASE.x), by = sy(BASE.y), sq = z * 4;
+      // Cleared command footprint, baked into ground in the real thing.
+      c.save();
+      c.fillStyle = 'rgba(214,196,158,0.30)';
+      c.beginPath(); c.ellipse(bx + sq / 2, by + sq / 2, sq * 0.62, sq * 0.46, 0, 0, 6.2832); c.fill();
+      c.strokeStyle = 'rgba(120,98,66,0.30)'; c.lineWidth = Math.max(1, z * 0.02);
+      c.beginPath(); c.ellipse(bx + sq / 2, by + sq / 2, sq * 0.6, sq * 0.44, 0, 0, 6.2832); c.stroke();
+      // Approach track running off toward the wash.
+      c.strokeStyle = 'rgba(190,168,128,0.55)';
+      c.lineWidth = Math.max(1.5, z * 0.055);
+      c.beginPath();
+      c.moveTo(bx + sq / 2, by + sq / 2);
+      c.quadraticCurveTo(bx - sq * 0.9, by + sq * 0.2, bx - sq * 1.9, by - sq * 0.5);
+      c.stroke();
+      // Contact shadow, then the keep itself as a stand-in for skin art.
+      c.fillStyle = 'rgba(50,38,24,0.32)';
+      c.beginPath(); c.ellipse(bx + sq / 2 + sq * 0.06, by + sq * 0.62, sq * 0.34, sq * 0.12, 0, 0, 6.2832); c.fill();
+      const kw = sq * 0.34, kh = sq * 0.32;
+      c.fillStyle = '#6d6154';
+      c.fillRect(bx + sq / 2 - kw / 2, by + sq * 0.6 - kh, kw, kh);
+      c.fillStyle = '#8b7c6a';
+      c.fillRect(bx + sq / 2 - kw / 2, by + sq * 0.6 - kh, kw, kh * 0.22);
+      c.fillStyle = '#574d42';
+      c.fillRect(bx + sq / 2 - kw * 0.16, by + sq * 0.6 - kh * 0.45, kw * 0.32, kh * 0.45);
+      c.restore();
+    }
+
+    if (state.march) {
+      const tgt = {x: BASE.x + 2, y: BASE.y + 2};
+      const gx = MARCH_FROM.x + (tgt.x - MARCH_FROM.x) * MARCH_T;
+      const gy = MARCH_FROM.y + (tgt.y - MARCH_FROM.y) * MARCH_T;
+      const px = sx(gx), py = sy(gy);
+      const ang = Math.atan2(tgt.y - MARCH_FROM.y, tgt.x - MARCH_FROM.x);
+
+      // Track marks already laid down behind the column.
+      c.save();
+      c.strokeStyle = 'rgba(150,128,94,0.40)';
+      c.lineWidth = Math.max(1, z * 0.03);
+      c.setLineDash([z * 0.18, z * 0.14]);
+      c.beginPath(); c.moveTo(sx(MARCH_FROM.x), sy(MARCH_FROM.y)); c.lineTo(px, py); c.stroke();
+      c.restore();
+
+      if (z >= 34) {
+        // Ground element: a compact column with dust behind it.
+        for (let i = 0; i < 3; i++) {
+          const off = -i * z * 0.34;
+          const ux = px + Math.cos(ang) * off, uy = py + Math.sin(ang) * off;
+          c.fillStyle = 'rgba(198,178,142,' + (0.20 - i * 0.05) + ')';
+          c.beginPath(); c.ellipse(ux - Math.cos(ang) * z * 0.2, uy - Math.sin(ang) * z * 0.2, z * 0.26, z * 0.17, 0, 0, 6.2832); c.fill();
+          c.fillStyle = 'rgba(40,32,22,0.28)';
+          c.beginPath(); c.ellipse(ux, uy + z * 0.07, z * 0.13, z * 0.055, 0, 0, 6.2832); c.fill();
+          c.fillStyle = '#4d4437';
+          c.fillRect(ux - z * 0.10, uy - z * 0.07, z * 0.20, z * 0.12);
+        }
+        // Air element, drawn above with its shadow on the ground below it.
+        // The shadow is what reads as altitude; the offset alone reads as a
+        // sprite in the wrong place.
+        const alt = z * 0.55;
+        for (let i = 0; i < 2; i++) {
+          const off = -i * z * 0.4 - z * 0.15;
+          const axp = px + Math.cos(ang) * off + z * 0.3;
+          const ayp = py + Math.sin(ang) * off - z * 0.1;
+          c.fillStyle = 'rgba(40,32,22,0.22)';
+          c.beginPath(); c.ellipse(axp, ayp + z * 0.05, z * 0.13, z * 0.05, 0, 0, 6.2832); c.fill();
+          c.save();
+          c.translate(axp, ayp - alt);
+          c.rotate(ang);
+          c.fillStyle = '#5b6472';
+          c.beginPath();
+          c.moveTo(z * 0.16, 0); c.lineTo(-z * 0.10, z * 0.11);
+          c.lineTo(-z * 0.04, 0); c.lineTo(-z * 0.10, -z * 0.11);
+          c.closePath(); c.fill();
+          c.restore();
+        }
+      } else {
+        // Far out, the column collapses to one formation marker.
+        c.save();
+        c.translate(px, py); c.rotate(ang);
+        c.fillStyle = '#f97316';
+        c.beginPath();
+        c.moveTo(9, 0); c.lineTo(-6, 6); c.lineTo(-2, 0); c.lineTo(-6, -6);
+        c.closePath(); c.fill();
+        c.strokeStyle = 'rgba(0,0,0,0.8)'; c.lineWidth = 1.4; c.stroke();
+        c.restore();
+      }
+    }
+
+    if (state.grid) {
+      const fx = Math.floor(state.cx - w / (2 * z)) - 1;
+      const lx = Math.ceil(state.cx + w / (2 * z)) + 1;
+      const fy = Math.floor(state.cy - h / (2 * z)) - 1;
+      const ly = Math.ceil(state.cy + h / (2 * z)) + 1;
+      c.strokeStyle = 'rgba(20,16,10,0.16)';
+      c.lineWidth = 1;
+      c.beginPath();
+      for (let px = fx; px <= lx; px++) { c.moveTo(sx(px) + 0.5, 0); c.lineTo(sx(px) + 0.5, h); }
+      for (let py = fy; py <= ly; py++) { c.moveTo(0, sy(py) + 0.5); c.lineTo(w, sy(py) + 0.5); }
+      c.stroke();
+    }
+  }
+
+  /* --------------------------------------------------------- compositing */
+
+  const bufA = document.createElement('canvas');
+  const bufB = document.createElement('canvas');
+  let dirty = true;
+  let quality = 'fine';
+
+  function sizeCanvas() {
+    const w = Math.max(320, Math.min(1000, stage.clientWidth));
+    const h = Math.round(w * 0.62);
+    cv.width = w; cv.height = h;
+    bufA.width = w; bufA.height = h;
+    bufB.width = w; bufB.height = h;
+    dirty = true;
+  }
+
+  function render() {
+    const w = cv.width, h = cv.height;
+    if (dirty) {
+      drawCurrent(bufA.getContext('2d'), w, h);
+      const cb = bufB.getContext('2d');
+      drawProposed(cb, w, h, quality);
+      drawFurniture(cb, w, h);
+      dirty = false;
+    }
+    const sp = Math.round(w * state.split);
+    ctx.drawImage(bufA, 0, 0, w, h, 0, 0, w, h);
+    if (sp < w) ctx.drawImage(bufB, sp, 0, w - sp, h, sp, 0, w - sp, h);
+
+    ctx.strokeStyle = 'rgba(201,151,74,0.95)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(sp, 0); ctx.lineTo(sp, h); ctx.stroke();
+    ctx.fillStyle = 'rgba(18,22,29,0.94)';
+    ctx.strokeStyle = 'rgba(201,151,74,0.95)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(sp, h / 2, 15, 0, 6.2832); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#d8c39a';
+    ctx.font = '600 13px "IBM Plex Mono", monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('‹›', sp, h / 2);
+    ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+  }
+
+  let pending = null;
+  let refine = null;
+  function invalidate() {
+    dirty = true;
+    quality = 'draft';
+    busyEl.classList.add('on');
+    if (pending) clearTimeout(pending);
+    if (refine) clearTimeout(refine);
+    pending = setTimeout(function () {
+      render();
+      // Then sharpen once the camera has stopped, the way a tile cache would
+      // settle after a pan.
+      refine = setTimeout(function () {
+        quality = 'fine';
+        dirty = true;
+        render();
+        busyEl.classList.remove('on');
+      }, 180);
+    }, 40);
+  }
+
+  /* -------------------------------------------------------------- inputs */
+
+  const HINTS = {
+    14: 'At <strong>14 px per plot</strong> the shipping ground is 14-pixel squares — the most grid-like view in the game, and the one used to read the war. The proposal has no plot boundary in it at all: colour comes from regional noise, not from a per-plot lookup.',
+    26: 'At <strong>26</strong> the shipping grid stroke switches on over every plot. Watch what that alone does to how manufactured the land looks.',
+    42: 'At <strong>42</strong> bases stop being art and become allegiance markers, so terrain has to carry the map on its own just below this line.',
+    94: 'At <strong>94</strong> the map opens and Home returns. The base should read as standing on cleared ground with an approach route, not pasted over the top of it.',
+    190: 'At <strong>190</strong> material has to hold: salt cracks, wash beds, track ruts. Props here are placeholders for sprite art.'
+  };
+  function hintFor(z) {
+    let best = 14;
+    for (const k of [14, 26, 42, 94, 190]) if (z >= k) best = k;
+    return HINTS[best];
+  }
+
+  zoomEl.addEventListener('input', function () {
+    state.zoom = Number(zoomEl.value);
+    zoomVal.textContent = state.zoom + ' px / plot';
+    hintEl.innerHTML = hintFor(state.zoom);
+    invalidate();
+  });
+
+  document.querySelectorAll('.stops button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      state.zoom = Number(b.dataset.z);
+      zoomEl.value = String(state.zoom);
+      zoomVal.textContent = state.zoom + ' px / plot';
+      hintEl.innerHTML = hintFor(state.zoom);
+      invalidate();
+    });
+  });
+
+  document.getElementById('toggles').addEventListener('click', function (e) {
+    const b = e.target.closest('.chip');
+    if (!b) return;
+    const k = b.dataset.k;
+    if (k === 'recentre') {
+      state.cx = 34; state.cy = -22; invalidate(); return;
+    }
+    state[k] = !state[k];
+    b.setAttribute('aria-pressed', state[k] ? 'true' : 'false');
+    invalidate();
+  });
+
+  // Pointer: near the divider it drags the wipe, anywhere else it pans.
+  let mode = null, last = null;
+  function localX(e) {
+    const r = cv.getBoundingClientRect();
+    return (e.clientX - r.left) * (cv.width / r.width);
+  }
+  function localY(e) {
+    const r = cv.getBoundingClientRect();
+    return (e.clientY - r.top) * (cv.height / r.height);
+  }
+
+  cv.addEventListener('pointerdown', function (e) {
+    cv.setPointerCapture(e.pointerId);
+    const x = localX(e);
+    mode = Math.abs(x - cv.width * state.split) < 28 ? 'split' : 'pan';
+    last = {x: x, y: localY(e)};
+    cv.classList.add('dragging');
+  });
+
+  cv.addEventListener('pointermove', function (e) {
+    if (!mode) return;
+    const x = localX(e), y = localY(e);
+    if (mode === 'split') {
+      state.split = clamp01(x / cv.width);
+      render();
+    } else {
+      state.cx -= (x - last.x) / state.zoom;
+      state.cy -= (y - last.y) / state.zoom;
+      invalidate();
+    }
+    last = {x: x, y: y};
+  });
+
+  function endDrag() { mode = null; cv.classList.remove('dragging'); }
+  cv.addEventListener('pointerup', endDrag);
+  cv.addEventListener('pointercancel', endDrag);
+
+  let rz = null;
+  window.addEventListener('resize', function () {
+    if (rz) clearTimeout(rz);
+    rz = setTimeout(function () { sizeCanvas(); render(); }, 120);
+  });
+
+  hintEl.innerHTML = hintFor(state.zoom);
+  sizeCanvas();
+  render();
+})();
+</script>

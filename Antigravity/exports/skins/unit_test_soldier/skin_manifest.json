@@ -1,0 +1,54 @@
+{
+  "skin_name": "unit_test_soldier",
+  "format_version": "1.0.0",
+  "engine_compatibility": [
+    "Three.js",
+    "WebGL",
+    "Unity",
+    "Unreal Engine 5",
+    "Godot 4.x"
+  ],
+  "files": {
+    "glb": "unit_test_soldier.glb",
+    "fbx": "unit_test_soldier.fbx"
+  },
+  "metrics": {
+    "vertices": 248,
+    "polygons": 146,
+    "triangles": 292,
+    "bone_count": 20,
+    "bones": [
+      "Root",
+      "Hips",
+      "Spine",
+      "Chest",
+      "Neck",
+      "Head",
+      "Shoulder.L",
+      "UpperArm.L",
+      "Forearm.L",
+      "Hand.L",
+      "Shoulder.R",
+      "UpperArm.R",
+      "Forearm.R",
+      "Hand.R",
+      "Thigh.L",
+      "Shin.L",
+      "Foot.L",
+      "Thigh.R",
+      "Shin.R",
+      "Foot.R"
+    ]
+  },
+  "animations": [
+    "CombatReady",
+    "Idle",
+    "Turntable",
+    "Walk"
+  ],
+  "game_integration": {
+    "three_js_loader": "const loader = new GLTFLoader(); loader.load('unit_test_soldier.glb', (gltf) => scene.add(gltf.scene));",
+    "unity_guidance": "Drag unit_test_soldier.fbx or unit_test_soldier.glb directly into your Assets/Skins/ folder. Ensure Rig is set to Humanoid or Generic.",
+    "unreal_guidance": "Import unit_test_soldier.fbx with 'Import Skeletal Mesh' and 'Import Animations' checked."
+  }
+}
